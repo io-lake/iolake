@@ -1560,7 +1560,7 @@ async fn require_user_tenant_admin(
 
 /// Gate a request on the tenant that owns `bucket`. System admin passes for
 /// any bucket; tenant admins only for buckets in their own tenant.
-async fn require_bucket_tenant_admin(
+pub(crate) async fn require_bucket_tenant_admin(
     state: &AppState,
     auth: &Option<Extension<AuthResult>>,
     headers: &HeaderMap,
@@ -1618,6 +1618,7 @@ pub async fn admin_list_buckets(
                         "created_at": b.created_at,
                         "owner": b.owner,
                         "versioning": b.versioning,
+                        "object_lock": object_lock_json(b.object_lock.as_ref()),
                         "pool": b.pool,
                         "tenant": b.tenant,
                     })
@@ -1627,6 +1628,31 @@ pub async fn admin_list_buckets(
         }
         Err(e) => meta_failure(&e),
     }
+}
+
+/// A bucket's object lock as its listing shows it: `{"enabled": false}`,
+/// or `{"enabled": true}` with its `default_retention` (`mode`, and `days`
+/// or `years`) when it has one.
+fn object_lock_json(
+    lock: Option<&objectio_proto::metadata::ObjectLockConfiguration>,
+) -> serde_json::Value {
+    let Some(lock) = lock.filter(|l| l.enabled) else {
+        return serde_json::json!({ "enabled": false });
+    };
+    let mut out = serde_json::json!({ "enabled": true });
+    if let Some(r) = &lock.default_retention
+        && let Some(mode) = crate::s3::retention_mode_name(r.mode())
+    {
+        let mut retention = serde_json::json!({ "mode": mode });
+        if r.days > 0 {
+            retention["days"] = r.days.into();
+        }
+        if r.years > 0 {
+            retention["years"] = r.years.into();
+        }
+        out["default_retention"] = retention;
+    }
+    out
 }
 
 pub async fn admin_create_bucket(

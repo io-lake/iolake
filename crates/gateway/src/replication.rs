@@ -506,9 +506,12 @@ impl Rule {
     }
 }
 
+/// A `ReplicationConfiguration`, both ways: S3 reads and writes it as XML,
+/// the admin API (`crate::bucket_settings`) as JSON with the same element
+/// names (`Rule` an array).
 #[derive(Deserialize, Serialize)]
 #[serde(rename = "ReplicationConfiguration")]
-struct ConfigXml {
+pub struct ConfigXml {
     #[serde(rename = "Role", default, skip_serializing_if = "String::is_empty")]
     role: String,
     #[serde(rename = "Rule", default)]
@@ -551,7 +554,7 @@ struct FilterXml {
 struct AndXml {
     #[serde(rename = "Prefix", default, skip_serializing_if = "Option::is_none")]
     prefix: Option<String>,
-    #[serde(rename = "Tag", default)]
+    #[serde(rename = "Tag", default, skip_serializing_if = "Vec::is_empty")]
     tags: Vec<TagXml>,
 }
 
@@ -596,9 +599,14 @@ fn enabled(status: &str) -> Result<bool, Response> {
 
 /// Parse a `ReplicationConfiguration`.
 #[allow(clippy::result_large_err)]
-fn parse(body: &[u8]) -> Result<Vec<Rule>, Response> {
-    let doc: ConfigXml = quick_xml::de::from_reader(body)
-        .map_err(|e| malformed(&format!("The XML you provided was not well-formed: {e}")))?;
+fn parse_xml(body: &[u8]) -> Result<ConfigXml, Response> {
+    quick_xml::de::from_reader(body)
+        .map_err(|e| malformed(&format!("The XML you provided was not well-formed: {e}")))
+}
+
+/// The rules of a parsed `ReplicationConfiguration`.
+#[allow(clippy::result_large_err)]
+fn check(doc: ConfigXml) -> Result<Vec<Rule>, Response> {
     if doc.rules.is_empty() {
         return Err(malformed(
             "A replication configuration needs at least one Rule",
@@ -651,8 +659,9 @@ fn parse(body: &[u8]) -> Result<Vec<Rule>, Response> {
     Ok(rules)
 }
 
-fn render(rules: &[Rule]) -> String {
-    let doc = ConfigXml {
+/// The stored rules as S3's document.
+fn document(rules: &[Rule]) -> ConfigXml {
+    ConfigXml {
         role: String::new(),
         rules: rules
             .iter()
@@ -689,19 +698,27 @@ fn render(rules: &[Rule]) -> String {
                 },
             })
             .collect(),
-    };
-    format!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n{}",
-        quick_xml::se::to_string(&doc).unwrap_or_default()
-    )
+    }
 }
 
 /// `PUT /{bucket}?replication`
 pub async fn put_config(state: &AppState, bucket: &str, body: &[u8]) -> Response {
+    put(state, bucket, parse_xml(body)).await
+}
+
+/// PutBucketReplication of a parsed document: `200` with no body, or S3's
+/// error.
+pub async fn put_document(state: &AppState, bucket: &str, doc: ConfigXml) -> Response {
+    put(state, bucket, Ok(doc)).await
+}
+
+/// Store `doc` on `bucket`: a missing bucket is answered before a
+/// document that didn't parse or check.
+async fn put(state: &AppState, bucket: &str, doc: Result<ConfigXml, Response>) -> Response {
     if let Err(r) = crate::s3::bucket_owner(state, bucket).await {
         return r;
     }
-    let rules = match parse(body) {
+    let rules = match doc.and_then(check) {
         Ok(r) => r,
         Err(resp) => return resp,
     };
@@ -733,20 +750,30 @@ pub async fn put_config(state: &AppState, bucket: &str, body: &[u8]) -> Response
 
 /// `GET /{bucket}?replication`
 pub async fn get_config(state: &AppState, bucket: &str) -> Response {
-    if let Err(r) = crate::s3::bucket_owner(state, bucket).await {
-        return r;
-    }
-    match bucket_rules(state, bucket).await {
-        Some(rules) => Response::builder()
+    match get_document(state, bucket).await {
+        Ok(doc) => Response::builder()
             .status(StatusCode::OK)
             .header("Content-Type", "application/xml")
-            .body(Body::from(render(&rules)))
+            .body(Body::from(format!(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n{}",
+                quick_xml::se::to_string(&doc).unwrap_or_default()
+            )))
             .unwrap_or_default(),
-        None => S3Error::xml_response(
+        Err(r) => r,
+    }
+}
+
+/// GetBucketReplication: the bucket's document, or S3's error
+/// (`ReplicationConfigurationNotFoundError` for a bucket without one).
+pub async fn get_document(state: &AppState, bucket: &str) -> Result<ConfigXml, Response> {
+    crate::s3::bucket_owner(state, bucket).await?;
+    match bucket_rules(state, bucket).await {
+        Some(rules) => Ok(document(&rules)),
+        None => Err(S3Error::xml_response(
             "ReplicationConfigurationNotFoundError",
             "The replication configuration was not found",
             StatusCode::NOT_FOUND,
-        ),
+        )),
     }
 }
 

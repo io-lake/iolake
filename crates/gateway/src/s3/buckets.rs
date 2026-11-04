@@ -709,20 +709,13 @@ pub(crate) async fn delete_bucket_policy_internal(
     }
 }
 
-/// XML request for PUT bucket versioning
-#[derive(Deserialize)]
+/// A bucket's `VersioningConfiguration`, both ways: S3 reads and writes it
+/// as XML, the admin API (`crate::bucket_settings`) as JSON with the same
+/// element names. No `Status` is a bucket that was never versioned.
+#[derive(Deserialize, Serialize, Default, Debug, PartialEq, Eq)]
 #[serde(rename = "VersioningConfiguration")]
-pub(crate) struct VersioningConfigurationRequest {
-    #[serde(rename = "Status")]
-    pub(crate) status: String,
-}
-
-/// XML response for GET bucket versioning
-#[derive(Serialize)]
-#[serde(rename = "VersioningConfiguration")]
-pub(crate) struct VersioningConfigurationResponse {
-    #[serde(rename = "Status")]
-    #[serde(skip_serializing_if = "Option::is_none")]
+pub(crate) struct VersioningConfiguration {
+    #[serde(rename = "Status", default, skip_serializing_if = "Option::is_none")]
     pub(crate) status: Option<String>,
 }
 
@@ -731,7 +724,7 @@ pub(crate) async fn put_bucket_versioning_internal(
     bucket: String,
     body: Bytes,
 ) -> Response {
-    let config: VersioningConfigurationRequest = match quick_xml::de::from_reader(body.as_ref()) {
+    let config: VersioningConfiguration = match quick_xml::de::from_reader(body.as_ref()) {
         Ok(c) => c,
         Err(e) => {
             return S3Error::xml_response(
@@ -741,10 +734,19 @@ pub(crate) async fn put_bucket_versioning_internal(
             );
         }
     };
+    put_bucket_versioning_doc(&state, &bucket, &config).await
+}
 
-    let versioning_state = match config.status.as_str() {
-        "Enabled" => VersioningState::VersioningEnabled,
-        "Suspended" => VersioningState::VersioningSuspended,
+/// PutBucketVersioning of a parsed configuration: `200` with no body, or
+/// S3's error.
+pub(crate) async fn put_bucket_versioning_doc(
+    state: &AppState,
+    bucket: &str,
+    config: &VersioningConfiguration,
+) -> Response {
+    let versioning_state = match config.status.as_deref() {
+        Some("Enabled") => VersioningState::VersioningEnabled,
+        Some("Suspended") => VersioningState::VersioningSuspended,
         _ => {
             return S3Error::xml_response(
                 "MalformedXML",
@@ -757,7 +759,7 @@ pub(crate) async fn put_bucket_versioning_internal(
     let mut client = state.meta_client.clone();
     match client
         .put_bucket_versioning(PutBucketVersioningRequest {
-            bucket: bucket.clone(),
+            bucket: bucket.to_string(),
             state: versioning_state.into(),
         })
         .await
@@ -830,61 +832,83 @@ fn location_xml(region: &str) -> String {
     }
 }
 
+/// A configuration document as S3 answers it: `200`, XML.
+pub(crate) fn xml_document<T: Serialize>(doc: &T) -> Response {
+    let xml = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n{}",
+        to_xml(doc).unwrap_or_default()
+    );
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/xml")
+        .body(Body::from(xml))
+        .unwrap()
+}
+
 pub(crate) async fn get_bucket_versioning_internal(
     state: Arc<AppState>,
     bucket: String,
 ) -> Response {
+    match get_bucket_versioning_doc(&state, &bucket).await {
+        Ok(doc) => xml_document(&doc),
+        Err(resp) => resp,
+    }
+}
+
+/// GetBucketVersioning: the bucket's configuration, or S3's error.
+pub(crate) async fn get_bucket_versioning_doc(
+    state: &AppState,
+    bucket: &str,
+) -> Result<VersioningConfiguration, Response> {
     let mut client = state.meta_client.clone();
     match client
         .get_bucket_versioning(GetBucketVersioningRequest {
-            bucket: bucket.clone(),
+            bucket: bucket.to_string(),
         })
         .await
     {
         Ok(resp) => {
-            let state = resp.into_inner().state();
-            let status = match state {
+            let status = match resp.into_inner().state() {
                 VersioningState::VersioningEnabled => Some("Enabled".to_string()),
                 VersioningState::VersioningSuspended => Some("Suspended".to_string()),
                 VersioningState::VersioningDisabled => None,
             };
-            let result = VersioningConfigurationResponse { status };
-            let xml = format!(
-                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n{}",
-                to_xml(&result).unwrap_or_default()
-            );
-            Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, "application/xml")
-                .body(Body::from(xml))
-                .unwrap()
+            Ok(VersioningConfiguration { status })
         }
         Err(e) => {
             error!("Failed to get versioning for {}: {}", bucket, e);
-            S3Error::from_status(&e)
+            Err(S3Error::from_status(&e))
         }
     }
 }
 
-#[derive(Deserialize)]
+/// A bucket's `ObjectLockConfiguration`, both ways: S3 reads and writes it
+/// as XML, the admin API (`crate::bucket_settings`) as JSON with the same
+/// element names.
+#[derive(Deserialize, Serialize, Default, Debug, PartialEq, Eq)]
 #[serde(rename = "ObjectLockConfiguration")]
-pub(crate) struct ObjectLockConfigRequest {
-    #[serde(rename = "ObjectLockEnabled")]
-    #[serde(default)]
+pub(crate) struct ObjectLockConfiguration {
+    #[serde(
+        rename = "ObjectLockEnabled",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub(crate) object_lock_enabled: Option<String>,
-    #[serde(rename = "Rule")]
-    #[serde(default)]
+    #[serde(rename = "Rule", default, skip_serializing_if = "Option::is_none")]
     pub(crate) rule: Option<ObjectLockRuleXml>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Default, Debug, PartialEq, Eq)]
 pub(crate) struct ObjectLockRuleXml {
-    #[serde(rename = "DefaultRetention")]
-    #[serde(default)]
+    #[serde(
+        rename = "DefaultRetention",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub(crate) default_retention: Option<DefaultRetentionXml>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub(crate) struct DefaultRetentionXml {
     #[serde(rename = "Mode")]
     pub(crate) mode: String,
@@ -898,28 +922,12 @@ pub(crate) struct DefaultRetentionXml {
     pub(crate) years: Option<i64>,
 }
 
-#[derive(Serialize)]
-#[serde(rename = "ObjectLockConfiguration")]
-pub(crate) struct ObjectLockConfigResponse {
-    #[serde(rename = "ObjectLockEnabled")]
-    pub(crate) object_lock_enabled: String,
-    #[serde(rename = "Rule")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) rule: Option<ObjectLockRuleResponseXml>,
-}
-
-#[derive(Serialize)]
-pub(crate) struct ObjectLockRuleResponseXml {
-    #[serde(rename = "DefaultRetention")]
-    pub(crate) default_retention: DefaultRetentionXml,
-}
-
 pub(crate) async fn put_object_lock_config_internal(
     state: Arc<AppState>,
     bucket: String,
     body: Bytes,
 ) -> Response {
-    let config: ObjectLockConfigRequest = match quick_xml::de::from_reader(body.as_ref()) {
+    let config: ObjectLockConfiguration = match quick_xml::de::from_reader(body.as_ref()) {
         Ok(c) => c,
         Err(e) => {
             return S3Error::xml_response(
@@ -929,7 +937,16 @@ pub(crate) async fn put_object_lock_config_internal(
             );
         }
     };
+    put_object_lock_config_doc(&state, &bucket, config).await
+}
 
+/// PutObjectLockConfiguration of a parsed configuration: `200` with no
+/// body, or S3's error.
+pub(crate) async fn put_object_lock_config_doc(
+    state: &AppState,
+    bucket: &str,
+    config: ObjectLockConfiguration,
+) -> Response {
     let malformed = |msg: &str| S3Error::xml_response("MalformedXML", msg, StatusCode::BAD_REQUEST);
     if config.object_lock_enabled.as_deref() != Some("Enabled") {
         return malformed("ObjectLockEnabled must be Enabled");
@@ -939,9 +956,9 @@ pub(crate) async fn put_object_lock_config_internal(
     // suspend it): that is what keeps a locked version from being
     // overwritten. A bucket created with lock has it; an existing one may
     // turn lock on once versioning is enabled, as S3 allows.
-    match bucket_lock(&mut client, &bucket).await {
+    match bucket_lock(&mut client, bucket).await {
         Ok(Some(_)) => {}
-        Ok(None) => match bucket_versioning(&mut client, &bucket).await {
+        Ok(None) => match bucket_versioning(&mut client, bucket).await {
             Ok(VersioningState::VersioningEnabled) => {}
             Ok(_) => {
                 return S3Error::xml_response(
@@ -991,12 +1008,9 @@ pub(crate) async fn put_object_lock_config_internal(
 
     match client
         .put_object_lock_configuration(PutObjectLockConfigRequest {
-            bucket: bucket.clone(),
+            bucket: bucket.to_string(),
             config: Some(ProtoObjectLockConfig {
-                enabled: config
-                    .object_lock_enabled
-                    .as_deref()
-                    .is_some_and(|v| v == "Enabled"),
+                enabled: true,
                 default_retention,
             }),
         })
@@ -1017,59 +1031,68 @@ pub(crate) async fn get_object_lock_config_internal(
     state: Arc<AppState>,
     bucket: String,
 ) -> Response {
+    match get_object_lock_config_doc(&state, &bucket).await {
+        Ok(doc) => xml_document(&doc),
+        Err(resp) => resp,
+    }
+}
+
+/// GetObjectLockConfiguration: the bucket's configuration, or S3's error
+/// (`ObjectLockConfigurationNotFoundError` for a bucket without one).
+pub(crate) async fn get_object_lock_config_doc(
+    state: &AppState,
+    bucket: &str,
+) -> Result<ObjectLockConfiguration, Response> {
     let mut client = state.meta_client.clone();
     match client
         .get_object_lock_configuration(GetObjectLockConfigRequest {
-            bucket: bucket.clone(),
+            bucket: bucket.to_string(),
         })
         .await
     {
         Ok(resp) => {
             let inner = resp.into_inner();
             if !inner.found {
-                return S3Error::xml_response(
+                return Err(S3Error::xml_response(
                     "ObjectLockConfigurationNotFoundError",
                     "Object Lock configuration does not exist for this bucket",
                     StatusCode::NOT_FOUND,
-                );
+                ));
             }
-            let config = inner.config.unwrap_or_default();
-            let rule = config.default_retention.map(|dr| {
-                let mode = match dr.mode() {
-                    RetentionMode::RetentionGovernance => "GOVERNANCE",
-                    RetentionMode::RetentionCompliance => "COMPLIANCE",
-                    RetentionMode::RetentionNone => "COMPLIANCE",
-                };
-                ObjectLockRuleResponseXml {
-                    default_retention: DefaultRetentionXml {
-                        mode: mode.to_string(),
-                        days: (dr.days > 0).then_some(i64::from(dr.days)),
-                        years: (dr.years > 0).then_some(i64::from(dr.years)),
-                    },
-                }
-            });
-            let result = ObjectLockConfigResponse {
-                object_lock_enabled: if config.enabled {
-                    "Enabled".to_string()
-                } else {
-                    "Disabled".to_string()
-                },
-                rule,
-            };
-            let xml = format!(
-                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n{}",
-                to_xml(&result).unwrap_or_default()
-            );
-            Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, "application/xml")
-                .body(Body::from(xml))
-                .unwrap()
+            Ok(object_lock_document(&inner.config.unwrap_or_default()))
         }
         Err(e) => {
             error!("Failed to get object lock config for {}: {}", bucket, e);
-            S3Error::from_status(&e)
+            Err(S3Error::from_status(&e))
         }
+    }
+}
+
+/// The stored configuration as S3's document.
+pub(crate) fn object_lock_document(config: &ProtoObjectLockConfig) -> ObjectLockConfiguration {
+    let rule = config.default_retention.map(|dr| {
+        let mode = match dr.mode() {
+            RetentionMode::RetentionGovernance => "GOVERNANCE",
+            RetentionMode::RetentionCompliance | RetentionMode::RetentionNone => "COMPLIANCE",
+        };
+        ObjectLockRuleXml {
+            default_retention: Some(DefaultRetentionXml {
+                mode: mode.to_string(),
+                days: (dr.days > 0).then_some(i64::from(dr.days)),
+                years: (dr.years > 0).then_some(i64::from(dr.years)),
+            }),
+        }
+    });
+    ObjectLockConfiguration {
+        object_lock_enabled: Some(
+            if config.enabled {
+                "Enabled"
+            } else {
+                "Disabled"
+            }
+            .to_string(),
+        ),
+        rule,
     }
 }
 

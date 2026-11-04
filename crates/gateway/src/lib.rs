@@ -11,6 +11,7 @@ pub mod audit_spool;
 pub mod auth_middleware;
 pub mod authz;
 pub mod bucket_logging;
+pub mod bucket_settings;
 pub mod checksum;
 pub mod chunked_decode;
 pub mod clock_skew;
@@ -1445,6 +1446,35 @@ pub async fn run(
         .route(
             "/_admin/buckets/{name}/objects",
             get(admin::admin_list_objects),
+        )
+        // A bucket's S3 settings for the console, which holds a session
+        // cookie and so cannot reach `/{bucket}?versioning` and the rest:
+        // the S3 handlers' code behind the per-bucket admin gate.
+        .route(
+            "/_admin/buckets/{name}/versioning",
+            get(bucket_settings::get_versioning).put(bucket_settings::put_versioning),
+        )
+        .route(
+            "/_admin/buckets/{name}/object-lock",
+            get(bucket_settings::get_object_lock).put(bucket_settings::put_object_lock),
+        )
+        .route(
+            "/_admin/buckets/{name}/encryption",
+            get(bucket_settings::get_encryption)
+                .put(bucket_settings::put_encryption)
+                .delete(bucket_settings::delete_encryption),
+        )
+        .route(
+            "/_admin/buckets/{name}/lifecycle",
+            get(bucket_settings::get_lifecycle)
+                .put(bucket_settings::put_lifecycle)
+                .delete(bucket_settings::delete_lifecycle),
+        )
+        .route(
+            "/_admin/buckets/{name}/replication",
+            get(bucket_settings::get_replication)
+                .put(bucket_settings::put_replication)
+                .delete(bucket_settings::delete_replication),
         )
         // Object read/write for the console. The S3 path needs a SigV4
         // signature; the console has a session cookie, so these run the same

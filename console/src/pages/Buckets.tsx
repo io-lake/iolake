@@ -1,98 +1,175 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { Archive, Plus, Search, Settings, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Plus, Search } from "lucide-react";
 import PageHeader from "../components/PageHeader";
-import { Badge, Button, Card, Chip, Input, Table, Row, Cell } from "../components/ui";
+import { Badge, Banner, Button, Cell, Input, Select } from "../components/ui";
+import { useProtection } from "../api/protection";
+import BucketPanel, { PublicBadge } from "../components/buckets/BucketPanel";
+import CreateBucket from "../components/buckets/CreateBucket";
+import { CardFrame, SelectableRow, Th } from "../components/buckets/parts";
+import { useNow } from "../components/buckets/hooks";
+import {
+  deleteBucket,
+  effectivePublic,
+  formatAgo,
+  formatBytes,
+  formatCount,
+  loadBucketPolicy,
+  loadBuckets,
+  loadPools,
+  loadPublicAccessBlock,
+  loadUsage,
+  loadUsers,
+  mapLimit,
+  poolName,
+  readPolicy,
+  schemeShort,
+  tenantName,
+  versioningOf,
+  type BucketInfo,
+  type PolicyDoc,
+  type PoolInfo,
+  type PublicAccessBlock,
+  type UsageReport,
+  type UserInfo,
+} from "../components/buckets/model";
 
-interface Bucket {
-  name: string;
-  created_at?: number;
-  owner?: string;
-  versioning?: number;
-  pool?: string;
-  tenant?: string;
-}
+type Pill = "all" | "versioned" | "suspended" | "public";
 
-/// Meta stores versioning as an enum, not a bool: 1 = Enabled, 2 = Suspended,
-/// anything else = never turned on. Suspended is not Off — existing versions
-/// are still kept, only new writes stop creating them.
-function versioning(v?: number): { label: string; kind: "ok" | "warn" | "neutral" } {
-  if (v === 1) return { label: "Enabled", kind: "ok" };
-  if (v === 2) return { label: "Suspended", kind: "warn" };
-  return { label: "Off", kind: "neutral" };
-}
-
-type Filter = "all" | "versioned" | "suspended";
+const PILLS: [Pill, string][] = [
+  ["all", "All"],
+  ["versioned", "Versioned"],
+  ["suspended", "Suspended"],
+  ["public", "Public"],
+];
 
 export default function Buckets() {
-  const [bucketList, setBucketList] = useState<Bucket[]>([]);
-  const [showCreate, setShowCreate] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
+  const [params, setParams] = useSearchParams();
+  const selectedName = params.get("bucket") ?? "";
+
+  const [buckets, setBuckets] = useState<BucketInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState("");
+  const [usage, setUsage] = useState<UsageReport | null>(null);
+  const [usageErr, setUsageErr] = useState("");
+  const [pools, setPools] = useState<PoolInfo[] | null>(null);
+  const [users, setUsers] = useState<UserInfo[]>([]);
+  const [block, setBlock] = useState<PublicAccessBlock | null>(null);
+  /// Each bucket's policy; a missing key is still loading.
+  const [policies, setPolicies] = useState<Record<string, PolicyDoc | null>>({});
 
-  // No `setLoading(true)` here: `loading` starts true so the mount path is
-  // already covered, and a refresh updating the list in place reads better
-  // than flashing a spinner over data already on screen.
-  const load = () => {
-    fetch("/_admin/buckets")
-      .then((r) => r.json())
-      .then((data) => setBucketList(data.buckets || []))
-      .catch(() => setBucketList([]))
-      .finally(() => setLoading(false));
-  };
+  const [showCreate, setShowCreate] = useState(false);
+  const [query, setQuery] = useState("");
+  const [tenantF, setTenantF] = useState("*");
+  const [poolF, setPoolF] = useState("*");
+  const [pill, setPill] = useState<Pill>("all");
+  const [notice, setNotice] = useState("");
+  const now = useNow();
+  const protection = useProtection();
 
-  useEffect(load, []);
+  // Buckets first, so the table shows as soon as meta answers; usage, pools
+  // and the rest fill in as they come. None of them is required: a tenant's
+  // console gets 403 for pools, and usage is 503 until its first pass.
+  const load = useCallback(async () => {
+    try {
+      const list = await loadBuckets();
+      setBuckets(list);
+      setLoadErr("");
+      // Public access is per bucket and only the policy says it, so every
+      // bucket's policy is read, a few at a time.
+      void mapLimit(list, 6, async (b) => {
+        const p = await loadBucketPolicy(b.name).catch(() => null);
+        setPolicies((cur) => ({ ...cur, [b.name]: p }));
+      });
+    } catch (e) {
+      setLoadErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+    loadUsage()
+      .then((u) => {
+        setUsage(u);
+        setUsageErr("");
+      })
+      .catch((e: Error) => setUsageErr(e.message.startsWith("503") ? "gathering" : "unavailable"));
+  }, []);
 
-  const createBucket = async () => {
-    if (!newName.trim()) return;
-    await fetch("/_admin/buckets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName.trim() }),
-    });
-    setNewName("");
-    setShowCreate(false);
-    load();
-  };
+  useEffect(() => {
+    void load();
+    loadPools().then(setPools).catch(() => setPools(null));
+    loadUsers().then(setUsers).catch(() => setUsers([]));
+    loadPublicAccessBlock().then(setBlock).catch(() => setBlock(null));
+  }, [load]);
 
-  const deleteBucket = async (name: string) => {
-    if (!confirm(`Delete bucket "${name}"?`)) return;
-    await fetch(`/_admin/buckets/${encodeURIComponent(name)}`, { method: "DELETE" });
-    load();
-  };
+  // Usage is gathered every few seconds; a page left open keeps up with it.
+  useEffect(() => {
+    const t = setInterval(() => {
+      loadUsage().then(setUsage).catch(() => {});
+    }, 30_000);
+    return () => clearInterval(t);
+  }, []);
 
-  const counts = useMemo(
-    () => ({
-      all: bucketList.length,
-      versioned: bucketList.filter((b) => b.versioning === 1).length,
-      suspended: bucketList.filter((b) => b.versioning === 2).length,
-    }),
-    [bucketList]
+  const usageBy = useMemo(() => new Map((usage?.buckets ?? []).map((u) => [u.bucket, u])), [usage]);
+  const poolBy = useMemo(() => new Map((pools ?? []).map((p) => [p.name, p])), [pools]);
+  const tenants = useMemo(() => [...new Set(buckets.map((b) => b.tenant ?? ""))].sort(), [buckets]);
+  const poolNames = useMemo(() => [...new Set(buckets.map((b) => poolName(b.pool)))].sort(), [buckets]);
+
+  const isPublic = useCallback(
+    (name: string) => {
+      const p = policies[name];
+      return p !== undefined && effectivePublic(readPolicy(p).public, block).level !== "private";
+    },
+    [policies, block],
   );
 
-  const visible = bucketList
-    .filter((b) => (query ? b.name.toLowerCase().includes(query.toLowerCase()) : true))
-    .filter((b) =>
-      filter === "versioned"
-        ? b.versioning === 1
-        : filter === "suspended"
-          ? b.versioning === 2
-          : true
-    );
+  const pillMatch = (b: BucketInfo, p: Pill) =>
+    p === "all" ||
+    (p === "versioned" && b.versioning === 1) ||
+    (p === "suspended" && b.versioning === 2) ||
+    (p === "public" && isPublic(b.name));
 
-  const FILTERS: Array<[Filter, string, number]> = [
-    ["all", "All", counts.all],
-    ["versioned", "Versioned", counts.versioned],
-    ["suspended", "Suspended", counts.suspended],
-  ];
+  const q = query.trim().toLowerCase();
+  const filtered = buckets.filter(
+    (b) =>
+      (!q || b.name.toLowerCase().includes(q) || tenantName(b.tenant).toLowerCase().includes(q)) &&
+      (tenantF === "*" || (b.tenant ?? "") === tenantF) &&
+      (poolF === "*" || poolName(b.pool) === poolF),
+  );
+  const visible = filtered.filter((b) => pillMatch(b, pill)).sort((a, b) => a.name.localeCompare(b.name));
+  const selected = buckets.find((b) => b.name === selectedName);
+
+  const select = (name: string) => {
+    const next = new URLSearchParams(params);
+    if (name && name !== selectedName) next.set("bucket", name);
+    else next.delete("bucket");
+    setParams(next, { replace: true });
+  };
+
+  const totalStored = (usage?.buckets ?? []).reduce((a, u) => a + u.logical_bytes, 0);
+  const description = loading
+    ? "Loading buckets…"
+    : [
+        `${buckets.length} bucket${buckets.length === 1 ? "" : "s"}`,
+        usage ? `${formatBytes(totalStored)} stored${tenants.length > 1 ? ` across ${tenants.length} tenants` : ""}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+  const userName = (id: string | undefined) => (id ? users.find((u) => u.user_id === id)?.display_name : undefined);
+
+  const footer = (() => {
+    const shown = `Showing ${visible.length} of ${buckets.length}`;
+    if (usage) return `${shown} · sizes as of ${formatAgo(usage.updated_at, now)}`;
+    if (usageErr === "gathering") return `${shown} · sizes appear once the gateway has gathered usage, within a minute`;
+    if (usageErr) return `${shown} · sizes aren't available to this console`;
+    return shown;
+  })();
 
   return (
-    <div className="p-6">
+    <div className="px-8 py-6 flex flex-col gap-4">
       <PageHeader
         title="Buckets"
-        description="S3 buckets across all tenants and pools"
+        description={description}
         action={
           <Button variant="primary" icon={<Plus size={13} />} onClick={() => setShowCreate(true)}>
             Create bucket
@@ -101,117 +178,214 @@ export default function Buckets() {
       />
 
       {showCreate && (
-        <Card title="Create bucket" className="mb-4">
-          <div className="flex gap-2 items-end">
-            <div className="flex-1">
-              <Input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && void createBucket()}
-                placeholder="bucket-name"
-                autoFocus
-                hint="Lowercase letters, digits and dashes; 3–63 characters."
-              />
-            </div>
-            <Button variant="primary" onClick={() => void createBucket()} disabled={!newName.trim()}>
-              Create
+        <CreateBucket
+          pools={pools}
+          onCancel={() => setShowCreate(false)}
+          onCreated={(name) => {
+            setShowCreate(false);
+            setNotice(`Bucket ${name} created`);
+            void load().then(() => select(name));
+          }}
+        />
+      )}
+      {notice && (
+        <Banner
+          kind="ok"
+          title={notice}
+          action={
+            <Button size="sm" variant="ghost" onClick={() => setNotice("")}>
+              Dismiss
             </Button>
-            <Button onClick={() => setShowCreate(false)}>Cancel</Button>
-          </div>
-        </Card>
+          }
+        />
+      )}
+      {loadErr && (
+        <Banner kind="err" title="Couldn't list buckets">
+          {loadErr}
+        </Banner>
       )}
 
-      <div className="flex items-center gap-3 mb-3 flex-wrap">
-        <div className="w-full sm:w-64">
-          <Input
-            icon={<Search size={13} />}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search buckets"
-          />
-        </div>
-        <div className="inline-flex rounded-control border border-border-strong overflow-hidden">
-          {FILTERS.map(([key, label, n]) => (
-            <button
-              key={key}
-              onClick={() => setFilter(key)}
-              className={`h-8 px-3 text-[12px] font-medium ${
-                filter === key ? "bg-surface-2 text-text" : "bg-surface text-muted hover:text-text"
-              }`}
+      <div className={`grid gap-4 items-start ${selected ? "xl:grid-cols-[minmax(0,1fr)_380px]" : ""}`}>
+        <CardFrame label="Bucket list" className="overflow-hidden">
+          <div className="flex gap-2 p-3 flex-wrap items-center border-b border-border">
+            <div className="flex-[1_1_240px] min-w-[200px]">
+              <Input
+                type="search"
+                aria-label="Filter buckets"
+                icon={<Search size={13} />}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Filter by name or tenant"
+              />
+            </div>
+            {tenants.length > 1 && (
+              <div className="w-40">
+                <Select aria-label="Tenant" value={tenantF} onChange={(e) => setTenantF(e.target.value)}>
+                  <option value="*">All tenants</option>
+                  {tenants.map((t) => (
+                    <option key={t} value={t}>
+                      {tenantName(t)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
+            {poolNames.length > 1 && (
+              <div className="w-40">
+                <Select aria-label="Pool" value={poolF} onChange={(e) => setPoolF(e.target.value)}>
+                  <option value="*">All pools</option>
+                  {poolNames.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
+            <div
+              role="group"
+              aria-label="Show"
+              className="inline-flex gap-0.5 p-0.5 bg-surface-2 border border-border rounded-control"
             >
-              {label} <span className="text-faint tabular-nums">{n}</span>
-            </button>
-          ))}
-        </div>
-        <span className="ml-auto text-[11px] text-muted">
-          Showing {visible.length} of {bucketList.length}
-        </span>
-      </div>
+              {PILLS.map(([key, label]) => {
+                const n = filtered.filter((b) => pillMatch(b, key)).length;
+                const on = pill === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setPill(key)}
+                    className={`h-7 px-2.5 rounded-[6px] text-[12px] font-medium inline-flex items-center gap-1.5 ${
+                      on ? "bg-surface text-text shadow-card" : "text-muted hover:text-text"
+                    }`}
+                  >
+                    {label}
+                    <span className="font-mono text-[10.5px] tabular-nums text-muted">{n}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-      <Table
-        columns={[
-          { key: "name", label: "Name" },
-          { key: "tenant", label: "Tenant", className: "w-40" },
-          { key: "versioning", label: "Versioning", className: "w-36" },
-          { key: "pool", label: "Pool", className: "w-36" },
-          { key: "size", label: "Size", align: "right", className: "w-28" },
-          { key: "actions", label: "", className: "w-20" },
-        ]}
-        loading={loading}
-        empty={bucketList.length === 0 ? "No buckets. Create one to get started." : "No matches"}
-        footer={
-          bucketList.length
-            ? `${visible.length} bucket${visible.length === 1 ? "" : "s"} · size per bucket needs usage accounting, which nothing computes yet`
-            : undefined
-        }
-      >
-        {visible.length
-          ? visible.map((b) => {
-              const v = versioning(b.versioning);
-              return (
-                <Row key={b.name}>
-                  <Cell>
-                    <Link
-                      to={`/buckets/${encodeURIComponent(b.name)}`}
-                      className="flex items-center gap-2 text-[13px] font-medium text-text hover:text-accent"
-                    >
-                      <Archive size={14} className="text-muted shrink-0" />
-                      {b.name}
-                    </Link>
-                  </Cell>
-                  <Cell>
-                    {b.tenant ? <Chip mono>{b.tenant}</Chip> : <span className="text-faint">system</span>}
-                  </Cell>
-                  <Cell>
-                    <Badge kind={v.kind}>{v.label}</Badge>
-                  </Cell>
-                  <Cell className="font-mono">{b.pool || "default"}</Cell>
-                  <Cell align="right" className="text-faint">
-                    <span title="No per-bucket usage accounting yet">—</span>
-                  </Cell>
-                  <Cell align="right">
-                    <span className="inline-flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                      <Link
-                        to={`/buckets/${encodeURIComponent(b.name)}`}
-                        title="Bucket settings"
-                        className="p-1 rounded text-muted hover:text-text hover:bg-surface-2"
-                      >
-                        <Settings size={13} />
-                      </Link>
-                      <button
-                        onClick={() => void deleteBucket(b.name)}
-                        title="Delete bucket"
-                        className="p-1 rounded text-muted hover:text-err hover:bg-surface-2"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </span>
-                  </Cell>
-                </Row>
-              );
-            })
-          : undefined}
-      </Table>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse min-w-[700px]">
+              <thead>
+                <tr>
+                  <Th>Name</Th>
+                  <Th>Tenant</Th>
+                  <Th>Pool</Th>
+                  <Th align="right">Stored</Th>
+                  <Th align="right">Objects</Th>
+                  <Th>Versioning</Th>
+                  <Th>Public access</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && (
+                  <tr>
+                    <td colSpan={7} className="px-3.5">
+                      <div className="h-16 flex items-center">
+                        <div className="h-0.5 w-full bg-surface-2 rounded overflow-hidden">
+                          <div className="h-full w-1/3 bg-accent animate-[loading-bar_1.2s_ease-in-out_infinite]" />
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {!loading && visible.length === 0 && (
+                  <tr className="border-t border-border">
+                    <td colSpan={7} className="px-3.5 py-10 text-center text-[12.5px] text-muted">
+                      {buckets.length === 0 ? (
+                        <>
+                          No buckets yet.{" "}
+                          <button type="button" className="text-accent hover:underline" onClick={() => setShowCreate(true)}>
+                            Create a bucket
+                          </button>{" "}
+                          to start storing objects.
+                        </>
+                      ) : (
+                        "No bucket matches these filters."
+                      )}
+                    </td>
+                  </tr>
+                )}
+                {visible.map((b) => {
+                  const u = usageBy.get(b.name);
+                  const v = versioningOf(b.versioning);
+                  const isSel = b.name === selectedName;
+                  const scheme = schemeShort(poolBy.get(poolName(b.pool)));
+                  return (
+                    <SelectableRow key={b.name} selected={isSel} onSelect={() => select(b.name)}>
+                      <Cell>
+                        <button
+                          type="button"
+                          aria-pressed={isSel}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            select(b.name);
+                          }}
+                          className={`font-mono text-[12.5px] font-medium text-left whitespace-nowrap hover:underline ${
+                            isSel ? "text-accent" : "text-text hover:text-accent"
+                          }`}
+                        >
+                          {b.name}
+                        </button>
+                      </Cell>
+                      <Cell className="whitespace-nowrap">{tenantName(b.tenant)}</Cell>
+                      <Cell className="whitespace-nowrap">
+                        <span className="font-mono">{poolName(b.pool)}</span>
+                        {scheme && <span className="text-muted"> · {scheme}</span>}
+                      </Cell>
+                      <Cell align="right" className="tabular-nums whitespace-nowrap">
+                        {u ? formatBytes(u.logical_bytes) : <span className="text-muted">—</span>}
+                      </Cell>
+                      <Cell align="right" className="tabular-nums">
+                        {u ? formatCount(u.objects) : <span className="text-muted">—</span>}
+                      </Cell>
+                      <Cell>
+                        {v === "on" ? (
+                          <span className="text-text">On</span>
+                        ) : v === "suspended" ? (
+                          <Badge kind="warn">Suspended</Badge>
+                        ) : (
+                          <span className="text-muted">Off</span>
+                        )}
+                      </Cell>
+                      <Cell>
+                        <PublicBadge policy={policies[b.name]} block={block} />
+                      </Cell>
+                    </SelectableRow>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {!loading && buckets.length > 0 && (
+            <div className="px-3.5 py-2.5 border-t border-border text-[12px] text-muted">{footer}</div>
+          )}
+        </CardFrame>
+
+        {selected && (
+          <BucketPanel
+            key={selected.name}
+            bucket={selected}
+            usage={usageBy.get(selected.name)}
+            pool={poolBy.get(poolName(selected.pool))}
+            health={protection?.pools.find((p) => p.pool === poolName(selected.pool))}
+            policy={policies[selected.name]}
+            block={block}
+            ownerName={userName(selected.owner)}
+            onClose={() => select("")}
+            onDelete={async () => {
+              await deleteBucket(selected.name);
+              setNotice(`Bucket ${selected.name} deleted`);
+              select("");
+              await load();
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }

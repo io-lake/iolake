@@ -218,9 +218,9 @@ export default function Monitoring() {
     : null;
 
   return (
-    <div className="p-6">
+    <div className="px-8 py-6">
       <PageHeader
-        title="Monitoring"
+        title="Performance"
         description={
           usingPrometheus
             ? `From Prometheus · ${selected.label} window`

@@ -234,7 +234,7 @@ export default function Pools({ embedded = false }: PoolsProps = {}) {
                 onClick={() => startEdit()}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-primary-fg rounded-lg text-[12px] font-medium hover:bg-accent"
               >
-                <Plus size={14} /> Create Pool
+                <Plus size={14} /> Create pool
               </button>
             ) : null
           }
@@ -246,7 +246,7 @@ export default function Pools({ embedded = false }: PoolsProps = {}) {
             onClick={() => startEdit()}
             className="flex items-center gap-1.5 px-2.5 py-1 bg-accent text-primary-fg rounded-lg text-[11px] font-medium hover:bg-accent"
           >
-            <Plus size={12} /> Create Pool
+            <Plus size={12} /> Create pool
           </button>
         </div>
       )}

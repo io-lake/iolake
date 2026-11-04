@@ -215,9 +215,9 @@ export default function DeltaSharing() {
     : "";
 
   return (
-    <div className="p-6">
+    <div className="px-8 py-6">
       <PageHeader
-        title="Table Sharing"
+        title="Sharing"
         description="Share Delta and Iceberg tables with external consumers"
       />
 
@@ -279,7 +279,7 @@ export default function DeltaSharing() {
                 onClick={() => setShowCreateShare(true)}
                 className="flex items-center gap-1 px-2 py-1 bg-primary text-primary-fg rounded text-[11px] hover:bg-primary-hover"
               >
-                <Plus size={12} /> New Share
+                <Plus size={12} /> New share
               </button>
             </div>
 
@@ -404,7 +404,7 @@ export default function DeltaSharing() {
                 onClick={() => setShowCreateRecipient(true)}
                 className="flex items-center gap-1 px-2 py-1 bg-primary text-primary-fg rounded text-[11px] hover:bg-primary-hover"
               >
-                <Plus size={12} /> New Recipient
+                <Plus size={12} /> New recipient
               </button>
             </div>
 
@@ -514,7 +514,7 @@ export default function DeltaSharing() {
               onClick={startAddTable}
               className="flex items-center gap-1 px-2 py-1 bg-primary text-primary-fg rounded text-[11px] hover:bg-primary-hover"
             >
-              <Plus size={12} /> Add Table
+              <Plus size={12} /> Add table
             </button>
           </div>
 
@@ -583,7 +583,7 @@ export default function DeltaSharing() {
                   onClick={addTable}
                   className="px-3 py-1.5 bg-primary text-primary-fg rounded text-[11px] hover:bg-primary-hover"
                 >
-                  Add Table
+                  Add table
                 </button>
                 <button
                   onClick={() => setShowAddTable(false)}

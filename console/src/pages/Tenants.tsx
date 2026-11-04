@@ -220,7 +220,7 @@ export default function Tenants() {
   const unlimited = tenants.filter((t) => !t.quota_bytes).length;
 
   return (
-    <div className="p-6">
+    <div className="px-8 py-6">
       <PageHeader
         title="Tenants"
         description="Multi-tenant isolation — each tenant gets its own buckets, quotas and identity"

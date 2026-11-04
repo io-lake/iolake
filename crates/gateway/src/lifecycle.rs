@@ -75,9 +75,12 @@ impl Default for Timing {
 
 // ── The S3 document ─────────────────────────────────────────────────────
 
+/// A `LifecycleConfiguration`, both ways: S3 reads and writes it as XML,
+/// the admin API (`crate::bucket_settings`) as JSON with the same element
+/// names (`Rule` an array).
 #[derive(Deserialize, Serialize, Default)]
 #[serde(rename = "LifecycleConfiguration")]
-struct ConfigXml {
+pub struct ConfigXml {
     #[serde(rename = "Rule", default)]
     rules: Vec<RuleXml>,
 }
@@ -250,13 +253,22 @@ fn positive(v: Option<i64>, what: &str) -> Result<u32, Invalid> {
 
 /// The rules of a `LifecycleConfiguration` document, checked as S3 checks
 /// them.
+#[cfg(test)]
 fn parse(body: &[u8]) -> Result<Vec<ProtoRule>, Invalid> {
-    let doc: ConfigXml = quick_xml::de::from_reader(body).map_err(|e| {
+    parse_xml(body).and_then(check)
+}
+
+fn parse_xml(body: &[u8]) -> Result<ConfigXml, Invalid> {
+    quick_xml::de::from_reader(body).map_err(|e| {
         invalid(
             "MalformedXML",
             format!("The XML you provided was not well-formed: {e}"),
         )
-    })?;
+    })
+}
+
+/// The rules of a parsed document, checked as S3 checks them.
+fn check(doc: ConfigXml) -> Result<Vec<ProtoRule>, Invalid> {
     if doc.rules.is_empty() || doc.rules.len() > MAX_RULES {
         return Err(invalid(
             "MalformedXML",
@@ -438,8 +450,22 @@ fn parse(body: &[u8]) -> Result<Vec<ProtoRule>, Invalid> {
     Ok(out)
 }
 
-/// The stored rules as S3's document, as they were written.
+/// The stored rules as S3's XML document.
 fn render(rules: &[ProtoRule]) -> String {
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n{}",
+        quick_xml::se::to_string(&document(rules))
+            .unwrap_or_default()
+            .replacen(
+                "<LifecycleConfiguration>",
+                "<LifecycleConfiguration xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">",
+                1
+            )
+    )
+}
+
+/// The stored rules as S3's document, as they were written.
+fn document(rules: &[ProtoRule]) -> ConfigXml {
     let rules: Vec<RuleXml> = rules
         .iter()
         .map(|r| {
@@ -524,16 +550,7 @@ fn render(rules: &[ProtoRule]) -> String {
             }
         })
         .collect();
-    format!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n{}",
-        quick_xml::se::to_string(&ConfigXml { rules })
-            .unwrap_or_default()
-            .replacen(
-                "<LifecycleConfiguration>",
-                "<LifecycleConfiguration xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">",
-                1
-            )
-    )
+    ConfigXml { rules }
 }
 
 fn meta_error(e: &tonic::Status) -> Response {
@@ -551,10 +568,22 @@ fn meta_error(e: &tonic::Status) -> Response {
 
 /// `PUT /{bucket}?lifecycle`
 pub async fn put_config(state: &AppState, bucket: &str, body: &[u8]) -> Response {
+    put(state, bucket, parse_xml(body)).await
+}
+
+/// PutBucketLifecycleConfiguration of a parsed document: `200` with no
+/// body, or S3's error.
+pub async fn put_document(state: &AppState, bucket: &str, doc: ConfigXml) -> Response {
+    put(state, bucket, Ok(doc)).await
+}
+
+/// Store `doc` on `bucket`: a missing bucket is answered before a
+/// document that didn't parse or check.
+async fn put(state: &AppState, bucket: &str, doc: Result<ConfigXml, Invalid>) -> Response {
     if let Err(r) = crate::s3::bucket_owner(state, bucket).await {
         return r;
     }
-    let rules = match parse(body) {
+    let rules = match doc.and_then(check) {
         Ok(r) => r,
         Err(e) => {
             return S3Error::xml_response(e.code, &e.message, StatusCode::BAD_REQUEST);
@@ -580,9 +609,24 @@ pub async fn put_config(state: &AppState, bucket: &str, body: &[u8]) -> Response
 
 /// `GET /{bucket}?lifecycle`
 pub async fn get_config(state: &AppState, bucket: &str) -> Response {
-    if let Err(r) = crate::s3::bucket_owner(state, bucket).await {
-        return r;
+    match stored_rules(state, bucket).await {
+        Ok(rules) => Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "application/xml")
+            .body(Body::from(render(&rules)))
+            .unwrap(),
+        Err(r) => r,
     }
+}
+
+/// GetBucketLifecycleConfiguration: the bucket's document, or S3's error
+/// (`NoSuchLifecycleConfiguration` for a bucket without one).
+pub async fn get_document(state: &AppState, bucket: &str) -> Result<ConfigXml, Response> {
+    stored_rules(state, bucket).await.map(|r| document(&r))
+}
+
+async fn stored_rules(state: &AppState, bucket: &str) -> Result<Vec<ProtoRule>, Response> {
+    crate::s3::bucket_owner(state, bucket).await?;
     match state
         .meta_client
         .clone()
@@ -594,19 +638,15 @@ pub async fn get_config(state: &AppState, bucket: &str) -> Response {
         Ok(r) => {
             let r = r.into_inner();
             match r.config.filter(|c| r.found && !c.rules.is_empty()) {
-                Some(c) => Response::builder()
-                    .status(StatusCode::OK)
-                    .header("Content-Type", "application/xml")
-                    .body(Body::from(render(&c.rules)))
-                    .unwrap(),
-                None => S3Error::xml_response(
+                Some(c) => Ok(c.rules),
+                None => Err(S3Error::xml_response(
                     "NoSuchLifecycleConfiguration",
                     "The lifecycle configuration does not exist",
                     StatusCode::NOT_FOUND,
-                ),
+                )),
             }
         }
-        Err(e) => meta_error(&e),
+        Err(e) => Err(meta_error(&e)),
     }
 }
 

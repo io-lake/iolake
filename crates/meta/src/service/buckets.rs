@@ -416,7 +416,11 @@ impl MetaService {
     ) -> Result<Response<ListBucketsResponse>, Status> {
         let req = request.into_inner();
 
-        let buckets: Vec<BucketMeta> = self
+        // Each bucket's object lock goes with it: it is kept in its own
+        // table (`object_lock_configs`), not on the stored record, and a
+        // listing would otherwise need a call per bucket to show it.
+        // One lock at a time: the bucket table's is released first.
+        let mut buckets: Vec<BucketMeta> = self
             .buckets
             .read()
             .values()
@@ -424,6 +428,11 @@ impl MetaService {
             .filter(|b| req.tenant.is_empty() || b.tenant == req.tenant)
             .cloned()
             .collect();
+        let locks = self.object_lock_configs.read();
+        for b in &mut buckets {
+            b.object_lock = locks.get(&b.name).copied();
+        }
+        drop(locks);
 
         Ok(Response::new(ListBucketsResponse { buckets }))
     }

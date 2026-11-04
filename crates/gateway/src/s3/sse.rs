@@ -784,15 +784,17 @@ pub(crate) fn asks_sse_c(headers: &HeaderMap) -> bool {
     })
 }
 
-#[derive(Deserialize)]
+/// A bucket's `ServerSideEncryptionConfiguration`, both ways: S3 reads and
+/// writes it as XML, the admin API (`crate::bucket_settings`) as JSON with
+/// the same element names (`Rule` an array).
+#[derive(Deserialize, Serialize, Default, Debug, PartialEq, Eq)]
 #[serde(rename = "ServerSideEncryptionConfiguration")]
-pub(crate) struct SseConfigRequest {
-    #[serde(rename = "Rule")]
-    #[serde(default)]
+pub(crate) struct SseConfiguration {
+    #[serde(rename = "Rule", default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) rules: Vec<SseRuleXml>,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SseRuleXml {
     #[serde(rename = "ApplyServerSideEncryptionByDefault")]
     pub(crate) apply_default: Option<SseByDefaultXml>,
@@ -801,21 +803,13 @@ pub(crate) struct SseRuleXml {
     pub(crate) bucket_key_enabled: Option<bool>,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SseByDefaultXml {
     #[serde(rename = "SSEAlgorithm")]
     pub(crate) sse_algorithm: String,
     #[serde(rename = "KMSMasterKeyID")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) kms_master_key_id: Option<String>,
-}
-
-#[derive(Serialize)]
-#[serde(rename = "ServerSideEncryptionConfiguration")]
-pub(crate) struct SseConfigResponse {
-    #[serde(rename = "Rule")]
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub(crate) rules: Vec<SseRuleXml>,
 }
 
 pub(crate) fn parse_sse_algorithm(s: &str) -> Option<SseAlgorithm> {
@@ -839,7 +833,7 @@ pub(crate) async fn put_bucket_encryption_internal(
     bucket: String,
     body: Bytes,
 ) -> Response {
-    let config: SseConfigRequest = match quick_xml::de::from_reader(body.as_ref()) {
+    let config: SseConfiguration = match quick_xml::de::from_reader(body.as_ref()) {
         Ok(c) => c,
         Err(e) => {
             return S3Error::xml_response(
@@ -849,7 +843,16 @@ pub(crate) async fn put_bucket_encryption_internal(
             );
         }
     };
+    put_bucket_encryption_doc(&state, &bucket, &config).await
+}
 
+/// PutBucketEncryption of a parsed configuration: `200` with no body, or
+/// S3's error.
+pub(crate) async fn put_bucket_encryption_doc(
+    state: &AppState,
+    bucket: &str,
+    config: &SseConfiguration,
+) -> Response {
     let mut proto_rules: Vec<SseRule> = Vec::with_capacity(config.rules.len());
     for rule in &config.rules {
         let apply = rule.apply_default.as_ref().ok_or(());
@@ -892,7 +895,7 @@ pub(crate) async fn put_bucket_encryption_internal(
     let mut client = state.meta_client.clone();
     match client
         .put_bucket_encryption(PutBucketEncryptionRequest {
-            bucket: bucket.clone(),
+            bucket: bucket.to_string(),
             config: Some(BucketSseConfiguration { rules: proto_rules }),
         })
         .await
@@ -912,21 +915,34 @@ pub(crate) async fn get_bucket_encryption_internal(
     state: Arc<AppState>,
     bucket: String,
 ) -> Response {
+    match get_bucket_encryption_doc(&state, &bucket).await {
+        Ok(doc) => xml_document(&doc),
+        Err(resp) => resp,
+    }
+}
+
+/// GetBucketEncryption: the bucket's configuration, or S3's error
+/// (`ServerSideEncryptionConfigurationNotFoundError` for a bucket without
+/// one).
+pub(crate) async fn get_bucket_encryption_doc(
+    state: &AppState,
+    bucket: &str,
+) -> Result<SseConfiguration, Response> {
     let mut client = state.meta_client.clone();
     match client
         .get_bucket_encryption(GetBucketEncryptionRequest {
-            bucket: bucket.clone(),
+            bucket: bucket.to_string(),
         })
         .await
     {
         Ok(resp) => {
             let inner = resp.into_inner();
             if !inner.found {
-                return S3Error::xml_response(
+                return Err(S3Error::xml_response(
                     "ServerSideEncryptionConfigurationNotFoundError",
                     "The server side encryption configuration was not found",
                     StatusCode::NOT_FOUND,
-                );
+                ));
             }
             let config = inner.config.unwrap_or_default();
             let rules: Vec<SseRuleXml> = config
@@ -952,21 +968,11 @@ pub(crate) async fn get_bucket_encryption_internal(
                     })
                 })
                 .collect();
-
-            let result = SseConfigResponse { rules };
-            let xml = format!(
-                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n{}",
-                to_xml(&result).unwrap_or_default()
-            );
-            Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, "application/xml")
-                .body(Body::from(xml))
-                .unwrap()
+            Ok(SseConfiguration { rules })
         }
         Err(e) => {
             error!("Failed to get encryption config for {}: {}", bucket, e);
-            S3Error::from_status(&e)
+            Err(S3Error::from_status(&e))
         }
     }
 }

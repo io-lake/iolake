@@ -15,7 +15,7 @@
 // system admin.
 
 import { useState, useEffect } from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import Layout from "../../components/Layout";
 import Login from "../../pages/Login";
 import Signup from "../../pages/Signup";
@@ -26,7 +26,6 @@ import Objects from "../../pages/Objects";
 import UsersPage from "../../pages/Users";
 import Identity from "../../pages/Identity";
 import Catalog from "../../pages/Catalog";
-import IcebergCatalog from "../../pages/IcebergCatalog";
 import UnityCatalog from "../../pages/UnityCatalog";
 import DeltaSharing from "../../pages/DeltaSharing";
 import Policies from "../../pages/Policies";
@@ -92,7 +91,7 @@ export default function TenantApp() {
         <Route path="policies" element={<Policies />} />
         <Route path="identity" element={<Identity />} />
         <Route path="catalog" element={<Catalog />} />
-        <Route path="iceberg" element={<IcebergCatalog />} />
+        <Route path="iceberg" element={<Navigate to="/catalog" replace />} />
         <Route path="unity" element={<UnityCatalog />} />
         <Route path="sharing" element={<DeltaSharing />} />
       </Route>

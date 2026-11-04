@@ -164,6 +164,11 @@ jobs:
         shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v4
+      # The OSDs' metadata goes on the root filesystem (TMPDIR): with under
+      # a tenth of it free they keep small shards on disk blocks, and the
+      # small-object tests fail (they check for room first).
+      - name: free disk space
+        run: scripts/ci/free-disk.sh
       - uses: taiki-e/install-action@nextest
       - uses: actions/download-artifact@v4
         with:
@@ -171,7 +176,7 @@ jobs:
       - name: run this shard
         run: |
           # The tests find the services' binaries next to their own.
-          mkdir -p target/debug && cp bins/* target/debug/ && chmod +x target/debug/*
+          mkdir -p target/debug && mv bins/* target/debug/ && chmod +x target/debug/*
           cargo nextest run --archive-file e2e.tar.zst --workspace-remap . \
             --partition hash:${{ matrix.shard }}/8 --test-threads 1 --no-fail-fast --success-output never --failure-output final
       # A failing test's cluster logs (target/e2e-logs), to see why.
@@ -203,6 +208,10 @@ jobs:
         objectio-osd-bin/io-uring,objectio-gateway-bin/pcre2
     steps:
       - uses: actions/checkout@v4
+      # A build's target directory and the OSDs' metadata share the root
+      # filesystem; under a tenth free, small shards go to disk blocks.
+      - name: free disk space
+        run: scripts/ci/free-disk.sh
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@nextest
@@ -382,14 +391,11 @@ jobs:
     # including the e2e suite against aio --rdma tcp. No RDMA hardware needed.
     timeout-minutes: 90
     steps:
+      - uses: actions/checkout@v4
       # Mooncake's dependencies plus the Rust builds do not fit next to what
       # the runner image ships with.
       - name: free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-            /opt/hostedtoolcache/CodeQL
-          df -h /
-      - uses: actions/checkout@v4
+        run: scripts/ci/free-disk.sh
       - uses: docker/setup-buildx-action@v3
       - name: build the Mooncake test image
         uses: docker/build-push-action@v6

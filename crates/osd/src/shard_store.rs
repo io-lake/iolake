@@ -797,7 +797,24 @@ impl MetaSpace {
             };
             #[cfg(test)]
             let low = low || META_SPACE_LOW.with(std::cell::Cell::get);
-            self.low.store(low, Ordering::Relaxed);
+            // Said when it changes: below the floor, small objects cost a
+            // shard read each again, and nothing else shows why.
+            if self.low.swap(low, Ordering::Relaxed) != low {
+                if low {
+                    warn!(
+                        "the metadata store at {} has under {:.0}% of its filesystem free: \
+                         small shards go to disk blocks until it has room",
+                        self.dir.display(),
+                        META_SPACE_FREE_FLOOR * 100.0
+                    );
+                } else {
+                    info!(
+                        "the metadata store at {} has room again: small shards are kept \
+                         with their metadata",
+                        self.dir.display()
+                    );
+                }
+            }
         }
         self.low.load(Ordering::Relaxed)
     }

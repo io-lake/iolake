@@ -1,32 +1,23 @@
-import { useCallback, useEffect, useState } from "react";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { Activity, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
+import { Button, CapacityBar, ChartCard, LegendDot, Tabs } from "../components/ui";
 import {
-  Badge,
-  Banner,
-  Button,
-  CapacityBar,
-  Card,
-  ChartCard,
-  Chip,
-  LegendDot,
-  StatTile,
-} from "../components/ui";
-import { seriesColor } from "../components/ui/chart-series";
-import { cluster, nodes as nodesApi, type NodeInfo } from "../api/client";
+  cluster,
+  drain as drainApi,
+  nodes as nodesApi,
+  rebalance as rebalanceApi,
+  request,
+  type DrainStatus,
+  type NodeInfo,
+  type RebalanceStatus,
+} from "../api/client";
 import {
   LIVE_INTERVAL_MS,
+  MAX_LIVE_POINTS,
   QUERIES,
+  RANGES,
   capabilities,
   queryInstant,
   queryRange,
@@ -34,451 +25,598 @@ import {
   type MetricsCapabilities,
   type Series,
 } from "../api/metrics";
+import { groupSum, parse, quantile, rate, total, type Scrape } from "../api/exposition";
+import { useProtection } from "../api/protection";
+import ProtectionHero from "../components/overview/ProtectionHero";
+import Attention from "../components/overview/Attention";
+import CapacityPanel from "../components/overview/CapacityPanel";
+import TrendChart, { Sparkline, type TrendRow } from "../components/overview/TrendChart";
+import { Skeleton } from "../components/overview/Panel";
+import { hostName, schemeLong, type Pool, type Usage } from "../components/overview/cluster";
+import { bytes, bytesShort, count, ms, percent, perSecond, plural } from "../components/overview/format";
 
-const DAY = 86_400;
-const AXIS = { fontSize: 10, fontFamily: "var(--oio-font-mono)", fill: "var(--oio-faint)" };
-const TOOLTIP = {
-  background: "var(--oio-surface)",
-  border: "1px solid var(--oio-border-strong)",
-  borderRadius: 8,
-  fontSize: 11,
+// There is no "Recent activity" panel: nothing records an audit or event
+// log the console can read (bucket creation, key rotation, scrubs, balancer
+// moves), and a feed pieced together from whatever this page happens to know
+// would read as a history it isn't.
+
+const REQUESTS = "objectio_s3_requests_total";
+const READ_BYTES = "objectio_s3_response_bytes_total";
+const WRITE_BYTES = "objectio_s3_request_bytes_total";
+const DURATION = "objectio_s3_request_duration_seconds";
+
+const PROM = {
+  read: `sum(rate(${READ_BYTES}[$RATE]))`,
+  write: `sum(rate(${WRITE_BYTES}[$RATE]))`,
+  p50: QUERIES.latencyQuantile(0.5),
+  p99: QUERIES.latencyQuantile(0.99),
 };
 
-/// Join Prometheus series into the row-per-timestamp shape Recharts wants,
-/// keyed by a label so each series keeps its identity across the join.
-function rows(series: Series[], key: string) {
-  const names = series.map((s, i) => s.labels[key] ?? `series ${i + 1}`);
-  const byTime = new Map<number, Record<string, number | string>>();
-  series.forEach((s, i) => {
-    for (const pt of s.points) {
-      const row = byTime.get(pt.t) ?? {
-        t: pt.t,
-        time: new Date(pt.t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      };
-      row[names[i]] = pt.v;
-      byTime.set(pt.t, row);
-    }
-  });
-  return { names, data: [...byTime.values()].sort((a, b) => Number(a.t) - Number(b.t)) };
+const HISTORY_RANGES = RANGES.filter((r) => r.needsPrometheus);
+
+/// Keep only what this page reads from a scrape: the full text is thousands
+/// of samples, and a window of them is held in state.
+function slim(text: string, t: number): Scrape {
+  const keep = [REQUESTS, READ_BYTES, WRITE_BYTES, `${DURATION}_bucket`];
+  return { t, samples: parse(text).filter((s) => keep.includes(s.name)) };
 }
 
-/// Read one counter from the Prometheus text exposition.
-function counter(text: string, name: string, label?: [string, string]): number {
-  const sel = label ? `\\{[^}]*${label[0]}="${label[1]}"[^}]*\\}` : "(?:\\{[^}]*\\})?";
-  const m = text.match(new RegExp(`^${name}${sel}\\s+(\\S+)`, "m"));
-  return m ? Number.parseFloat(m[1]) : 0;
+const sum = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
+
+type Latency = { p50: number; p99: number } | "none" | "inconsistent";
+
+/// p50 and p99 of the requests between two scrapes, or why there are none.
+/// A histogram whose buckets don't rise to its total can't give a true
+/// percentile, so it is reported as such rather than computed anyway.
+function liveLatency(cur: Scrape, prev: Scrape): Latency {
+  const bucket = `${DURATION}_bucket`;
+  const a = groupSum(cur.samples, bucket, "le");
+  const b = groupSum(prev.samples, bucket, "le");
+  const inc = Object.keys(a)
+    .map((le) => [le === "+Inf" ? Infinity : Number.parseFloat(le), a[le] - (b[le] ?? 0)] as const)
+    .sort((x, y) => x[0] - y[0]);
+  const all = inc.at(-1);
+  if (!all || all[0] !== Infinity || all[1] <= 0) return "none";
+  for (let i = 1; i < inc.length; i++) {
+    if (inc[i][1] < inc[i - 1][1]) return "inconsistent";
+  }
+  const p50 = quantile(cur, prev, DURATION, 0.5).value;
+  const p99 = quantile(cur, prev, DURATION, 0.99).value;
+  return p50 == null || p99 == null ? "none" : { p50, p99 };
 }
 
-/// Sum every sample of a counter family, whatever its labels — the total
-/// across operations rather than any one of them.
-function counterSum(text: string, name: string): number {
-  let total = 0;
-  for (const line of text.split("\n")) {
-    if (line.startsWith(name) && !line.startsWith("#")) {
-      const v = Number.parseFloat(line.slice(line.lastIndexOf(" ") + 1));
-      if (Number.isFinite(v)) total += v;
+interface LivePoint {
+  t: number;
+  req: number;
+  read: number;
+  write: number;
+  latency: Latency;
+}
+
+/// Join range series by timestamp into chart rows.
+function joinSeries(named: Record<string, Series[]>, scale = 1): TrendRow[] {
+  const byT = new Map<number, TrendRow>();
+  for (const [key, list] of Object.entries(named)) {
+    for (const pt of list[0]?.points ?? []) {
+      if (!Number.isFinite(pt.v)) continue;
+      const row = byT.get(pt.t) ?? { t: pt.t };
+      row[key] = pt.v * scale;
+      byT.set(pt.t, row);
     }
   }
-  return total;
+  return [...byT.values()].sort((x, y) => x.t - y.t);
 }
 
-function bytes(n: number): string {
-  if (!Number.isFinite(n) || n <= 0) return "0 B";
-  const u = ["B", "KB", "MB", "GB", "TB", "PB"];
-  const i = Math.min(u.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
-  return `${(n / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${u[i]}`;
+function Tile({
+  label,
+  loading,
+  value,
+  aside,
+  children,
+  sub,
+}: {
+  label: string;
+  loading?: boolean;
+  value: ReactNode;
+  aside?: ReactNode;
+  children?: ReactNode;
+  sub?: ReactNode;
+}) {
+  return (
+    <div className="bg-surface border border-border rounded-card shadow-card px-4 py-3.5 flex flex-col gap-1.5 min-w-0">
+      <div className="font-mono text-[11px] leading-4 font-medium uppercase tracking-[0.06em] text-muted">
+        {label}
+      </div>
+      {loading ? (
+        <>
+          <Skeleton className="h-7 w-28" />
+          <Skeleton className="h-3.5 w-36" />
+        </>
+      ) : (
+        <>
+          <div className="flex items-end justify-between gap-2 min-w-0">
+            <div className="flex items-baseline gap-1.5 min-w-0">{value}</div>
+            {aside}
+          </div>
+          {children}
+          {sub && <div className="text-[11.5px] text-muted">{sub}</div>}
+        </>
+      )}
+    </div>
+  );
 }
 
-interface Spark {
-  v: number;
+function Big({ children }: { children: ReactNode }) {
+  return (
+    <span className="font-display text-[24px] leading-7 font-semibold text-text tabular-nums whitespace-nowrap">
+      {children}
+    </span>
+  );
+}
+
+function ChartNote({ children }: { children: ReactNode }) {
+  return (
+    <div className="h-[200px] flex items-center justify-center text-center px-6">
+      <p className="text-[12px] text-muted max-w-sm">{children}</p>
+    </div>
+  );
 }
 
 export default function Dashboard() {
-  const [caps, setCaps] = useState<MetricsCapabilities | null>(null);
+  /// null until the node list answers; false for a tenant's console, which
+  /// may not read cluster state.
+  const [admin, setAdmin] = useState<boolean | null>(null);
+  const [nodeList, setNodeList] = useState<NodeInfo[] | null>(null);
+  const [pools, setPools] = useState<Pool[]>([]);
+  const [usage, setUsage] = useState<Usage | null>(null);
+  const [balancer, setBalancer] = useState<RebalanceStatus | null>(null);
+  const [drains, setDrains] = useState<DrainStatus[]>([]);
   const [healthy, setHealthy] = useState<boolean | null>(null);
-  const [nodeList, setNodeList] = useState<NodeInfo[]>([]);
-  const [pools, setPools] = useState<{ name: string; scheme?: string; used?: number; total?: number }[]>([]);
-  const [rebalance, setRebalance] = useState<string>("");
-  const [rates, setRates] = useState<{ req: number; err: number; bytes: number }>({ req: 0, err: 0, bytes: 0 });
-  const [spark, setSpark] = useState<Record<string, Spark[]>>({ req: [], err: [], bytes: [] });
-  const [protection, setProtection] = useState({ data: 0, parity: 0 });
-  const [p99, setP99] = useState<number | null>(null);
-  const [p50, setP50] = useState<number | null>(null);
-  const [reqSeries, setReqSeries] = useState<Series[]>([]);
-  const [latSeries, setLatSeries] = useState<Series[]>([]);
-  // Previous counter reading, held only to difference against the next one.
-  const [, setPrev] = useState<Record<string, number> | null>(null);
+  const [caps, setCaps] = useState<MetricsCapabilities | null>(null);
+  const [range, setRange] = useState("24h");
+  const [history, setHistory] = useState<{ tput: TrendRow[]; lat: TrendRow[] } | null>(null);
+  const [promNow, setPromNow] = useState<{ p50?: number; p99?: number }>({});
+  const [scrapes, setScrapes] = useState<Scrape[]>([]);
+
+  const protection = useProtection(admin === true);
 
   const load = useCallback(async () => {
     cluster.health().then(setHealthy).catch(() => setHealthy(false));
-    nodesApi.list().then((d) => setNodeList(d.nodes ?? [])).catch(() => setNodeList([]));
-    fetch("/_admin/pools")
-      .then((r) => r.json())
+    fetch("/_admin/usage")
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setUsage)
+      .catch(() => setUsage(null));
+    try {
+      const d = await nodesApi.list();
+      setNodeList(d.nodes ?? []);
+      setAdmin(true);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (msg.startsWith("403") || msg.startsWith("401")) {
+        setAdmin(false);
+        return;
+      }
+      setAdmin(true);
+      setNodeList([]);
+    }
+    request<Pool[] | { pools: Pool[] }>("GET", "/_admin/pools")
       .then((d) => setPools(Array.isArray(d) ? d : (d.pools ?? [])))
       .catch(() => setPools([]));
-    fetch("/_admin/rebalance-status")
-      .then((r) => r.json())
-      .then((d) => setRebalance(d.running ? "rebalancing" : "idle"))
-      .catch(() => setRebalance(""));
+    rebalanceApi.status().then(setBalancer).catch(() => setBalancer(null));
+    drainApi
+      .status()
+      .then((d) => setDrains(d.drains ?? []))
+      .catch(() => setDrains([]));
   }, []);
 
-  const sampleMetrics = useCallback(async () => {
+  const sample = useCallback(async () => {
     try {
-      const text = await cluster.metrics();
-      setProtection({
-        data: counter(text, "objectio_gateway_protection_data_shards"),
-        parity: counter(text, "objectio_gateway_protection_parity_shards"),
-      });
-      const now = {
-        req: counterSum(text, "objectio_s3_requests_total"),
-        err: counter(text, "objectio_s3_requests_total", ["status", "server_error"]),
-        bytes:
-          counterSum(text, "objectio_s3_response_bytes_total") +
-          counterSum(text, "objectio_s3_request_bytes_total"),
-      };
-      setPrev((p) => {
-        if (p) {
-          const per = LIVE_INTERVAL_MS / 1000;
-          // A counter that went backwards means the process restarted; report
-          // zero rather than a large negative rate.
-          const d = (k: keyof typeof now) => (now[k] < p[k] ? 0 : (now[k] - p[k]) / per);
-          const next = { req: d("req"), err: d("err"), bytes: d("bytes") };
-          setRates(next);
-          setSpark((s) => ({
-            req: [...s.req, { v: next.req }].slice(-24),
-            err: [...s.err, { v: next.err }].slice(-24),
-            bytes: [...s.bytes, { v: next.bytes }].slice(-24),
-          }));
-        }
-        return now;
-      });
+      const s = slim(await cluster.metrics(), Date.now());
+      setScrapes((list) => [...list, s].slice(-(MAX_LIVE_POINTS + 1)));
     } catch {
-      // A missed sample is a gap, not a failure of the page.
+      // A missed scrape is a gap in the live window, not a page failure.
     }
   }, []);
 
-  // The 24h panels and the latency percentiles are the parts of this screen
-  // that cannot come from a browser polling /metrics: a quantile is computed
-  // from the histogram by Prometheus, and a day of history is history.
-  const loadHistory = useCallback(async () => {
-    const [ops, lat50, lat99, now99, now50] = await Promise.all([
-      queryRange(withRate(QUERIES.requestsByOperation, DAY), DAY).catch(() => [] as Series[]),
-      queryRange(withRate(QUERIES.latencyQuantile(0.5), DAY), DAY).catch(() => [] as Series[]),
-      queryRange(withRate(QUERIES.latencyQuantile(0.99), DAY), DAY).catch(() => [] as Series[]),
-      queryInstant(withRate(QUERIES.latencyQuantile(0.99), 300)).catch(() => [] as Series[]),
-      queryInstant(withRate(QUERIES.latencyQuantile(0.5), 300)).catch(() => [] as Series[]),
-    ]);
-    setReqSeries(ops);
-    setLatSeries([
-      ...lat50.map((x) => ({ ...x, labels: { q: "p50" } })),
-      ...lat99.map((x) => ({ ...x, labels: { q: "p99" } })),
-    ]);
-    const first = (s: Series[]) => s[0]?.points.at(-1)?.v;
-    setP99(first(now99) ?? null);
-    setP50(first(now50) ?? null);
+  const loadHistory = useCallback(async (key: string) => {
+    const r = HISTORY_RANGES.find((x) => x.key === key) ?? HISTORY_RANGES[0];
+    const q = (expr: string) => queryRange(withRate(expr, r.seconds), r.seconds).catch(() => [] as Series[]);
+    const [read, write, p50, p99] = await Promise.all([q(PROM.read), q(PROM.write), q(PROM.p50), q(PROM.p99)]);
+    setHistory({ tput: joinSeries({ read, write }), lat: joinSeries({ p99, p50 }, 1000) });
   }, []);
 
+  const loadPromNow = useCallback(async () => {
+    const one = (expr: string) =>
+      queryInstant(withRate(expr, 300))
+        .then((s) => s[0]?.points.at(-1)?.v)
+        .catch(() => undefined);
+    const [p50, p99] = await Promise.all([one(PROM.p50), one(PROM.p99)]);
+    setPromNow({
+      p50: p50 != null && Number.isFinite(p50) ? p50 : undefined,
+      p99: p99 != null && Number.isFinite(p99) ? p99 : undefined,
+    });
+  }, []);
+
+  // These start async work and set state only after their awaits; the rule
+  // can't see past the call.
   useEffect(() => {
-    capabilities()
-      .then((c) => {
-        setCaps(c);
-        if (c.prometheus) void loadHistory();
-      })
-      .catch(() => setCaps(null));
-    void load();
-    // Both are async and set state only after their awaits; the rule flags the
-    // call because it cannot see past the function boundary.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void sampleMetrics();
-    const t = setInterval(() => void sampleMetrics(), LIVE_INTERVAL_MS);
+    void load();
+    const t = setInterval(() => void load(), 30_000);
     return () => clearInterval(t);
-  }, [load, sampleMetrics, loadHistory]);
+  }, [load]);
 
-  const disks = nodeList.flatMap((n) => n.disks ?? []);
-  const totalCap = disks.reduce((a, d) => a + (d.total_capacity ?? 0), 0);
-  const usedCap = disks.reduce((a, d) => a + (d.used_capacity ?? 0), 0);
-  const online = nodeList.filter((n) => n.online).length;
-  const shards = protection.data + protection.parity;
-  const dataShare = shards > 0 ? protection.data / shards : 0;
+  useEffect(() => {
+    if (admin !== true) return;
+    capabilities()
+      .then(setCaps)
+      .catch(() => setCaps(null));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void sample();
+    const t = setInterval(() => void sample(), LIVE_INTERVAL_MS);
+    return () => clearInterval(t);
+  }, [admin, sample]);
 
-  const req = rows(reqSeries, "operation");
-  const lat = rows(latSeries, "q");
+  useEffect(() => {
+    if (!caps?.prometheus) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadHistory(range);
+    void loadPromNow();
+    const t = setInterval(() => {
+      void loadHistory(range);
+      void loadPromNow();
+    }, 60_000);
+    return () => clearInterval(t);
+  }, [caps, range, loadHistory, loadPromNow]);
 
-  const tiles = [
-    { label: "S3 requests / s", value: rates.req.toFixed(1), sub: "all operations", key: "req" },
-    {
-      label: "p99 latency",
-      // A percentile has no meaning without the histogram, and the browser
-      // only sees running totals — so this is blank rather than wrong when
-      // Prometheus is not wired.
-      value: p99 == null ? "—" : `${(p99 * 1000).toFixed(0)} ms`,
-      sub: p50 == null ? "needs Prometheus" : `p50 ${(p50 * 1000).toFixed(0)} ms`,
-      key: "",
-    },
-    { label: "Throughput", value: `${bytes(rates.bytes)}/s`, sub: "request + response", key: "bytes" },
-    { label: "Errors (5xx) / s", value: rates.err.toFixed(2), sub: "server_error", key: "err" },
-    { label: "OSDs up", value: `${online} / ${nodeList.length}`, sub: `${disks.length} disks`, key: "" },
-  ];
+  const live = useMemo<LivePoint[]>(() => {
+    const out: LivePoint[] = [];
+    for (let i = 1; i < scrapes.length; i++) {
+      const cur = scrapes[i];
+      const prev = scrapes[i - 1];
+      out.push({
+        t: cur.t,
+        req: sum(rate(cur, prev, REQUESTS, "operation")),
+        read: sum(rate(cur, prev, READ_BYTES)),
+        write: sum(rate(cur, prev, WRITE_BYTES)),
+        latency: liveLatency(cur, prev),
+      });
+    }
+    return out;
+  }, [scrapes]);
+
+  // What the live window saw in total: the operation mix and server errors.
+  const seen = useMemo(() => {
+    if (scrapes.length < 2) return null;
+    const first = scrapes[0];
+    const last = scrapes[scrapes.length - 1];
+    const a = groupSum(last.samples, REQUESTS, "operation");
+    const b = groupSum(first.samples, REQUESTS, "operation");
+    const ops = Object.entries(a)
+      .map(([op, v]) => [op, Math.max(0, v - (b[op] ?? 0))] as const)
+      .filter(([, v]) => v > 0)
+      .sort((x, y) => y[1] - x[1]);
+    const errNow = total(last.samples, REQUESTS, { status: "server_error" }) ?? 0;
+    const errThen = total(first.samples, REQUESTS, { status: "server_error" }) ?? 0;
+    return {
+      seconds: (last.t - first.t) / 1000,
+      ops,
+      requests: ops.reduce((x, [, v]) => x + v, 0),
+      errors: Math.max(0, errNow - errThen),
+    };
+  }, [scrapes]);
+
+  const resumeBalancer = useCallback(async () => {
+    await rebalanceApi.resume();
+    setBalancer(await rebalanceApi.status());
+  }, []);
+
+  if (admin === false) return <TenantOverview usage={usage} />;
+
+  const nodes = nodeList ?? [];
+  const loading = nodeList === null;
+  const disks = nodes.flatMap((n) => n.disks ?? []);
+  const rawTotal = disks.reduce((a, d) => a + (d.total_capacity ?? 0), 0);
+  const rawUsed = disks.reduce((a, d) => a + (d.used_capacity ?? 0), 0);
+  const up = nodes.filter((n) => n.online);
+  const hosts = new Set(up.map(hostName)).size;
+  const unhealthy = up.reduce((a, n) => a + (n.disks ?? []).filter((d) => d.status !== "healthy").length, 0);
+  const marked = (st: string) => nodes.filter((n) => n.admin_state === st).length;
+  const schemes = [...new Set(pools.map(schemeLong))];
+
+  const description = loading
+    ? "Reading the cluster"
+    : nodes.length === 0
+      ? "No OSDs have registered yet"
+      : [
+          plural(hosts, "host"),
+          plural(nodes.length, "OSD"),
+          plural(disks.length, "drive"),
+          `${bytes(rawTotal)} raw`,
+          schemes.length === 1 ? schemes[0] : schemes.length > 1 ? plural(pools.length, "pool") : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+
+  const now = live.at(-1);
+  const prom = caps?.prometheus === true;
+  const liveLat = live.map((p) => p.latency);
+  const lastLat = [...liveLat].reverse().find((l) => typeof l === "object");
+  const latBroken = liveLat.some((l) => l === "inconsistent");
+  const p99 = prom ? promNow.p99 : typeof lastLat === "object" ? lastLat.p99 : undefined;
+  const p50 = prom ? promNow.p50 : typeof lastLat === "object" ? lastLat.p50 : undefined;
+
+  let mix = "Measuring";
+  if (seen && seen.requests === 0) {
+    mix = `No requests in the last ${plural(Math.max(1, Math.round(seen.seconds)), "second")}`;
+  } else if (seen) {
+    const share = (v: number) => `${Math.round((v / seen.requests) * 100)}%`;
+    const parts = seen.ops.slice(0, 2).map(([op, v]) => `${op} ${share(v)}`);
+    const rest = seen.ops.slice(2).reduce((a, [, v]) => a + v, 0);
+    if (rest > 0) parts.push(`other ${share(rest)}`);
+    mix = parts.join(" · ");
+  }
+
+  const liveRows = (pick: (p: LivePoint) => Record<string, number | undefined>): TrendRow[] =>
+    live.map((p) => ({ t: p.t, ...pick(p) }));
+  const tputRows = prom ? (history?.tput ?? []) : liveRows((p) => ({ read: p.read, write: p.write }));
+  const latRows = prom
+    ? (history?.lat ?? [])
+    : liveRows((p) =>
+        typeof p.latency === "object" ? { p99: p.latency.p99 * 1000, p50: p.latency.p50 * 1000 } : {},
+      );
+  const latPoints = latRows.filter((r) => r.p99 != null);
+  const lastT = tputRows.at(-1);
+  const lastL = latPoints.at(-1);
+  const windowText = prom
+    ? `last ${HISTORY_RANGES.find((r) => r.key === range)?.label ?? range}`
+    : "live, since this page opened";
 
   return (
-    <div className="p-6">
+    <div className="px-8 py-6 flex flex-col gap-4">
       <PageHeader
-        title="Dashboard"
-        description={
-          nodeList.length
-            ? `${nodeList.length} host${nodeList.length === 1 ? "" : "s"} · ${disks.length} disk${disks.length === 1 ? "" : "s"} · ${bytes(totalCap)} raw`
-            : "Cluster overview"
-        }
+        title="Overview"
+        description={description}
         action={
-          <div className="flex gap-2">
-            <Button variant="secondary" icon={<RefreshCw size={13} />} onClick={() => void load()}>
+          <>
+            {prom && (
+              <div role="group" aria-label="Time range">
+                <Tabs
+                  items={HISTORY_RANGES.map((r) => ({ key: r.key, label: r.label }))}
+                  value={range}
+                  onChange={setRange}
+                />
+              </div>
+            )}
+            <Button
+              variant="secondary"
+              icon={<RefreshCw size={13} />}
+              onClick={() => {
+                void load();
+                if (prom) {
+                  void loadHistory(range);
+                  void loadPromNow();
+                }
+              }}
+            >
               Refresh
             </Button>
-            <Link to="/monitoring">
-              <Button variant="primary" icon={<Activity size={13} />}>
-                Open monitoring
-              </Button>
-            </Link>
-          </div>
+          </>
         }
       />
 
-      <Banner
-        kind={healthy === false ? "err" : "ok"}
-        className="mb-4"
-        title={healthy === false ? "Gateway is not answering health checks" : "All systems operational"}
-      >
-        {[
-          rebalance ? `balancer ${rebalance}` : null,
-          `${online}/${nodeList.length || 0} OSDs online`,
-        ]
-          .filter(Boolean)
-          .join(" · ")}
-      </Banner>
+      <ProtectionHero protection={protection} pools={pools} nodes={nodes} />
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
-        {tiles.map((t) => (
-          <StatTile
-            key={t.label}
-            label={t.label}
-            value={t.value}
-            sub={t.sub}
-            spark={
-              t.key && spark[t.key]?.length > 1 ? (
-                <div className="w-[120px] h-[26px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={spark[t.key]}>
-                      <YAxis hide domain={["dataMin", "dataMax"]} />
-                      <Line
-                        type="monotone"
-                        dataKey="v"
-                        stroke={seriesColor(0)}
-                        strokeWidth={1.5}
-                        dot={false}
-                        isAnimationActive={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : undefined
-            }
-          />
-        ))}
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-4 mb-4">
-        <ChartCard
-          title="S3 request rate"
-          subtitle="requests per second · 24h"
-          legend={
-            req.names.length ? (
-              <div className="flex gap-3 flex-wrap">
-                {req.names.slice(0, 4).map((n, i) => (
-                  <LegendDot key={n} index={i} label={n} />
-                ))}
-              </div>
-            ) : undefined
+      <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+        <Tile
+          label="Capacity used"
+          loading={loading}
+          value={
+            <>
+              <Big>{bytes(rawUsed)}</Big>
+              <span className="text-muted tabular-nums whitespace-nowrap">of {bytes(rawTotal)}</span>
+            </>
+          }
+          sub={
+            rawTotal > 0
+              ? `${percent(rawUsed, rawTotal).toFixed(1)}% of raw · ${bytes(rawTotal - rawUsed)} free`
+              : "No drives reporting"
           }
         >
-          {req.data.length ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={req.data} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
-                <CartesianGrid stroke="var(--oio-border)" vertical={false} />
-                <XAxis dataKey="time" tick={AXIS} tickLine={false} axisLine={false} minTickGap={40} />
-                <YAxis tick={AXIS} tickLine={false} axisLine={false} width={44} />
-                <Tooltip contentStyle={TOOLTIP} />
-                {req.names.slice(0, 4).map((n, i) => (
-                  <Line
-                    key={n}
-                    type="monotone"
-                    dataKey={n}
-                    stroke={seriesColor(i)}
-                    strokeWidth={2}
-                    dot={false}
-                    isAnimationActive={false}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
+          <CapacityBar used={rawUsed} total={rawTotal} />
+        </Tile>
+
+        <Tile
+          label="S3 requests"
+          loading={scrapes.length === 0}
+          value={<Big>{now ? `${perSecond(now.req)}/s` : "—"}</Big>}
+          aside={
+            live.length > 1 ? (
+              <Sparkline values={live.map((p) => p.req)} label="Requests per second since this page opened" />
+            ) : undefined
+          }
+          sub={mix}
+        />
+
+        <Tile
+          label="p99 latency"
+          loading={!prom && scrapes.length === 0}
+          value={<Big>{p99 != null ? ms(p99) : "—"}</Big>}
+          aside={
+            !prom && latPoints.length > 1 ? (
+              <Sparkline values={latPoints.map((r) => Number(r.p99))} label="p99 latency since this page opened" />
+            ) : undefined
+          }
+          sub={
+            p50 != null
+              ? `p50 ${ms(p50)} · all operations`
+              : latBroken && !prom
+                ? "The gateway's latency histogram doesn't add up"
+                : "No requests to measure yet"
+          }
+        />
+
+        <Tile
+          label="Objects"
+          loading={usage === null && loading}
+          value={<Big>{usage?.cluster ? count(usage.cluster.objects) : "—"}</Big>}
+          sub={
+            usage?.cluster
+              ? `${bytes(usage.cluster.logical_bytes)} in ${plural(usage.cluster.buckets, "bucket")}`
+              : "Usage hasn't been gathered yet"
+          }
+        />
+
+        <Tile
+          label="OSDs up"
+          loading={loading}
+          value={
+            <>
+              <Big>{count(up.length)}</Big>
+              <span className="text-muted tabular-nums whitespace-nowrap">of {count(nodes.length)}</span>
+            </>
+          }
+          sub={[
+            plural(disks.length, "drive"),
+            unhealthy ? `${unhealthy} not healthy` : disks.length ? "all healthy" : null,
+            marked("out") ? `${marked("out")} out` : null,
+            marked("draining") ? `${marked("draining")} draining` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        />
+      </div>
+
+      <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(min(440px,100%),1fr))]">
+        <ChartCard
+          title="Throughput"
+          subtitle={`bytes per second, all pools · ${windowText}`}
+          className="shadow-card min-w-0"
+          legend={
+            <div className="flex gap-3.5 flex-wrap">
+              <LegendDot index={0} label={`Read${lastT?.read != null ? ` ${bytes(Number(lastT.read))}/s` : ""}`} />
+              <LegendDot index={1} label={`Write${lastT?.write != null ? ` ${bytes(Number(lastT.write))}/s` : ""}`} />
+            </div>
+          }
+        >
+          {tputRows.length > 1 ? (
+            <TrendChart
+              rows={tputRows}
+              series={[
+                { key: "read", label: "Read", color: 0 },
+                { key: "write", label: "Write", color: 1 },
+              ]}
+              axisFormat={bytesShort}
+              base={1024}
+              valueFormat={(v) => `${bytes(v)}/s`}
+              label={`S3 throughput, ${windowText}. Now ${bytes(Number(lastT?.read ?? 0))}/s read and ${bytes(Number(lastT?.write ?? 0))}/s written.`}
+            />
+          ) : prom && history ? (
+            <ChartNote>Prometheus has no samples for this range yet.</ChartNote>
           ) : (
-            <NeedsHistory promReady={caps?.prometheus === true} />
+            <ChartNote>
+              Measuring. A rate needs two scrapes of the gateway's counters, {LIVE_INTERVAL_MS / 1000} seconds
+              apart.
+            </ChartNote>
           )}
         </ChartCard>
 
         <ChartCard
           title="Request latency"
-          subtitle="milliseconds · 24h"
+          subtitle={`milliseconds, all S3 operations · ${windowText}`}
+          className="shadow-card min-w-0"
           legend={
-            <div className="flex gap-3">
-              {["p50", "p99"].map((n, i) => (
-                <LegendDot key={n} index={i} label={n} />
-              ))}
-            </div>
+            latPoints.length ? (
+              <div className="flex gap-3.5 flex-wrap">
+                <LegendDot index={0} label={`p99${lastL?.p99 != null ? ` ${Math.round(Number(lastL.p99))}` : ""}`} />
+                <LegendDot index={2} label={`p50${lastL?.p50 != null ? ` ${Math.round(Number(lastL.p50))}` : ""}`} />
+              </div>
+            ) : undefined
           }
         >
-          {lat.data.length ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={lat.data} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
-                <CartesianGrid stroke="var(--oio-border)" vertical={false} />
-                <XAxis dataKey="time" tick={AXIS} tickLine={false} axisLine={false} minTickGap={40} />
-                <YAxis
-                  tick={AXIS}
-                  tickLine={false}
-                  axisLine={false}
-                  width={44}
-                  tickFormatter={(v) => `${(Number(v) * 1000).toFixed(0)}`}
-                />
-                <Tooltip
-                  contentStyle={TOOLTIP}
-                  formatter={(v) => [`${(Number(v) * 1000).toFixed(1)} ms`, ""]}
-                />
-                {["p50", "p99"].map((n, i) => (
-                  <Line
-                    key={n}
-                    type="monotone"
-                    dataKey={n}
-                    stroke={seriesColor(i)}
-                    strokeWidth={2}
-                    dot={false}
-                    isAnimationActive={false}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
+          {latPoints.length > 1 ? (
+            <TrendChart
+              rows={latRows}
+              series={[
+                { key: "p99", label: "p99", color: 0 },
+                { key: "p50", label: "p50", color: 2 },
+              ]}
+              axisFormat={(v) => `${Math.round(v)}`}
+              valueFormat={(v) => `${v < 10 ? v.toFixed(1) : Math.round(v)} ms`}
+              label={`S3 request latency, ${windowText}. p99 now ${Math.round(Number(lastL?.p99 ?? 0))} ms, p50 ${Math.round(Number(lastL?.p50 ?? 0))} ms.`}
+            />
+          ) : prom ? (
+            <ChartNote>Prometheus has no latency samples for this range yet.</ChartNote>
+          ) : latBroken ? (
+            <ChartNote>
+              The gateway's request-duration histogram has buckets that count more requests than its total, so
+              no percentile computed from it would be right.
+            </ChartNote>
           ) : (
-            <NeedsHistory promReady={caps?.prometheus === true} />
+            <ChartNote>
+              No S3 requests to measure since this page opened. Percentiles appear as requests arrive; for a
+              history, point the gateway at Prometheus.
+            </ChartNote>
           )}
         </ChartCard>
       </div>
 
-      <div className="grid lg:grid-cols-4 gap-4">
-        <Card title="Capacity">
-          <p className="font-display text-[26px] leading-none font-semibold text-text tabular-nums">
-            {bytes(usedCap)}
-          </p>
-          <p className="text-[11px] text-muted mt-1 mb-3">
-            of {bytes(totalCap)} raw
-            {totalCap > 0 && ` · ${((usedCap / totalCap) * 100).toFixed(1)}%`}
-          </p>
-          <CapacityBar used={usedCap} total={totalCap} />
-          {shards > 0 && (
-            <div className="flex items-center gap-3 mt-3 text-[11px] text-muted">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full" style={{ background: seriesColor(0) }} />
-                Data {protection.data}
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-warn-dot" />
-                Parity {protection.parity}
-              </span>
-              <span className="ml-auto">{(dataShare * 100).toFixed(0)}% usable</span>
-            </div>
-          )}
-          {!caps?.prometheus && (
-            <p className="mt-3 text-[11px] text-faint">
-              A capacity trend needs Prometheus; this is the current reading.
-            </p>
-          )}
-        </Card>
-
-        <Card title="Pools · PG fill">
-          {pools.length === 0 ? (
-            <p className="text-[12px] text-muted">
-              No pools defined.{" "}
-              <Link to="/pools" className="text-accent">
-                Create one
-              </Link>
-            </p>
-          ) : (
-            <div className="space-y-2.5">
-              {pools.map((p) => (
-                <div key={p.name} className="flex items-center gap-2">
-                  <span className="font-mono text-[11px] text-text-2 w-20 truncate">{p.name}</span>
-                  {p.scheme && <Chip mono>{p.scheme}</Chip>}
-                  <CapacityBar used={p.used ?? 0} total={p.total ?? 0} className="flex-1" />
-                  <span className="text-[11px] text-muted tabular-nums w-10 text-right">
-                    {p.total ? `${Math.round(((p.used ?? 0) / p.total) * 100)}%` : "—"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        <Card title="Hosts">
-          {nodeList.length === 0 ? (
-            <p className="text-[12px] text-muted">No OSDs registered</p>
-          ) : (
-            <div className="space-y-2.5">
-              {nodeList.slice(0, 6).map((n) => {
-                const t = (n.disks ?? []).reduce((a, d) => a + d.total_capacity, 0);
-                const u = (n.disks ?? []).reduce((a, d) => a + d.used_capacity, 0);
-                return (
-                  <div key={n.node_id} className="flex items-center gap-2">
-                    <span className="font-mono text-[11px] text-text-2 flex-1 truncate">
-                      {n.hostname || n.node_name}
-                    </span>
-                    <CapacityBar used={u} total={t} className="w-16" />
-                    <span className="text-[11px] text-muted tabular-nums w-9 text-right">
-                      {t ? `${Math.round((u / t) * 100)}%` : "—"}
-                    </span>
-                    <Badge kind={n.online ? "ok" : "err"}>{n.online ? "up" : "down"}</Badge>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </Card>
-
-        {/* The artboard shows a recent-events feed. Nothing records one: there
-            is no event log endpoint, and inventing entries from whatever the
-            page happens to know would be worse than saying so. */}
-        <Card title="Recent events">
-          <p className="text-[11px] text-muted">
-            No event log yet. Balancer moves, licence changes and bucket
-            lifecycle are not recorded anywhere the console can read, so this
-            panel has no source.
-          </p>
-        </Card>
+      <div className="grid gap-4 items-start grid-cols-[repeat(auto-fit,minmax(min(340px,100%),1fr))]">
+        <Attention
+          healthy={healthy}
+          protection={protection}
+          nodes={nodes}
+          drains={drains}
+          rebalance={balancer}
+          serverErrors={seen ? { errors: seen.errors, seconds: seen.seconds } : null}
+          onResumeBalancer={resumeBalancer}
+        />
+        <CapacityPanel nodes={nodes} />
       </div>
+
+      {pools.length === 0 && !loading && (
+        <p className="text-[12px] text-muted">
+          No pools are defined.{" "}
+          <Link to="/cluster/pools" className="text-accent hover:underline">
+            Create one
+          </Link>
+        </p>
+      )}
     </div>
   );
 }
 
-/// Shown where a 24h panel has no data. A browser polling /metrics knows
-/// nothing older than the moment the page opened, so an empty chart here
-/// would read as "no traffic" rather than "no history".
-function NeedsHistory({ promReady }: { promReady: boolean }) {
+/// A tenant's console sees its own storage only: cluster state, other
+/// tenants' traffic and raw capacity aren't theirs to read.
+function TenantOverview({ usage }: { usage: Usage | null }) {
+  const t = usage?.tenants[0];
   return (
-    <div className="h-[200px] flex flex-col items-center justify-center text-center px-6 gap-1.5">
-      <code className="font-mono text-[11px] text-text-2 bg-surface-2 px-1.5 py-px rounded-[5px]">
-        {promReady ? "no samples in the last 24h" : "--prometheus-url"}
-      </code>
-      <p className="text-[11px] text-muted max-w-xs">
-        {promReady
-          ? "Prometheus is wired but has not been scraping this long yet. The panel fills in as history accumulates."
-          : "A day of history comes from Prometheus. Without it this screen can only show the live scrape, which starts when the page opens."}
-      </p>
+    <div className="px-8 py-6 flex flex-col gap-4">
+      <PageHeader
+        title="Overview"
+        description={t ? `Storage in tenant ${t.tenant}` : "Your tenant's storage"}
+      />
+      <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+        <Tile label="Objects" loading={usage === null} value={<Big>{t ? count(t.objects) : "—"}</Big>} />
+        <Tile
+          label="Stored"
+          loading={usage === null}
+          value={<Big>{t ? bytes(t.logical_bytes) : "—"}</Big>}
+          sub={t && t.quota_bytes > 0 ? `of a ${bytes(t.quota_bytes)} quota` : "No quota set"}
+        >
+          {t && t.quota_bytes > 0 ? <CapacityBar used={t.logical_bytes} total={t.quota_bytes} /> : null}
+        </Tile>
+        <Tile
+          label="Buckets"
+          loading={usage === null}
+          value={<Big>{t ? count(t.buckets) : "—"}</Big>}
+          sub={
+            <Link to="/buckets" className="text-accent hover:underline">
+              View buckets
+            </Link>
+          }
+        />
+      </div>
     </div>
   );
 }

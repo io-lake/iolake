@@ -229,7 +229,9 @@ function TopBar({ isSystemAdmin }: { isSystemAdmin: boolean }) {
           {protection.level === "protected"
             ? "All data protected"
             : protection.level === "rebuilding"
-              ? `Rebuilding ${protection.rebuilding} placement group${protection.rebuilding === 1 ? "" : "s"}`
+              ? protection.short === protection.rebuilding
+                ? `${protection.short} placement group${protection.short === 1 ? "" : "s"} short of a drive`
+                : `Rebuilding ${protection.rebuilding} placement group${protection.rebuilding === 1 ? "" : "s"}`
               : `${protection.atRisk} placement group${protection.atRisk === 1 ? "" : "s"} at risk`}
         </Link>
       )}

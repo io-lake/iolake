@@ -5,8 +5,10 @@ import { placementGroups, request, type PlacementGroup } from "./client";
 /// found of every placement group.
 ///
 /// - clean: every shard in place.
-/// - rebuilding: a shard is missing or stale and recovery is putting it back;
-///   every object still reads.
+/// - rebuilding: a shard is missing or stale; every object still reads.
+///   `short` counts those of them recovery can't put back yet because a
+///   position has no usable OSD (Undersized), or the OSDs that could take it
+///   are too full (WaitTooFull): they need a drive back or added.
 /// - atRisk: one more loss would lose data (no spare left), or the group
 ///   can't serve at all (Down, Incomplete).
 export type ProtectionLevel = "protected" | "rebuilding" | "at-risk" | "unknown";
@@ -16,6 +18,8 @@ export interface PoolProtection {
   total: number;
   clean: number;
   rebuilding: number;
+  /// Of `rebuilding`, the groups waiting for a drive rather than repairing.
+  short: number;
   atRisk: number;
   /// Objects and bytes recovery still has to rebuild in this pool.
   objectsRemaining: number;
@@ -27,6 +31,7 @@ export interface Protection {
   total: number;
   clean: number;
   rebuilding: number;
+  short: number;
   atRisk: number;
   objectsRemaining: number;
   bytesRemaining: number;
@@ -37,6 +42,7 @@ export interface Protection {
 }
 
 const SEVERE = new Set(["Down", "Incomplete"]);
+const WAITING = new Set(["Undersized", "WaitTooFull"]);
 
 export function classify(pg: PlacementGroup): "clean" | "rebuilding" | "atRisk" {
   const s = pg.state;
@@ -71,6 +77,7 @@ export async function loadProtection(): Promise<Protection> {
     total: 0,
     clean: 0,
     rebuilding: 0,
+    short: 0,
     atRisk: 0,
     objectsRemaining: 0,
     bytesRemaining: 0,
@@ -79,10 +86,11 @@ export async function loadProtection(): Promise<Protection> {
     loadedAt: Date.now(),
   };
   for (const { pool, pgs } of per) {
-    const pp: PoolProtection = { pool, total: pgs.length, clean: 0, rebuilding: 0, atRisk: 0, objectsRemaining: 0, bytesRemaining: 0 };
+    const pp: PoolProtection = { pool, total: pgs.length, clean: 0, rebuilding: 0, short: 0, atRisk: 0, objectsRemaining: 0, bytesRemaining: 0 };
     for (const pg of pgs) {
       const c = classify(pg);
       pp[c] += 1;
+      if (c === "rebuilding" && WAITING.has(pg.state?.state ?? "")) pp.short += 1;
       pp.objectsRemaining += pg.state?.recovery?.remaining ?? 0;
       pp.bytesRemaining += pg.state?.recovery?.bytes_remaining ?? 0;
       if (c !== "clean") out.notClean.push(pg);
@@ -91,6 +99,7 @@ export async function loadProtection(): Promise<Protection> {
     out.total += pp.total;
     out.clean += pp.clean;
     out.rebuilding += pp.rebuilding;
+    out.short += pp.short;
     out.atRisk += pp.atRisk;
     out.objectsRemaining += pp.objectsRemaining;
     out.bytesRemaining += pp.bytesRemaining;
@@ -129,6 +138,7 @@ const UNKNOWN: Omit<Protection, "loadedAt"> = {
   total: 0,
   clean: 0,
   rebuilding: 0,
+  short: 0,
   atRisk: 0,
   objectsRemaining: 0,
   bytesRemaining: 0,

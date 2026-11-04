@@ -21,7 +21,7 @@ export default function ChartCard({
 }) {
   return (
     <div
-      className={`bg-surface border border-border rounded-card shadow-sm p-4 ${className}`}
+      className={`bg-surface border border-border rounded-card shadow-card p-4 ${className}`}
     >
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0">

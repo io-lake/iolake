@@ -30,7 +30,7 @@ export default function Table({
   const isEmpty = !loading && !children;
   return (
     <div
-      className={`bg-surface border border-border rounded-card shadow-sm overflow-hidden ${className}`}
+      className={`bg-surface border border-border rounded-card shadow-card overflow-hidden ${className}`}
     >
       <table className="w-full border-collapse">
         <thead>

@@ -61,7 +61,7 @@ export default function Tabs({
           className={`flex items-center gap-1.5 px-2.5 h-7 rounded-[6px] text-[12px]
             font-medium transition-colors ${
               value === t.key
-                ? "bg-surface text-text shadow-sm"
+                ? "bg-surface text-text shadow-card"
                 : "text-muted hover:text-text"
             }`}
         >

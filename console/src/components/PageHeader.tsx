@@ -1,26 +1,30 @@
+import type { ReactNode } from "react";
+
 interface Props {
-  title: string;
-  description?: string;
-  action?: React.ReactNode;
+  title: ReactNode;
+  description?: ReactNode;
+  /// The page's actions, primary last.
+  action?: ReactNode;
+  /// Set the title in mono: for a page named by an identifier (a bucket, a
+  /// table).
+  mono?: boolean;
 }
 
-export default function PageHeader({ title, description, action }: Props) {
-  // Sizes measured off the artboards rather than guessed: the page title is
-  // Sora 600 at 20px (the mock's "Dashboard" is 94 CSS px wide, which only
-  // lands at 20px), the description IBM Plex Sans at 12px. The console had
-  // been shipping a 15px body-font title, which is the main reason a screen
-  // read as a different design even where the content matched.
+/// Every page opens the same way: the title (Sora 600, 22px, or mono for an
+/// identifier), one line saying what the page holds, and its actions on the
+/// right.
+export default function PageHeader({ title, description, action, mono }: Props) {
   return (
-    <div className="flex items-start justify-between gap-4 mb-5">
+    <div className="flex items-end justify-between gap-4 flex-wrap mb-5">
       <div className="min-w-0">
-        <h1 className="font-display text-[20px] leading-tight font-semibold text-text">
+        <h1
+          className={`${mono ? "font-mono text-[21px]" : "font-display text-[22px] tracking-[-0.01em]"} leading-7 font-semibold text-text break-words`}
+        >
           {title}
         </h1>
-        {description && (
-          <p className="text-[12px] text-muted mt-1">{description}</p>
-        )}
+        {description && <p className="text-[13px] text-muted mt-1">{description}</p>}
       </div>
-      {action && <div className="shrink-0">{action}</div>}
+      {action && <div className="shrink-0 flex items-center gap-2 flex-wrap">{action}</div>}
     </div>
   );
 }

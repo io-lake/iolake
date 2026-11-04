@@ -25,6 +25,7 @@ import BucketDetail from "../../pages/BucketDetail";
 import Objects from "../../pages/Objects";
 import UsersPage from "../../pages/Users";
 import Identity from "../../pages/Identity";
+import Catalog from "../../pages/Catalog";
 import IcebergCatalog from "../../pages/IcebergCatalog";
 import UnityCatalog from "../../pages/UnityCatalog";
 import DeltaSharing from "../../pages/DeltaSharing";
@@ -90,6 +91,7 @@ export default function TenantApp() {
         <Route path="users" element={<UsersPage />} />
         <Route path="policies" element={<Policies />} />
         <Route path="identity" element={<Identity />} />
+        <Route path="catalog" element={<Catalog />} />
         <Route path="iceberg" element={<IcebergCatalog />} />
         <Route path="unity" element={<UnityCatalog />} />
         <Route path="sharing" element={<DeltaSharing />} />

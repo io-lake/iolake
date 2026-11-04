@@ -34,7 +34,7 @@ export default defineConfig({
     // `npm run dev` sends API calls to a gateway: a local objectio-aio, or
     // the one OBJECTIO_URL names.
     proxy: Object.fromEntries(
-      ["/_admin", "/iceberg", "/metrics", "/health"].map((path) => [
+      ["/_admin", "/_console/api", "/iceberg", "/metrics", "/health"].map((path) => [
         path,
         { target: GATEWAY, changeOrigin: true },
       ]),

@@ -9,12 +9,14 @@ import Objects from "./pages/Objects";
 import UsersPage from "./pages/Users";
 import Identity from "./pages/Identity";
 import Tenants from "./pages/Tenants";
+import Catalog from "./pages/Catalog";
 import IcebergCatalog from "./pages/IcebergCatalog";
 import UnityCatalog from "./pages/UnityCatalog";
 import DeltaSharing from "./pages/DeltaSharing";
 import Monitoring from "./pages/Monitoring";
 import Policies from "./pages/Policies";
 import Encryption from "./pages/Encryption";
+import Health from "./pages/Health";
 import Cluster from "./pages/Cluster";
 import PoolPlacement from "./pages/PoolPlacement";
 import MyAccount from "./pages/MyAccount";
@@ -79,6 +81,7 @@ export default function App() {
         <Route path="policies" element={<Policies />} />
         <Route path="identity" element={<Identity />} />
         {isSystemAdmin && <Route path="tenants" element={<Tenants />} />}
+        <Route path="catalog" element={<Catalog />} />
         <Route path="iceberg" element={<IcebergCatalog />} />
         <Route path="unity" element={<UnityCatalog />} />
         <Route path="sharing" element={<DeltaSharing />} />
@@ -86,6 +89,7 @@ export default function App() {
         {isSystemAdmin && <Route path="encryption" element={<Encryption />} />}
         {/* Unified cluster page — Topology / Nodes & Drives / Pools /
             Balancing tabs. Old routes redirect so deep links stay live. */}
+        {isSystemAdmin && <Route path="cluster/health" element={<Health />} />}
         {isSystemAdmin && <Route path="cluster" element={<Cluster />} />}
         {isSystemAdmin && (
           <Route path="cluster/pools/:name" element={<PoolPlacement />} />

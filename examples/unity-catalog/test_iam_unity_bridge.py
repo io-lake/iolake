@@ -66,11 +66,9 @@ def sigv4_session(ak: str, sk: str) -> requests.Session:
     the body — same pattern unity_smoke_test.py uses successfully.
     """
     creds = botocore.credentials.Credentials(ak, sk)
-    # S3SigV4Auth (not the generic SigV4Auth) emits the X-Amz-Content-SHA256
-    # header. The gateway uses that header value as the canonical-request
-    # payload hash; without it, the server falls back to "UNSIGNED-PAYLOAD"
-    # while botocore signs the actual body hash → SignatureDoesNotMatch.
-    signer = botocore.auth.S3SigV4Auth(creds, "s3", REGION)
+    # The generic signer signs the body's hash without sending it; the
+    # gateway hashes the body to check it.
+    signer = botocore.auth.SigV4Auth(creds, "s3", REGION)
     sess = requests.Session()
 
     def sign(req: requests.PreparedRequest) -> requests.PreparedRequest:

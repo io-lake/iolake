@@ -310,17 +310,40 @@ pub async fn optional_auth_layer(
         .query()
         .is_some_and(|q| parse_presigned_query(q).is_some() || is_presigned_v2(q));
     if presigned || request.headers().get("authorization").is_some() {
-        auth_layer(state, request, next).await
+        authenticate(&state, request, next, Surface::Rest).await
     } else {
         Ok(next.run(request).await)
     }
 }
 
+/// Which API a request signed with SigV4 is for: the S3 API, or one of the
+/// JSON REST APIs beside it (the admin API, Iceberg REST, Unity Catalog).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Surface {
+    /// S3 clients send the payload hash they signed in
+    /// `x-amz-content-sha256`; one without it signed none. Object bodies
+    /// are never read here.
+    S3,
+    /// Generic SigV4 signers (botocore's `SigV4Auth`, PyIceberg) sign the
+    /// body's hash without sending it; see [`verify_rest_request_v4`].
+    Rest,
+}
+
 pub async fn auth_layer(
     State(auth_state): State<Arc<AuthState>>,
-    mut request: Request<Body>,
+    request: Request<Body>,
     next: Next,
 ) -> Result<Response, AuthError> {
+    authenticate(&auth_state, request, next, Surface::S3).await
+}
+
+async fn authenticate(
+    auth_state: &Arc<AuthState>,
+    mut request: Request<Body>,
+    next: Next,
+    surface: Surface,
+) -> Result<Response, AuthError> {
+    let auth_state = Arc::clone(auth_state);
     let path = request.uri().path();
 
     // Skip auth for health checks and metrics
@@ -362,9 +385,10 @@ pub async fn auth_layer(
     };
     let auth_header = auth_header
         .to_str()
-        .map_err(|_| AuthError::AccessDenied("invalid authorization header".to_string()))?;
+        .map_err(|_| AuthError::AccessDenied("invalid authorization header".to_string()))?
+        .to_string();
 
-    let parsed = parse_authorization_header(auth_header)?;
+    let parsed = parse_authorization_header(&auth_header)?;
 
     // Check for STS temporary credentials (ASIA* access key + X-Amz-Security-Token)
     let access_key_id = parsed.access_key_id();
@@ -379,13 +403,18 @@ pub async fn auth_layer(
             resolve_session(&auth_state, access_key_id, session_token.as_deref()).await?;
         // The SAME SigV4 verify path as permanent keys — without this the
         // session token is the only proof, which is replayable.
-        let (_, seed) = verify_request_v4_seeded(
-            &request,
+        let region = signing_region(&auth_header, &auth_state.region).to_string();
+        let (checked, verified) = verify_for(
+            surface,
+            request,
             &parsed.signed_headers,
             &parsed.signature,
             &cred,
-            signing_region(auth_header, &auth_state.region),
-        )?;
+            &region,
+        )
+        .await;
+        request = checked;
+        let (_, seed) = verified?;
         debug!("STS auth ok: user_arn={}", auth_result.user_arn);
         if has_signed_chunks(&request) {
             request.extensions_mut().insert(seed);
@@ -397,14 +426,18 @@ pub async fn auth_layer(
     // Fetch credentials from metadata service (permanent keys)
     let cred = auth_state.lookup_credential(access_key_id).await?;
 
-    // Verify the signature based on auth version
-    let (mut auth_result, seed) = verify_request_v4_seeded(
-        &request,
+    let region = signing_region(&auth_header, &auth_state.region).to_string();
+    let (checked, verified) = verify_for(
+        surface,
+        request,
         &parsed.signed_headers,
         &parsed.signature,
         &cred,
-        signing_region(auth_header, &auth_state.region),
-    )?;
+        &region,
+    )
+    .await;
+    request = checked;
+    let (mut auth_result, seed) = verified?;
     // The chunked decoder checks each chunk's signature from this one.
     if has_signed_chunks(&request) {
         request.extensions_mut().insert(seed);
@@ -1091,8 +1124,120 @@ fn header_payload_hash<B>(request: &Request<B>) -> String {
         .headers()
         .get("x-amz-content-sha256")
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("UNSIGNED-PAYLOAD")
+        .unwrap_or(UNSIGNED_PAYLOAD)
         .to_string()
+}
+
+const UNSIGNED_PAYLOAD: &str = "UNSIGNED-PAYLOAD";
+
+/// The largest body of a REST API call (admin, Iceberg REST, Unity
+/// Catalog) that is read whole to hash it, for a client that signed the
+/// body's SHA-256 without sending `x-amz-content-sha256`: axum's default
+/// body limit, the one these APIs' handlers read their JSON bodies under.
+pub(crate) const MAX_HASHED_BODY: usize = 2 * 1024 * 1024;
+
+/// A request's signature checked as the API it is for signs it: the S3
+/// API by [`verify_request_v4_seeded`], a REST API by
+/// [`verify_rest_request_v4`]. The request comes back whatever the
+/// outcome, its body intact unless it could not be read.
+async fn verify_for(
+    surface: Surface,
+    request: Request<Body>,
+    signed_headers: &[String],
+    signature: &str,
+    cred: &CachedCredential,
+    region: &str,
+) -> (
+    Request<Body>,
+    Result<(AuthResult, ChunkSigningSeed), AuthError>,
+) {
+    match surface {
+        Surface::S3 => {
+            let verified =
+                verify_request_v4_seeded(&request, signed_headers, signature, cred, region);
+            (request, verified)
+        }
+        Surface::Rest => {
+            verify_rest_request_v4(request, signed_headers, signature, cred, region).await
+        }
+    }
+}
+
+/// Verify the SigV4 signature of a call to a REST API that is not S3.
+///
+/// A request that sends `x-amz-content-sha256` is checked as an S3 request
+/// is, over that value (and its body is held to it afterwards, by
+/// `payload_hash`). One that doesn't is signed one of two ways: over
+/// `UNSIGNED-PAYLOAD`, which proves nothing about the body; or,
+/// as standard SigV4 for any service other than S3 is signed (botocore's
+/// `SigV4Auth`, which PyIceberg uses, and generic SigV4 libraries), over
+/// the SHA-256 of the body, which is then read, at most
+/// [`MAX_HASHED_BODY`] of it, and hashed. Either signature is accepted; a
+/// body changed after it was signed over its hash fails the second.
+///
+/// The request comes back with its body: as it arrived, or the bytes read
+/// to hash it.
+pub(crate) async fn verify_rest_request_v4(
+    request: Request<Body>,
+    signed_headers: &[String],
+    signature: &str,
+    cred: &CachedCredential,
+    region: &str,
+) -> (
+    Request<Body>,
+    Result<(AuthResult, ChunkSigningSeed), AuthError>,
+) {
+    if request.headers().contains_key("x-amz-content-sha256") {
+        let verified = verify_request_v4_seeded(&request, signed_headers, signature, cred, region);
+        return (request, verified);
+    }
+    let mut signed = Signed {
+        signed_headers,
+        signature,
+        region,
+        service: "s3",
+        payload_hash: UNSIGNED_PAYLOAD,
+    };
+    // Signed over no payload: nothing to read. Only a signature that
+    // doesn't match goes on to the body's hash.
+    match check_signature(&request, &signed, cred, false) {
+        Err(AuthError::SignatureDoesNotMatch) => {}
+        verified => return (request, verified),
+    }
+    let (parts, body) = request.into_parts();
+    let declared_len = parts
+        .headers
+        .get(http::header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<u64>().ok());
+    if declared_len.is_some_and(|n| n > MAX_HASHED_BODY as u64) {
+        return (
+            Request::from_parts(parts, Body::empty()),
+            Err(AuthError::HashedBodyTooLarge),
+        );
+    }
+    let bytes = match read_bounded(body, MAX_HASHED_BODY).await {
+        Ok(bytes) => bytes,
+        Err(e) => return (Request::from_parts(parts, Body::empty()), Err(e)),
+    };
+    let body_hash = hex_sha256(&bytes);
+    let request = Request::from_parts(parts, Body::from(bytes));
+    signed.payload_hash = &body_hash;
+    let verified = check_signature(&request, &signed, cred, true);
+    (request, verified)
+}
+
+/// A body read whole, refused past `limit` bytes.
+async fn read_bounded(body: Body, limit: usize) -> Result<bytes::Bytes, AuthError> {
+    use http_body_util::BodyExt;
+    match http_body_util::Limited::new(body, limit).collect().await {
+        Ok(collected) => Ok(collected.to_bytes()),
+        Err(e) if e.is::<http_body_util::LengthLimitError>() => Err(AuthError::HashedBodyTooLarge),
+        Err(e) => {
+            debug!("reading a body to hash it: {e}");
+            Err(AuthError::IncompleteBody)
+        }
+    }
 }
 
 /// Verify SigV4 request signature
@@ -1183,6 +1328,17 @@ fn check_signature_v4<B>(
     signed: &Signed<'_>,
     cred: &CachedCredential,
 ) -> Result<(AuthResult, ChunkSigningSeed), AuthError> {
+    check_signature(request, signed, cred, true)
+}
+
+/// [`check_signature_v4`], logging a mismatch only with `log_mismatch`: a
+/// first guess at the payload hash that misses is no mismatch yet.
+fn check_signature<B>(
+    request: &Request<B>,
+    signed: &Signed<'_>,
+    cred: &CachedCredential,
+    log_mismatch: bool,
+) -> Result<(AuthResult, ChunkSigningSeed), AuthError> {
     let Signed {
         signed_headers,
         signature,
@@ -1215,6 +1371,9 @@ fn check_signature_v4<B>(
 
     // Compare signatures using constant-time comparison
     if !constant_time_eq(&calculated_signature, signature) {
+        if !log_mismatch {
+            return Err(AuthError::SignatureDoesNotMatch);
+        }
         // What we computed beside what arrived, to tell a proxy rewriting
         // the request from a client signing it wrong. Debug only, and with
         // credentials and keys taken out: this runs on every bad request,
@@ -1582,6 +1741,11 @@ pub enum AuthError {
     UnsupportedSigV2,
     /// The body is not the one whose SHA-256 the request was signed with.
     PayloadHashMismatch,
+    /// A body signed over its SHA-256 without `x-amz-content-sha256` is
+    /// read whole to hash it, and this one is over [`MAX_HASHED_BODY`].
+    HashedBodyTooLarge,
+    /// The body ended before its length, or its connection dropped.
+    IncompleteBody,
     /// Internal error
     #[allow(dead_code)]
     InternalError,
@@ -1613,6 +1777,8 @@ impl AuthError {
             AuthError::ExpiredToken(_) => "expired",
             AuthError::UnsupportedSigV2 => "sigv2",
             AuthError::PayloadHashMismatch => "payload_hash",
+            AuthError::HashedBodyTooLarge => "body_too_large",
+            AuthError::IncompleteBody => "incomplete_body",
             AuthError::InternalError => "internal",
             AuthError::Unavailable(_) => "unavailable",
         }
@@ -1661,6 +1827,16 @@ impl IntoResponse for AuthError {
                 "The provided 'x-amz-content-sha256' header does not match what was computed."
                     .to_string(),
             ),
+            AuthError::HashedBodyTooLarge => (
+                StatusCode::PAYLOAD_TOO_LARGE,
+                "EntityTooLarge",
+                hashed_body_too_large_message(),
+            ),
+            AuthError::IncompleteBody => (
+                StatusCode::BAD_REQUEST,
+                "IncompleteBody",
+                "The request body could not be read in full.".to_string(),
+            ),
             AuthError::InternalError => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "InternalError",
@@ -1692,6 +1868,16 @@ impl IntoResponse for AuthError {
                     .unwrap()
             })
     }
+}
+
+/// Why a body signed over its hash, without the hash sent, was refused.
+pub(crate) fn hashed_body_too_large_message() -> String {
+    format!(
+        "A request body signed over its SHA-256 without an x-amz-content-sha256 header is \
+         read whole to check the signature, and may be at most {} MiB; send the header to \
+         sign a larger one.",
+        MAX_HASHED_BODY >> 20
+    )
 }
 
 /// Extension trait for getting auth result from request
@@ -2218,6 +2404,11 @@ mod redaction_tests {
         .iter()
         .map(|s| (*s).to_string())
         .collect();
+        // With this subscriber the only one registered, tracing asks a
+        // thread that first reaches a callsite about its own default (none,
+        // in the other tests running beside this one), and caches "never"
+        // for everyone. A second one keeps it asking every subscriber.
+        let _second = tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default());
         let result = tracing::subscriber::with_default(subscriber, || {
             super::verify_signature_v4(
                 &request,
@@ -2415,6 +2606,282 @@ mod tenant_gate_tests {
         assert!(matches!(
             resolve_session(&s, &creds.access_key_id, Some(&creds.session_token)).await,
             Err(AuthError::AccessDenied(_))
+        ));
+    }
+}
+
+/// Which payload hash a REST API call's signature is checked over.
+#[cfg(test)]
+mod rest_payload_tests {
+    use super::*;
+    use http_body_util::BodyExt;
+
+    const SECRET: &str = "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY";
+
+    fn cred() -> CachedCredential {
+        CachedCredential {
+            access_key_id: "AKIARESTTEST".into(),
+            secret_access_key: SECRET.into(),
+            user_id: "u1".into(),
+            user_arn: "arn:obio:iam::acme:user/u1".into(),
+            tenant: "acme".into(),
+            scope: None,
+            cached_at: std::time::Instant::now(),
+        }
+    }
+
+    fn sha(data: &[u8]) -> String {
+        hex::encode(Sha256::digest(data))
+    }
+
+    /// A request signed over `payload_hash`, sending it in
+    /// `x-amz-content-sha256` only with `send_hash` (botocore's generic
+    /// `SigV4Auth` doesn't), with `body` as what is sent.
+    fn signed(
+        method: &str,
+        uri: &str,
+        payload_hash: &str,
+        send_hash: bool,
+        body: Vec<u8>,
+        content_length: bool,
+    ) -> Request<Body> {
+        let now = Utc::now();
+        let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
+        let date_stamp = now.format("%Y%m%d").to_string();
+        let mut b = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("host", "gw.example:9000")
+            .header("content-type", "application/json")
+            .header("x-amz-date", &amz_date);
+        if send_hash {
+            b = b.header("x-amz-content-sha256", payload_hash);
+        }
+        if content_length {
+            b = b.header("content-length", body.len());
+        }
+        let unsigned = b.body(()).unwrap();
+        let mut names: Vec<String> = unsigned
+            .headers()
+            .keys()
+            .map(|k| k.as_str().to_string())
+            .filter(|k| k != "content-length")
+            .collect();
+        names.sort();
+        let canonical = build_canonical_request(&unsigned, &names, payload_hash).unwrap();
+        let scope = format!("{date_stamp}/us-east-1/s3/aws4_request");
+        let string_to_sign = build_string_to_sign(&canonical, &amz_date, &scope);
+        let key = derive_signing_key(SECRET, &date_stamp, "us-east-1", "s3");
+        let signature = calculate_signature_v4(&key, &string_to_sign);
+        let (mut parts, ()) = unsigned.into_parts();
+        parts.headers.insert(
+            "authorization",
+            format!(
+                "AWS4-HMAC-SHA256 Credential=AKIARESTTEST/{scope}, SignedHeaders={}, \
+                 Signature={signature}",
+                names.join(";")
+            )
+            .parse()
+            .unwrap(),
+        );
+        Request::from_parts(parts, Body::from(body))
+    }
+
+    /// The REST verification's outcome, and the body the request goes on
+    /// with.
+    async fn verify(
+        request: Request<Body>,
+    ) -> (Result<(AuthResult, ChunkSigningSeed), AuthError>, Vec<u8>) {
+        let header = request.headers()["authorization"]
+            .to_str()
+            .unwrap()
+            .to_string();
+        let parsed = parse_authorization_header(&header).unwrap();
+        let (request, verified) = verify_rest_request_v4(
+            request,
+            &parsed.signed_headers,
+            &parsed.signature,
+            &cred(),
+            "us-east-1",
+        )
+        .await;
+        let body = request.into_body().collect().await.unwrap().to_bytes();
+        (verified, body.to_vec())
+    }
+
+    #[tokio::test]
+    async fn a_get_signed_over_the_empty_bodys_hash_without_the_header_is_accepted() {
+        // PyIceberg's first call, `GET /iceberg/v1/config`.
+        let req = signed(
+            "GET",
+            "/iceberg/v1/config?warehouse=wh",
+            &sha(b""),
+            false,
+            Vec::new(),
+            false,
+        );
+        let (verified, _) = verify(req).await;
+        verified.expect("signed over e3b0c442..., the empty body's hash");
+    }
+
+    #[tokio::test]
+    async fn a_body_signed_over_its_hash_without_the_header_is_accepted_and_goes_on() {
+        let body = br#"{"namespace":["db"],"properties":{}}"#.to_vec();
+        for content_length in [true, false] {
+            let req = signed(
+                "POST",
+                "/iceberg/v1/namespaces?warehouse=wh",
+                &sha(&body),
+                false,
+                body.clone(),
+                content_length,
+            );
+            let (verified, passed) = verify(req).await;
+            verified.expect("signed over the body's hash");
+            assert_eq!(passed, body, "the handler gets the body that was hashed");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_body_changed_after_it_was_signed_over_its_hash_is_refused() {
+        let body = br#"{"namespace":["db"]}"#;
+        let req = signed(
+            "POST",
+            "/iceberg/v1/namespaces",
+            &sha(body),
+            false,
+            br#"{"namespace":["xx"]}"#.to_vec(),
+            true,
+        );
+        let (verified, _) = verify(req).await;
+        assert!(matches!(verified, Err(AuthError::SignatureDoesNotMatch)));
+    }
+
+    #[tokio::test]
+    async fn unsigned_payload_without_the_header_is_accepted_without_reading_the_body() {
+        // Over the hashing limit: had it been read to hash it, it would
+        // have been refused.
+        let body = vec![7u8; MAX_HASHED_BODY + 1];
+        let req = signed(
+            "PUT",
+            "/_admin/buckets/b/objects/k",
+            UNSIGNED_PAYLOAD,
+            false,
+            body.clone(),
+            true,
+        );
+        let (verified, passed) = verify(req).await;
+        verified.expect("signed over UNSIGNED-PAYLOAD, as before");
+        assert_eq!(passed.len(), body.len());
+    }
+
+    #[tokio::test]
+    async fn a_hash_that_is_sent_is_the_only_one_checked() {
+        let body = br#"{"name":"x"}"#.to_vec();
+        // Sent and signed: accepted (the body is held to it later, by
+        // `payload_hash`).
+        let req = signed(
+            "POST",
+            "/_admin/users",
+            &sha(&body),
+            true,
+            body.clone(),
+            true,
+        );
+        verify(req)
+            .await
+            .0
+            .expect("the hash sent is the hash signed");
+        // Signed over UNSIGNED-PAYLOAD but the body's hash sent: no
+        // fallback to the other.
+        let mut req = signed(
+            "POST",
+            "/_admin/users",
+            UNSIGNED_PAYLOAD,
+            false,
+            body.clone(),
+            true,
+        );
+        req.headers_mut()
+            .insert("x-amz-content-sha256", sha(&body).parse().unwrap());
+        assert!(matches!(
+            verify(req).await.0,
+            Err(AuthError::SignatureDoesNotMatch)
+        ));
+        // Signed over the body's hash but UNSIGNED-PAYLOAD sent: refused
+        // too, the body is not hashed.
+        let mut req = signed("POST", "/_admin/users", &sha(&body), false, body, true);
+        req.headers_mut()
+            .insert("x-amz-content-sha256", UNSIGNED_PAYLOAD.parse().unwrap());
+        assert!(matches!(
+            verify(req).await.0,
+            Err(AuthError::SignatureDoesNotMatch)
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_body_too_large_to_hash_is_refused_as_such() {
+        let body = vec![1u8; MAX_HASHED_BODY + 1];
+        // Known from its length, and found while reading one of no length.
+        for content_length in [true, false] {
+            let req = signed(
+                "POST",
+                "/iceberg/v1/namespaces",
+                &sha(&body),
+                false,
+                body.clone(),
+                content_length,
+            );
+            let (verified, _) = verify(req).await;
+            assert!(matches!(verified, Err(AuthError::HashedBodyTooLarge)));
+        }
+        // At the limit it is read and checked.
+        let body = vec![1u8; MAX_HASHED_BODY];
+        let req = signed(
+            "POST",
+            "/iceberg/v1/namespaces",
+            &sha(&body),
+            false,
+            body,
+            true,
+        );
+        verify(req).await.0.expect("a body at the limit is hashed");
+    }
+
+    #[tokio::test]
+    async fn the_s3_api_still_reads_no_header_as_unsigned_payload() {
+        let body = b"object bytes".to_vec();
+        let req = signed("PUT", "/b/k", &sha(&body), false, body, true);
+        let header = req.headers()["authorization"].to_str().unwrap().to_string();
+        let parsed = parse_authorization_header(&header).unwrap();
+        let (_, verified) = verify_for(
+            Surface::S3,
+            req,
+            &parsed.signed_headers,
+            &parsed.signature,
+            &cred(),
+            "us-east-1",
+        )
+        .await;
+        assert!(matches!(verified, Err(AuthError::SignatureDoesNotMatch)));
+    }
+
+    #[tokio::test]
+    async fn a_stale_request_is_refused_before_its_body_is_read() {
+        let body = vec![1u8; MAX_HASHED_BODY + 1];
+        let mut req = signed(
+            "POST",
+            "/iceberg/v1/namespaces",
+            &sha(&body),
+            false,
+            body,
+            true,
+        );
+        req.headers_mut()
+            .insert("x-amz-date", "20200101T000000Z".parse().unwrap());
+        assert!(matches!(
+            verify(req).await.0,
+            Err(AuthError::RequestTimeTooSkewed)
         ));
     }
 }

@@ -302,6 +302,16 @@ fn auth_error(e: &crate::auth_middleware::AuthError) -> IamError {
             "XAmzContentSHA256Mismatch",
             "The provided 'x-amz-content-sha256' header does not match what was computed.",
         ),
+        AuthError::HashedBodyTooLarge => IamError::new(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "EntityTooLarge",
+            crate::auth_middleware::hashed_body_too_large_message(),
+        ),
+        AuthError::IncompleteBody => IamError::new(
+            StatusCode::BAD_REQUEST,
+            "IncompleteBody",
+            "The request body could not be read in full.",
+        ),
         AuthError::Unavailable(m) => {
             IamError::new(StatusCode::SERVICE_UNAVAILABLE, "ServiceUnavailable", m)
         }

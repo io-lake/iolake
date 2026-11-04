@@ -1306,6 +1306,79 @@ impl Cluster {
         }
     }
 
+    /// A request signed as standard `SigV4` for a service other than S3 is
+    /// (botocore's generic `SigV4Auth`, which `PyIceberg` uses): over the
+    /// SHA-256 of `signed_body`, which is not sent, and the headers
+    /// `content-type` (with a body), `host` and `x-amz-date`. `sent_body`
+    /// is what goes on the wire, as JSON: the body signed, or another to
+    /// show the signature covers it.
+    pub fn request_hashing_body(
+        &self,
+        method: &str,
+        path: &str,
+        signed_body: &[u8],
+        sent_body: &[u8],
+    ) -> Response {
+        let payload_hash = hex::encode(Sha256::digest(signed_body));
+        let host = self.host();
+        let (path_only, query) = path.split_once('?').unwrap_or((path, ""));
+        let escaped_path = escape_path(path_only);
+        let (amz_date, date_stamp) = time_now();
+        let mut headers: Vec<(&str, String)> =
+            vec![("host", host), ("x-amz-date", amz_date.clone())];
+        if !sent_body.is_empty() {
+            headers.push(("content-type", "application/json".into()));
+        }
+        headers.sort_by(|a, b| a.0.cmp(b.0));
+        let canonical_headers: String = headers
+            .iter()
+            .map(|(k, v)| format!("{k}:{}\n", v.trim()))
+            .collect();
+        let signed_headers = headers
+            .iter()
+            .map(|(k, _)| *k)
+            .collect::<Vec<_>>()
+            .join(";");
+        let canonical_request = format!(
+            "{method}\n{escaped_path}\n{}\n{canonical_headers}\n{signed_headers}\n{payload_hash}",
+            canonical_query(query),
+        );
+        let scope = format!("{date_stamp}/us-east-1/s3/aws4_request");
+        let string_to_sign = format!(
+            "AWS4-HMAC-SHA256\n{amz_date}\n{scope}\n{}",
+            hex::encode(Sha256::digest(canonical_request.as_bytes()))
+        );
+        let mut key = hmac(format!("AWS4{}", self.secret_key).as_bytes(), &date_stamp);
+        key = hmac(&key, "us-east-1");
+        key = hmac(&key, "s3");
+        key = hmac(&key, "aws4_request");
+        let signature = hex::encode(hmac(&key, &string_to_sign));
+        let url = if query.is_empty() {
+            format!("{}{escaped_path}", self.endpoint)
+        } else {
+            format!("{}{escaped_path}?{}", self.endpoint, canonical_query(query))
+        };
+        let mut req = http_client()
+            .request(method.parse().expect("method"), url)
+            .header(
+                "Authorization",
+                format!(
+                    "AWS4-HMAC-SHA256 Credential={}/{scope}, \
+                     SignedHeaders={signed_headers}, Signature={signature}",
+                    self.access_key
+                ),
+            );
+        for (k, v) in &headers {
+            if *k != "host" || self.host.is_some() {
+                req = req.header(*k, v.as_str());
+            }
+        }
+        if !sent_body.is_empty() {
+            req = req.body(sent_body.to_vec());
+        }
+        Response::from(req.send().expect("request"))
+    }
+
     /// A call to the IAM or STS query API: `POST /` with `params` as a form
     /// body, signed as aws-cli and boto3 sign it: for `service` (`iam` or
     /// `sts`), over the body's hash, which they don't send. `creds` is

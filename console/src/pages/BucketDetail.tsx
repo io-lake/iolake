@@ -20,7 +20,8 @@ import {
   loadPublicAccessBlock,
   loadUsage,
   loadUsers,
-  parseLifecycle,
+  lockFromListing,
+  lockWords,
   poolName,
   putObject,
   schemeShort,
@@ -159,6 +160,7 @@ export default function BucketDetail() {
       {scheme ? ` ${scheme}` : ""}
       {usage ? ` · ${formatCount(usage.objects)} object${usage.objects === 1 ? "" : "s"} · ${formatBytes(usage.logical_bytes)}` : ""}
       {` · versioning ${v === "on" ? "on" : v === "suspended" ? "suspended" : "off"}`}
+      {bucket.object_lock?.enabled ? ` · object lock ${lockWords(lockFromListing(bucket.object_lock)).toLowerCase()}` : ""}
     </>
   ) : missing ? (
     "Not found"
@@ -166,7 +168,7 @@ export default function BucketDetail() {
     "Loading…"
   );
 
-  const lifecycleCount = settings?.lifecycle.state === "set" ? parseLifecycle(settings.lifecycle.doc).length : undefined;
+  const lifecycleCount = settings?.lifecycle.state === "set" ? (settings.lifecycle.doc.Rule ?? []).length : undefined;
 
   return (
     <div className="px-8 py-6 flex flex-col gap-4">

@@ -2,6 +2,7 @@
 //! takes the shards from the metadata answers, with no shard reads.
 
 use std::path::Path;
+use std::process::Command;
 use std::time::Duration;
 
 use objectio_e2e::Cluster;
@@ -21,6 +22,48 @@ fn shard_reads(c: &Cluster) -> u64 {
         .sum()
 }
 
+/// Fail unless the filesystem the cluster's data goes on (the temporary
+/// directory) keeps more than a tenth free once `need` more bytes are
+/// written. Under that, the OSDs keep small shards on disk blocks instead
+/// of in their metadata store (B21: a nearly full metadata partition
+/// spills to blocks), and what these tests look for isn't there to see.
+/// A CI runner was: a 72 GB root with 12 GB free before the job's
+/// downloads, where a small GET read its eight shards.
+fn needs_room(need: u64) {
+    let dir = std::env::temp_dir();
+    let out = Command::new("df")
+        .arg("-Pk")
+        .arg(&dir)
+        .output()
+        .expect("df");
+    let text = String::from_utf8_lossy(&out.stdout);
+    let fields: Vec<u64> = text
+        .lines()
+        .nth(1)
+        .map(|l| {
+            l.split_whitespace()
+                .skip(1)
+                .take(3)
+                .filter_map(|f| f.parse().ok())
+                .collect()
+        })
+        .unwrap_or_default();
+    let [size, _, free] = fields[..] else {
+        panic!("df {}: {text}", dir.display());
+    };
+    let (size, free) = (size << 10, free << 10);
+    assert!(
+        free.saturating_sub(need) * 10 > size,
+        "{} has {} of {} MiB free: this test writes {} MiB and needs a tenth of the \
+         filesystem free after that, or the OSDs keep small shards on disk blocks \
+         (point TMPDIR at a filesystem with room)",
+        dir.display(),
+        free >> 20,
+        size >> 20,
+        need >> 20
+    );
+}
+
 fn payload(len: usize, seed: u8) -> Vec<u8> {
     (0..len)
         .map(|i| u8::try_from(i % 251).unwrap() ^ seed)
@@ -29,6 +72,7 @@ fn payload(len: usize, seed: u8) -> Vec<u8> {
 
 #[test]
 fn a_small_get_reads_no_shards() {
+    needs_room(64 << 20);
     let c = Cluster::start_with_ec_and_args(6, 4, 2, &[]);
     c.json("POST", "/_admin/buckets", json!({"name": "small"}))
         .expect_ok();
@@ -129,6 +173,8 @@ fn read_by(pid: u32) -> u64 {
 #[test]
 #[cfg(target_os = "linux")]
 fn an_osd_restart_does_not_read_its_small_shards_bytes() {
+    // Up to 12,000 objects, and six OSDs' metadata logs.
+    needs_room(2 << 30);
     let mut ha = HaCluster::start(1, 6, 1);
     let _ = ha.await_leader(Duration::from_secs(30));
     assert_eq!(ha.clients[0].request("PUT", "/many", &[]).status, 200);

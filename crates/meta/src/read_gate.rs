@@ -61,6 +61,16 @@
 //! answered UNAVAILABLE, which clients retry, reaching a node that serves
 //! (`objectio_proto::transport::meta_channel` leaves a node out while its
 //! probe says it isn't serving).
+//!
+//! Except on the only voter (one meta node, as in `objectio-aio`): its
+//! quorum is itself, so openraft confirms its round as soon as its Raft
+//! core takes the request, and a round waits on nothing but this node.
+//! The core takes it after the log append it is busy with, which syncs:
+//! seconds on a loaded disk. Cut off at the timeout, the call was answered
+//! that this node can't confirm it leads, and the gateway's PUT 503, with
+//! nowhere else to retry and the node reachable and leading. The only
+//! voter's calls wait for the round, as a write waits for the same append;
+//! the client's call timeout bounds them.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -83,6 +93,7 @@ pub struct NotConfirmed {
 
 type Round = Pin<Box<dyn Future<Output = Result<(), NotConfirmed>> + Send>>;
 type Confirm = Box<dyn Fn() -> Round + Send + Sync>;
+type Alone = Box<dyn Fn() -> bool + Send + Sync>;
 type Outcome = Shared<Pin<Box<dyn Future<Output = Result<(), String>> + Send>>>;
 
 type MetaRaft = openraft::Raft<objectio_meta_store::MetaTypeConfig>;
@@ -93,10 +104,14 @@ const RETRY_PAUSE: Duration = Duration::from_millis(50);
 
 pub struct ReadGate {
     confirm: Confirm,
+    /// Whether this node is the only voter: its rounds aren't cut off at
+    /// the timeout (the module comment says why).
+    alone: Alone,
     /// How long after its round started a confirmation still serves a
     /// call that arrived before the round.
     window: Duration,
-    /// How long a call waits for a confirmation, at most.
+    /// How long a call waits for a confirmation, at most (on a node that
+    /// isn't the only voter).
     timeout: Duration,
     state: Mutex<State>,
 }
@@ -118,7 +133,8 @@ struct State {
 
 impl ReadGate {
     /// The gate for `raft`: its window is a quarter of the leader lease
-    /// (`election_timeout_max`), its timeout `election_timeout_min`.
+    /// (`election_timeout_max`), its timeout `election_timeout_min`, and
+    /// whether this node is the only voter read from its membership.
     pub fn for_raft(raft: Arc<MetaRaft>) -> Arc<Self> {
         let config = raft.config();
         let lease = Duration::from_millis(config.election_timeout_max);
@@ -131,6 +147,7 @@ impl ReadGate {
         window: Duration,
         timeout: Duration,
     ) -> Arc<Self> {
+        let metrics = raft.metrics();
         Self::new(
             Box::new(move || {
                 let raft = raft.clone();
@@ -149,14 +166,20 @@ impl ReadGate {
                     })
                 })
             }),
+            Box::new(move || {
+                let m = metrics.borrow();
+                let mut voters = m.membership_config.membership().voter_ids();
+                voters.next() == Some(m.id) && voters.next().is_none()
+            }),
             window,
             timeout,
         )
     }
 
-    fn new(confirm: Confirm, window: Duration, timeout: Duration) -> Arc<Self> {
+    fn new(confirm: Confirm, alone: Alone, window: Duration, timeout: Duration) -> Arc<Self> {
         Arc::new(Self {
             confirm,
+            alone,
             window,
             timeout,
             state: Mutex::default(),
@@ -181,7 +204,12 @@ impl ReadGate {
                 }
                 self.pending_round(&mut state, term)
             };
-            match tokio::time::timeout_at(deadline, outcome).await {
+            let outcome = if (self.alone)() {
+                Ok(outcome.await)
+            } else {
+                tokio::time::timeout_at(deadline, outcome).await
+            };
+            match outcome {
                 // The round succeeded, but may have started before this
                 // call and ended after the window, or been revoked: look
                 // again, and start another if so.
@@ -262,7 +290,12 @@ impl ReadGate {
         let deadline = Instant::now() + self.timeout;
         let outcome = loop {
             let started = Instant::now();
-            match tokio::time::timeout_at(deadline, (self.confirm)()).await {
+            let round = if (self.alone)() {
+                Ok((self.confirm)().await)
+            } else {
+                tokio::time::timeout_at(deadline, (self.confirm)()).await
+            };
+            match round {
                 Ok(Ok(())) => break Ok(started),
                 Ok(Err(e)) if e.retry && Instant::now() + RETRY_PAUSE < deadline => {
                     tokio::time::sleep(RETRY_PAUSE).await;
@@ -317,6 +350,8 @@ mod tests {
         /// state and the acks are counted apart from it, a node that
         /// stops leading while a round is under way doesn't fail it.
         leads: AtomicBool,
+        /// Whether this node is the only voter.
+        alone: AtomicBool,
         rounds: AtomicUsize,
     }
 
@@ -325,9 +360,11 @@ mod tests {
             takes_ms: AtomicU64::new(u64::try_from(takes.as_millis()).unwrap()),
             quorum: AtomicBool::new(quorum),
             leads: AtomicBool::new(true),
+            alone: AtomicBool::new(false),
             rounds: AtomicUsize::new(0),
         });
         let f = fake.clone();
+        let a = fake.clone();
         let g = ReadGate::new(
             Box::new(move || {
                 f.rounds.fetch_add(1, Ordering::SeqCst);
@@ -352,6 +389,7 @@ mod tests {
                     }
                 })
             }),
+            Box::new(move || a.alone.load(Ordering::SeqCst)),
             WINDOW,
             TIMEOUT,
         );
@@ -429,6 +467,29 @@ mod tests {
         fake.quorum.store(true, Ordering::SeqCst);
         g.check(1).await.unwrap();
         assert!(g.serving(1));
+    }
+
+    /// The only voter's round waits on its own Raft core, busy with a log
+    /// append that syncs: a round slower than the timeout is waited for,
+    /// not answered UNAVAILABLE. With other voters it is cut off.
+    #[tokio::test(start_paused = true)]
+    async fn the_only_voter_waits_for_a_round_slower_than_the_timeout() {
+        let (g, fake) = gate(TIMEOUT * 2, true);
+        fake.alone.store(true, Ordering::SeqCst);
+        let started = Instant::now();
+        let calls: Vec<_> = (0..10).map(|_| call(&g)).collect();
+        for c in calls {
+            c.await.unwrap().unwrap();
+        }
+        assert!(started.elapsed() >= TIMEOUT * 2);
+        assert_eq!(fake.rounds(), 1);
+        assert!(g.serving(1));
+
+        fake.alone.store(false, Ordering::SeqCst);
+        tokio::time::advance(WINDOW).await;
+        let started = Instant::now();
+        assert!(g.check(1).await.is_err(), "waited past the timeout");
+        assert!(started.elapsed() < TIMEOUT + Duration::from_millis(100));
     }
 
     #[tokio::test(start_paused = true)]

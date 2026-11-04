@@ -720,9 +720,10 @@ impl S3Metrics {
             let sum_us = metrics.latency_sum_us.load(Ordering::Relaxed);
 
             // Buckets
-            let mut cumulative = 0u64;
+            // `record` counts a request in every bucket at or above its latency,
+            // so each bucket is already cumulative.
             for (i, &boundary_ms) in LATENCY_BUCKET_BOUNDARIES_MS.iter().enumerate() {
-                cumulative += metrics.latency_buckets[i].load(Ordering::Relaxed);
+                let cumulative = metrics.latency_buckets[i].load(Ordering::Relaxed);
                 writeln!(
                     output,
                     "objectio_s3_request_duration_seconds_bucket{{operation=\"{}\",le=\"{}\"}} {}",
@@ -802,9 +803,10 @@ impl S3Metrics {
                 let total = metrics.requests_total.load(Ordering::Relaxed);
                 let sum_us = metrics.latency_sum_us.load(Ordering::Relaxed);
 
-                let mut cumulative = 0u64;
+                // `record` counts a request in every bucket at or above its latency,
+                // so each bucket is already cumulative.
                 for (i, &boundary_ms) in LATENCY_BUCKET_BOUNDARIES_MS.iter().enumerate() {
-                    cumulative += metrics.latency_buckets[i].load(Ordering::Relaxed);
+                    let cumulative = metrics.latency_buckets[i].load(Ordering::Relaxed);
                     writeln!(
                         output,
                         "objectio_iceberg_request_duration_seconds_bucket{{operation=\"{}\",le=\"{}\"}} {}",
@@ -886,9 +888,10 @@ impl S3Metrics {
                 let total = metrics.requests_total.load(Ordering::Relaxed);
                 let sum_us = metrics.latency_sum_us.load(Ordering::Relaxed);
 
-                let mut cumulative = 0u64;
+                // `record` counts a request in every bucket at or above its latency,
+                // so each bucket is already cumulative.
                 for (i, &boundary_ms) in LATENCY_BUCKET_BOUNDARIES_MS.iter().enumerate() {
-                    cumulative += metrics.latency_buckets[i].load(Ordering::Relaxed);
+                    let cumulative = metrics.latency_buckets[i].load(Ordering::Relaxed);
                     writeln!(
                         output,
                         "objectio_unity_request_duration_seconds_bucket{{operation=\"{}\",le=\"{}\"}} {}",
@@ -1001,6 +1004,61 @@ mod tests {
         assert!(output.contains("objectio_s3_requests_total"));
         assert!(output.contains("GetObject"));
         assert!(output.contains("PutObject"));
+    }
+
+    /// Each `le` bucket counts the requests at or under it, once: the buckets
+    /// never pass `+Inf`, and a request lands in every bucket from its own up.
+    #[test]
+    fn latency_buckets_are_cumulative_once() {
+        let metrics = S3Metrics::new();
+        // 1 ms, 5 ms and 10 s.
+        metrics.record_operation(S3Operation::GetObject, 200, 0, 0, 1_000);
+        metrics.record_operation(S3Operation::GetObject, 200, 0, 0, 5_000);
+        metrics.record_operation(S3Operation::GetObject, 200, 0, 0, 10_000_000);
+        metrics.record_iceberg_operation(IcebergOperation::LoadTable, 200, 1_000);
+
+        let output = metrics.export_prometheus();
+        for family in [
+            "objectio_s3_request_duration_seconds",
+            "objectio_iceberg_request_duration_seconds",
+        ] {
+            let mut buckets: Vec<u64> = Vec::new();
+            let mut inf = None;
+            for line in output
+                .lines()
+                .filter(|l| l.starts_with(&format!("{family}_bucket{{")))
+            {
+                let v: u64 = line.rsplit(' ').next().unwrap().parse().unwrap();
+                if line.contains("le=\"+Inf\"") {
+                    inf = Some(v);
+                } else {
+                    buckets.push(v);
+                }
+            }
+            let inf = inf.expect("an +Inf bucket");
+            assert!(!buckets.is_empty(), "{family} has buckets");
+            assert!(
+                buckets.windows(2).all(|w| w[0] <= w[1]),
+                "{family} buckets never decrease: {buckets:?}"
+            );
+            assert!(
+                buckets.iter().all(|&b| b <= inf),
+                "{family} buckets never pass +Inf ({inf}): {buckets:?}"
+            );
+        }
+        let get = |le: &str| -> u64 {
+            let key = format!(
+                "objectio_s3_request_duration_seconds_bucket{{operation=\"GetObject\",le=\"{le}\"}} "
+            );
+            output
+                .lines()
+                .find_map(|l| l.strip_prefix(&key))
+                .unwrap()
+                .parse()
+                .unwrap()
+        };
+        assert_eq!(get("+Inf"), 3);
+        assert_eq!(get("0.005"), 2, "1 ms and 5 ms are at or under 5 ms");
     }
 
     #[test]

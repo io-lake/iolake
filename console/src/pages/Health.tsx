@@ -3,7 +3,7 @@ import { Pause, Play, RefreshCw } from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import { Banner, Button } from "../components/ui";
 import { rebalance as rebalanceApi } from "../api/client";
-import { loadProtection, useProtection, type Protection } from "../api/protection";
+import { refreshProtection, useProtection } from "../api/protection";
 import { useClusterSnapshot, useScrubSummary } from "../components/health/data";
 import PgCard from "../components/health/PgCard";
 import RepairCard from "../components/health/RepairCard";
@@ -16,17 +16,13 @@ import HostsTable from "../components/health/HostsTable";
 /// nodes listing, placed in racks by meta's failure domains. There is no
 /// event API yet, so the page has no events timeline.
 export default function Health() {
-  const shared = useProtection();
-  const [fresh, setFresh] = useState<Protection | null>(null);
+  const p = useProtection();
   const { snap, reload } = useClusterSnapshot();
   const [refreshKey, setRefreshKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // The shared poll runs every 30 s; a refresh reads protection now and
-  // keeps that answer until the poll has a newer one.
-  const p = fresh && (!shared || fresh.loadedAt > shared.loadedAt) ? fresh : shared;
   const scrub = useScrubSummary(
     p && p.level !== "unknown" ? p.pools.map((x) => x.pool) : [],
     refreshKey,
@@ -36,8 +32,8 @@ export default function Health() {
     setRefreshing(true);
     setError(null);
     try {
-      const [np] = await Promise.all([loadProtection().catch(() => null), reload()]);
-      if (np) setFresh(np);
+      // Refreshes the shared poll, so the top bar's badge updates too.
+      await Promise.all([refreshProtection(), reload()]);
       setRefreshKey((k) => k + 1);
     } finally {
       setRefreshing(false);

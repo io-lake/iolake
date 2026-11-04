@@ -635,9 +635,10 @@ export interface NodeInfo {
   uptime_seconds: number;
   disks: DiskInfo[];
   online: boolean;
-  kubernetes_node: string;
+  /// Absent for an offline OSD, which reports only its id and address.
+  kubernetes_node?: string;
   pod_name: string;
-  hostname: string;
+  hostname?: string;
   os_info: string;
   cpu_cores: number;
   memory_bytes: number;

@@ -15,7 +15,9 @@ interface Props {
 /// right.
 export default function PageHeader({ title, description, action, mono }: Props) {
   return (
-    <div className="flex items-end justify-between gap-4 flex-wrap mb-5">
+    // mb-5 below it, unless it sits in a page column that spaces its children
+    // with gap-4 already.
+    <div className="flex items-end justify-between gap-4 flex-wrap mb-5 [.gap-4>&]:mb-0">
       <div className="min-w-0">
         <h1
           className={`${mono ? "font-mono text-[21px]" : "font-display text-[22px] tracking-[-0.01em]"} leading-7 font-semibold text-text break-words`}

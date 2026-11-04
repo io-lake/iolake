@@ -118,6 +118,12 @@ export function useProtection(enabled = true, everyMs = 30_000): Protection | nu
   return enabled ? p : null;
 }
 
+/// Reload the shared poll now (after an action that changes protection), so
+/// every component showing it, the top bar's badge included, updates at once.
+export function refreshProtection(): Promise<void> {
+  return shared.tick();
+}
+
 const UNKNOWN: Omit<Protection, "loadedAt"> = {
   level: "unknown",
   total: 0,

@@ -55,6 +55,7 @@ fn refuse(status: StatusCode, message: &str) -> Response {
             "type": match status {
                 StatusCode::UNAUTHORIZED => "NotAuthorizedException",
                 StatusCode::FORBIDDEN => "ForbiddenException",
+                StatusCode::BAD_REQUEST | StatusCode::PAYLOAD_TOO_LARGE => "BadRequestException",
                 _ => "ServiceUnavailableException",
             },
             "code": status.as_u16(),
@@ -120,15 +121,35 @@ pub async fn iceberg_unified_auth_layer(
                     // sees it under a stripped (and maybe rewritten) path.
                     let sent = signed_uri(&request);
                     let routed = std::mem::replace(request.uri_mut(), sent);
-                    let verify_result = crate::auth_middleware::verify_request_v4(
-                        &request,
+                    // Over the body's hash too, which generic SigV4 signers
+                    // (PyIceberg's) sign without sending it.
+                    let (checked, verify_result) = crate::auth_middleware::verify_rest_request_v4(
+                        request,
                         &parsed.signed_headers,
                         &parsed.signature,
                         &cred,
                         &state.sigv4_state.region,
-                    );
+                    )
+                    .await;
+                    request = checked;
                     *request.uri_mut() = routed;
-                    if let Ok(mut auth_result) = verify_result {
+                    // Its body was not read whole, so it can't go on.
+                    match &verify_result {
+                        Err(crate::auth_middleware::AuthError::HashedBodyTooLarge) => {
+                            return refuse(
+                                StatusCode::PAYLOAD_TOO_LARGE,
+                                &crate::auth_middleware::hashed_body_too_large_message(),
+                            );
+                        }
+                        Err(crate::auth_middleware::AuthError::IncompleteBody) => {
+                            return refuse(
+                                StatusCode::BAD_REQUEST,
+                                "The request body could not be read in full",
+                            );
+                        }
+                        _ => {}
+                    }
+                    if let Ok((mut auth_result, _)) = verify_result {
                         if let Err(e) = state
                             .sigv4_state
                             .admit_tenant(

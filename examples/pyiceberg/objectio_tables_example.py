@@ -17,10 +17,12 @@ Setup (via ObjectIO console at http://localhost:9000/_console/):
 2. Inside warehouse → Create namespace (e.g., "analytics")
 3. Tables are created programmatically via PyIceberg (see create_table below)
 
-Or via curl:
-    curl -X POST http://localhost:9000/_admin/warehouses \\
+Or via curl, signed with the same keys:
+    curl --aws-sigv4 "aws:amz:us-east-1:s3" --user "$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY" \\
+         -X POST http://localhost:9000/_admin/warehouses \\
          -H "Content-Type: application/json" -d '{"name": "production"}'
-    curl -X POST http://localhost:9000/iceberg/v1/namespaces \\
+    curl --aws-sigv4 "aws:amz:us-east-1:s3" --user "$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY" \\
+         -X POST "http://localhost:9000/iceberg/v1/namespaces?warehouse=production" \\
          -H "Content-Type: application/json" -d '{"namespace": ["analytics"]}'
 """
 

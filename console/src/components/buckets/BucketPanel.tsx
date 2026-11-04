@@ -12,9 +12,8 @@ import {
   formatDate,
   layoutSentence,
   lifecycleWords,
+  lockFromListing,
   lockWords,
-  parseLifecycle,
-  parseLock,
   poolName,
   protectionSentence,
   PUBLIC_WORDS,
@@ -27,7 +26,7 @@ import {
   type PolicyDoc,
   type PoolInfo,
   type PublicAccessBlock,
-  type S3Setting,
+  type Setting,
 } from "./model";
 
 /// Who the bucket's policy names, in words.
@@ -92,31 +91,26 @@ export default function BucketPanel({
   const href = `/buckets/${encodeURIComponent(bucket.name)}`;
   const v = versioningOf(bucket.versioning);
 
-  // Settings S3 keeps as sub-resources. The ones the gateway refused are
-  // named once below instead of a row of "unknown"s.
-  const refused: string[] = [];
-  const row = (label: string, s: S3Setting | undefined, words: (d: Document) => string): [string, ReactNode] | null => {
+  // Settings S3 keeps as sub-resources, each read from its admin route;
+  // object lock comes with the bucket listing.
+  const row = <T,>(label: string, s: Setting<T> | undefined, words: (d: T) => string, none = "Off"): [string, ReactNode] => {
     if (!s) return [label, <span className="text-muted">…</span>];
     if (s.state === "set") return [label, words(s.doc)];
-    if (s.state === "none") return [label, "Off"];
-    if (s.state === "refused") {
-      refused.push(label.toLowerCase());
-      return null;
-    }
-    return [label, <span className="text-muted">Couldn't read ({s.message})</span>];
+    if (s.state === "none") return [label, none];
+    return [label, <span className="text-muted">{s.message}</span>];
   };
-  const settingRows = [
+  const settingRows: [string, ReactNode][] = [
     [
       "Versioning",
       v === "on" ? "On, every overwrite keeps the earlier version" : v === "suspended" ? "Suspended: earlier versions kept, new writes replace" : "Off",
-    ] as [string, ReactNode],
-    row("Object lock", settings?.lock, (d) => lockWords(parseLock(d))),
+    ],
+    ["Object lock", lockWords(lockFromListing(bucket.object_lock))],
     row("Encryption", settings?.encryption, encryptionWords),
-    row("Lifecycle", settings?.lifecycle, (d) => lifecycleWords(parseLifecycle(d))),
+    row("Lifecycle", settings?.lifecycle, (d) => lifecycleWords(d.Rule ?? []), "None"),
     row("Replication", settings?.replication, replicationWords),
-    ["Owner", ownerName ?? (bucket.owner ? <span className="font-mono text-[12px]">{bucket.owner}</span> : <span className="text-warn">None: only a policy reaches it</span>)] as [string, ReactNode],
+    ["Owner", ownerName ?? (bucket.owner ? <span className="font-mono text-[12px]">{bucket.owner}</span> : <span className="text-warn">None: only a policy reaches it</span>)],
     ...(usage?.quota_bytes ? [["Quota", formatBytes(usage.quota_bytes)] as [string, ReactNode]] : []),
-  ].filter((r): r is [string, ReactNode] => r !== null);
+  ];
 
   const protection = protectionSentence(pool);
   const layout = layoutSentence(pool);
@@ -194,12 +188,6 @@ export default function BucketPanel({
 
       <PanelSection title="Settings">
         <Kv rows={settingRows} />
-        {refused.length > 0 && (
-          <p className="text-[11.5px] text-muted">
-            {refused.join(", ").replace(/, ([^,]*)$/, " and $1").replace(/^./, (c) => c.toUpperCase())} can't be read
-            from the console yet: the gateway has no admin route for {refused.length === 1 ? "it" : "them"}.
-          </p>
-        )}
       </PanelSection>
 
       <PanelSection title="Who has access">

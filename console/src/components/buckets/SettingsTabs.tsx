@@ -6,47 +6,48 @@ import { ProtectionHealth, PublicBadge } from "./BucketPanel";
 import { CardFrame, DangerTextButton, Kv, SelectableRow, SettingCard, Th } from "./parts";
 import type { BucketSettings } from "./hooks";
 import {
+  changeLifecycle,
+  encryptionSentence,
   encryptionWords,
   formatBytes,
   formatCount,
   layoutSentence,
-  lifecycleXml,
+  lifecycleRule,
+  lifecycleRuleDoc,
+  lockDoc,
+  lockFromDoc,
+  lockFromListing,
+  lockSentence,
   lockWords,
-  lockXml,
-  parseLifecycle,
-  parseLock,
   poolName,
   protectionSentence,
   readPolicy,
-  REFUSED,
-  replicationWords,
-  ruleWords,
+  replicationRule,
+  SettingError,
   versioningOf,
-  writeS3Setting,
+  writeSetting,
   type BucketInfo,
   type BucketUsage,
-  type LifecycleRule,
+  type EncryptionDoc,
+  type LifecycleDoc,
+  type LifecycleDraft,
   type LockConfig,
+  type LockDoc,
   type PolicyDoc,
   type PoolInfo,
   type PublicAccessBlock,
-  type S3Setting,
+  type ReplicationDoc,
+  type Setting,
   type UserInfo,
 } from "./model";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-/// What to say when a setting couldn't be read.
-function Unreadable({ s, what }: { s: S3Setting | undefined; what: string }) {
+/// What a setting shows while it loads or when it couldn't be read; `null`
+/// once it has a value to show.
+function NotYet({ s }: { s: Setting<unknown> | undefined }) {
   if (!s) return <p className="text-[12.5px] text-muted">Loading…</p>;
-  if (s.state === "refused")
-    return (
-      <p className="text-[12.5px] text-muted">
-        The console can't read this bucket's {what} yet: the gateway refuses the console's session on the S3 API and has
-        no admin route for it. Use an S3 client to see or change it.
-      </p>
-    );
-  if (s.state === "error") return <p className="text-[12.5px] text-err">Couldn't read the {what}: {s.message}</p>;
+  if (s.state === "error") return <p className="text-[12.5px] text-err">{s.message}</p>;
   return null;
 }
 
@@ -75,20 +76,24 @@ export function SettingsTab({
   const [verBusy, setVerBusy] = useState(false);
   const [verErr, setVerErr] = useState("");
   const [delErr, setDelErr] = useState("");
+  // The lock's own read is the freshest; the listing answers until it's in.
+  const locked =
+    settings?.lock.state === "set" ? lockFromDoc(settings.lock.doc).enabled : lockFromListing(bucket.object_lock).enabled;
 
   const setVersioning = async (status: "Enabled" | "Suspended") => {
     setVerBusy(true);
     setVerErr("");
     try {
-      await writeS3Setting(
-        bucket.name,
-        "versioning",
-        "PUT",
-        `<?xml version="1.0" encoding="UTF-8"?><VersioningConfiguration><Status>${status}</Status></VersioningConfiguration>`,
-      );
+      await writeSetting(bucket.name, "versioning", "PUT", { Status: status });
       onBucketChanged();
     } catch (e) {
-      setVerErr(errText(e));
+      if (e instanceof SettingError && e.status === 409 && status === "Suspended") {
+        setVerErr(
+          "Versioning can't be suspended on this bucket: it has object lock, which keeps every version until its retention ends. Object lock can't be turned off, so versioning stays on.",
+        );
+        onBucketChanged();
+        reloadSettings();
+      } else setVerErr(`Couldn't ${status === "Enabled" ? "turn on" : "suspend"} versioning. ${errText(e)}`);
     } finally {
       setVerBusy(false);
     }
@@ -104,12 +109,6 @@ export function SettingsTab({
     }
   };
 
-  // When the gateway turned the session away on the S3 path, a versioning
-  // change would be refused the same way, so it isn't offered.
-  const s3Off = settings ? Object.values(settings).some((x) => x.state === "refused") : false;
-  const enc = settings?.encryption;
-  const repl = settings?.replication;
-
   return (
     <div className="grid gap-4 lg:grid-cols-2 items-start">
       <SettingCard
@@ -117,11 +116,11 @@ export function SettingsTab({
         description="Keeps every version of an object, so an overwrite or a delete can be undone. Once on, it can be suspended but not turned off."
         action={
           v === "on" ? (
-            <Button disabled={verBusy || s3Off} onClick={() => void setVersioning("Suspended")}>
+            <Button disabled={verBusy || locked} onClick={() => void setVersioning("Suspended")}>
               Suspend versioning
             </Button>
           ) : (
-            <Button disabled={verBusy || s3Off} onClick={() => void setVersioning("Enabled")}>
+            <Button disabled={verBusy} onClick={() => void setVersioning("Enabled")}>
               {v === "suspended" ? "Resume versioning" : "Turn on versioning"}
             </Button>
           )
@@ -139,16 +138,15 @@ export function SettingsTab({
                 : "An overwrite replaces the object."}
           </span>
         </div>
-        {s3Off && (
+        {v === "on" && locked && !verErr && (
           <p className="text-[12px] text-muted">
-            The console can't change versioning yet: the gateway refuses its session on the S3 API. Use an S3 client
-            (<span className="font-mono text-[11.5px]">put-bucket-versioning</span>).
+            Object lock keeps versioning on: a locked bucket must keep every version, so it can't be suspended.
           </p>
         )}
         {verErr && <p className="text-[12px] text-err">{verErr}</p>}
       </SettingCard>
 
-      <ObjectLockCard bucket={bucket.name} setting={settings?.lock} onSaved={reloadSettings} versioned={v === "on"} />
+      <ObjectLockCard bucket={bucket.name} setting={settings?.lock} versioned={v === "on"} onSaved={() => (reloadSettings(), onBucketChanged())} />
 
       <SettingCard title="Protection" description="How this bucket's objects are stored, set by its pool.">
         <Kv
@@ -164,18 +162,9 @@ export function SettingsTab({
         />
       </SettingCard>
 
-      <SettingCard title="Encryption and replication" description="Default encryption for new objects, and where this bucket copies them.">
-        {enc?.state === "set" || enc?.state === "none" || repl?.state === "set" || repl?.state === "none" ? (
-          <Kv
-            rows={[
-              ["Encryption", enc?.state === "set" ? encryptionWords(enc.doc) : enc?.state === "none" ? "Off" : "—"],
-              ["Replication", repl?.state === "set" ? replicationWords(repl.doc) : repl?.state === "none" ? "Off" : "—"],
-            ]}
-          />
-        ) : (
-          <Unreadable s={enc} what="encryption and replication settings" />
-        )}
-      </SettingCard>
+      <EncryptionCard setting={settings?.encryption} />
+
+      <ReplicationCard setting={settings?.replication} />
 
       <SettingCard
         title="Delete bucket"
@@ -192,6 +181,18 @@ export function SettingsTab({
   );
 }
 
+/// The default retention as the form edits it: a period in one unit, as S3
+/// takes exactly one of days and years.
+interface RetentionDraft {
+  mode: LockConfig["mode"];
+  period: number;
+  unit: "days" | "years";
+}
+
+function retentionOf(c: LockConfig): RetentionDraft {
+  return { mode: c.mode, period: c.years || c.days || 0, unit: c.years ? "years" : "days" };
+}
+
 function ObjectLockCard({
   bucket,
   setting,
@@ -199,31 +200,49 @@ function ObjectLockCard({
   onSaved,
 }: {
   bucket: string;
-  setting: S3Setting | undefined;
+  setting: Setting<LockDoc> | undefined;
   versioned: boolean;
   onSaved: () => void;
 }) {
-  const readable = setting?.state === "set" || setting?.state === "none";
-  const initial: LockConfig =
-    setting?.state === "set" ? parseLock(setting.doc) : { enabled: false, mode: "COMPLIANCE", days: 0, years: 0 };
-  const [draft, setDraft] = useState<LockConfig | null>(null);
+  const current = setting?.state === "set" ? lockFromDoc(setting.doc) : lockFromDoc(undefined);
+  const [draft, setDraft] = useState<RetentionDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [saved, setSaved] = useState(false);
-  const c = draft ?? initial;
-  const set = (p: Partial<LockConfig>) => setDraft({ ...c, ...p });
+  const [saved, setSaved] = useState("");
+  const d = draft ?? retentionOf(current);
+  const set = (p: Partial<RetentionDraft>) => setDraft({ ...d, ...p });
+  const periodErr = d.mode && d.period < 1 ? "Enter 1 or more." : undefined;
+  const turningOn = !current.enabled;
 
   const save = async () => {
+    if (
+      turningOn &&
+      !confirm(
+        `Turn on object lock for ${bucket}? It can't be turned off again, and versioning can't be suspended once it's on.`,
+      )
+    )
+      return;
     setBusy(true);
     setErr("");
+    setSaved("");
+    const next: LockConfig = {
+      enabled: true,
+      mode: d.mode,
+      days: d.mode && d.unit === "days" ? d.period : 0,
+      years: d.mode && d.unit === "years" ? d.period : 0,
+    };
     try {
-      await writeS3Setting(bucket, "object-lock", "PUT", lockXml(c));
+      await writeSetting(bucket, "object-lock", "PUT", lockDoc(next));
       setDraft(null);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      setSaved(turningOn ? "Object lock is on" : "Default retention saved");
+      setTimeout(() => setSaved(""), 2500);
       onSaved();
     } catch (e) {
-      setErr(errText(e));
+      setErr(
+        e instanceof SettingError && e.status === 409
+          ? "Turn on versioning first: object lock needs every version kept."
+          : `Couldn't save object lock. ${errText(e)}`,
+      );
     } finally {
       setBusy(false);
     }
@@ -232,45 +251,130 @@ function ObjectLockCard({
   return (
     <SettingCard
       title="Object lock"
-      description="Stops objects from being deleted or overwritten for a set time (write once, read many). Needs versioning."
+      description="Stops objects from being deleted or overwritten for a set time (write once, read many). Needs versioning, and can't be turned off once on."
     >
-      {!readable ? (
-        <Unreadable s={setting} what="object lock" />
+      {!setting || setting.state === "error" ? (
+        <NotYet s={setting} />
       ) : (
         <>
-          <div className="flex items-center gap-2 text-[12.5px]">
-            <span className="text-muted">Now:</span>
-            <span className="text-text">{lockWords(initial)}</span>
+          <div className="flex items-center gap-2 flex-wrap text-[12.5px]">
+            {current.enabled ? <Badge kind="ok">On</Badge> : <Badge>Off</Badge>}
+            {current.enabled && <span className="text-text">{lockWords(current)}</span>}
           </div>
-          <label className="inline-flex items-center gap-2 text-[12.5px] text-text">
-            <input
-              type="checkbox"
-              role="switch"
-              checked={c.enabled}
-              onChange={(e) => set({ enabled: e.target.checked })}
-              className="w-3.5 h-3.5 accent-accent"
-            />
-            Lock objects in this bucket
-          </label>
-          {c.enabled && (
-            <div className="grid grid-cols-3 gap-3">
-              <Select label="Mode" value={c.mode} onChange={(e) => set({ mode: e.target.value })}>
-                <option value="COMPLIANCE">Compliance</option>
-                <option value="GOVERNANCE">Governance</option>
-              </Select>
-              <Input label="Days" type="number" min={0} value={c.days} onChange={(e) => set({ days: parseInt(e.target.value, 10) || 0 })} />
-              <Input label="Years" type="number" min={0} value={c.years} onChange={(e) => set({ years: parseInt(e.target.value, 10) || 0 })} />
-            </div>
+          <p className="text-[12.5px] text-muted -mt-1">{lockSentence(current)}</p>
+          {turningOn && !versioned ? (
+            <p className="text-[12px] text-muted">Object lock can be turned on once versioning is on: it needs every version kept.</p>
+          ) : (
+            <form
+              className="flex flex-col gap-3 pt-1 border-t border-border"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void save();
+              }}
+            >
+              <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 pt-2">
+                <Select label="Default retention" value={d.mode} onChange={(e) => set({ mode: e.target.value as LockConfig["mode"] })}>
+                  <option value="">None</option>
+                  <option value="GOVERNANCE">Governance</option>
+                  <option value="COMPLIANCE">Compliance</option>
+                </Select>
+                <Input
+                  label="Keep for"
+                  type="number"
+                  min={1}
+                  disabled={!d.mode}
+                  value={d.mode ? d.period : ""}
+                  error={periodErr}
+                  onChange={(e) => set({ period: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                />
+                <Select label="Unit" disabled={!d.mode} value={d.unit} onChange={(e) => set({ unit: e.target.value as RetentionDraft["unit"] })}>
+                  <option value="days">Days</option>
+                  <option value="years">Years</option>
+                </Select>
+              </div>
+              {d.mode === "COMPLIANCE" && (
+                <p className="text-[12px] text-warn -mt-1">
+                  In compliance mode no one can delete a new object until its time is up, an admin included.
+                </p>
+              )}
+              <div className="flex items-center gap-3 flex-wrap">
+                <Button
+                  type="submit"
+                  variant={turningOn ? "primary" : "secondary"}
+                  icon={turningOn ? undefined : <Save size={13} />}
+                  disabled={busy || !!periodErr || (!turningOn && draft === null)}
+                >
+                  {turningOn ? "Turn on object lock" : "Save default retention"}
+                </Button>
+                {!turningOn && draft !== null && (
+                  <Button type="button" variant="ghost" onClick={() => setDraft(null)}>
+                    Discard changes
+                  </Button>
+                )}
+                {saved && <span className="text-[12px] text-ok">{saved}</span>}
+              </div>
+            </form>
           )}
-          {c.enabled && !versioned && <p className="text-[12px] text-warn">Turn on versioning first: object lock needs it.</p>}
-          <div className="flex items-center gap-3">
-            <Button icon={<Save size={13} />} disabled={busy || draft === null} onClick={() => void save()}>
-              Save object lock
-            </Button>
-            {saved && <span className="text-[12px] text-ok">Object lock saved</span>}
-          </div>
           {err && <p className="text-[12px] text-err">{err}</p>}
         </>
+      )}
+    </SettingCard>
+  );
+}
+
+function EncryptionCard({ setting }: { setting: Setting<EncryptionDoc> | undefined }) {
+  const doc = setting?.state === "set" ? setting.doc : undefined;
+  const on = !!doc?.Rule?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm;
+  return (
+    <SettingCard title="Default encryption" description="How objects written to this bucket are encrypted when the upload doesn't say.">
+      {!setting || setting.state === "error" ? (
+        <NotYet s={setting} />
+      ) : (
+        <>
+          <div className="flex items-center gap-2 flex-wrap text-[12.5px]">
+            {on ? <Badge kind="ok">On</Badge> : <Badge>Off</Badge>}
+            {on && <span className="text-text">{encryptionWords(doc)}</span>}
+          </div>
+          <p className="text-[12.5px] text-muted -mt-1">{encryptionSentence(doc)}</p>
+        </>
+      )}
+    </SettingCard>
+  );
+}
+
+function ReplicationCard({ setting }: { setting: Setting<ReplicationDoc> | undefined }) {
+  const rules = setting?.state === "set" ? (setting.doc.Rule ?? []).map(replicationRule) : [];
+  const sorted = [...rules].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+  return (
+    <SettingCard title="Replication" description="Copies new objects from this bucket to another ObjectIO cluster, by rule.">
+      {!setting || setting.state === "error" ? (
+        <NotYet s={setting} />
+      ) : rules.length === 0 ? (
+        <div className="flex items-center gap-2 flex-wrap text-[12.5px]">
+          <Badge>Off</Badge>
+          <span className="text-muted">This bucket's objects aren't copied anywhere.</span>
+        </div>
+      ) : (
+        <ul className="flex flex-col -my-1" aria-label="Replication rules">
+          {sorted.map((r) => (
+            <li key={r.id} className="py-2 border-t border-border first:border-t-0 flex flex-col gap-0.5">
+              <div className="flex items-center gap-2 flex-wrap text-[12.5px]">
+                {r.enabled ? <Badge kind="ok">On</Badge> : <Badge>Off</Badge>}
+                <span className="font-mono text-text">{r.id}</span>
+                {rules.length > 1 && r.priority !== undefined && (
+                  <span className="text-[11.5px] text-muted">priority {r.priority}</span>
+                )}
+              </div>
+              <p className="text-[12.5px] text-text">
+                {r.scope} {r.enabled ? "are copied" : "would be copied"} to{" "}
+                {r.target ? <span className="font-mono">{r.target}</span> : "a target the rule doesn't name"}.
+              </p>
+              <p className="text-[12px] text-muted">
+                {r.deletes ? "Deletes are copied too." : "Deletes aren't copied: an object deleted here stays at the target."}
+              </p>
+            </li>
+          ))}
+        </ul>
       )}
     </SettingCard>
   );
@@ -563,9 +667,8 @@ function PolicyCard({
 
 // ---- Lifecycle ------------------------------------------------------------
 
-const EMPTY_RULE: LifecycleRule = {
+const EMPTY_RULE: LifecycleDraft = {
   id: "",
-  status: "Enabled",
   prefix: "",
   expiration_days: 0,
   noncurrent_days: 0,
@@ -579,35 +682,67 @@ export function LifecycleTab({
   onSaved,
 }: {
   bucket: string;
-  setting: S3Setting | undefined;
+  setting: Setting<LifecycleDoc> | undefined;
   onSaved: () => void;
 }) {
-  // Rules are written as a whole: a PUT replaces every rule. So editing is
-  // only offered once the current rules have been read, or a save would
-  // drop the ones the console couldn't see.
+  // A PUT replaces every rule, so each change reads the rules again and
+  // edits those (`changeLifecycle`). Editing is offered only once they have
+  // been read here too, so the page never shows a list it couldn't save.
   const readable = setting?.state === "set" || setting?.state === "none";
-  const rules = setting?.state === "set" ? parseLifecycle(setting.doc) : [];
-  const [adding, setAdding] = useState<LifecycleRule | null>(null);
+  const rules = setting?.state === "set" ? (setting.doc.Rule ?? []).map(lifecycleRule) : [];
+  const [adding, setAdding] = useState<LifecycleDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [msg, setMsg] = useState("");
 
-  const write = async (next: LifecycleRule[]) => {
+  const change = async (fn: Parameters<typeof changeLifecycle>[1], failed: string, done: string) => {
     setBusy(true);
     setErr("");
+    setMsg("");
     try {
-      if (next.length === 0) await writeS3Setting(bucket, "lifecycle", "DELETE");
-      else await writeS3Setting(bucket, "lifecycle", "PUT", lifecycleXml(next));
-      onSaved();
+      await changeLifecycle(bucket, fn);
+      setMsg(done);
+      setTimeout(() => setMsg(""), 2500);
       return true;
     } catch (e) {
-      setErr(errText(e) === REFUSED ? REFUSED : `Couldn't save the rules: ${errText(e)}`);
+      setErr(`${failed} ${errText(e)}`);
       return false;
     } finally {
       setBusy(false);
+      onSaved();
     }
   };
 
+  const add = (draft: LifecycleDraft) => {
+    const id = draft.id.trim();
+    return change(
+      (now) => {
+        if (now.some((r) => r.ID === id)) throw new Error(`Someone else has just added a rule named ${id}. Pick another name.`);
+        return [...now, lifecycleRuleDoc(draft)];
+      },
+      "Couldn't add the rule.",
+      `Rule ${id} added`,
+    );
+  };
+
+  const turn = (id: string, on: boolean) =>
+    change(
+      (now) => {
+        if (!now.some((r) => r.ID === id)) throw new Error(`Rule ${id} isn't there any more: someone else has removed it.`);
+        return now.map((r) => (r.ID === id ? { ...r, Status: on ? "Enabled" : "Disabled" } : r));
+      },
+      `Couldn't turn ${on ? "on" : "off"} rule ${id}.`,
+      `Rule ${id} turned ${on ? "on" : "off"}`,
+    );
+
+  const remove = (id: string) =>
+    change((now) => now.filter((r) => r.ID !== id), `Couldn't delete rule ${id}.`, `Rule ${id} deleted`);
+
   const num = (v: string) => Math.max(0, parseInt(v, 10) || 0);
+  const id = adding?.id.trim() ?? "";
+  const taken = !!adding && rules.some((r) => r.id === id);
+  const noAction =
+    !!adding && !adding.expiration_days && !adding.noncurrent_days && !adding.abort_days && !adding.delete_markers;
 
   return (
     <div className="flex flex-col gap-4">
@@ -616,21 +751,25 @@ export function LifecycleTab({
           <div className="min-w-0">
             <h2 className="text-[14px] font-semibold text-text">Lifecycle rules</h2>
             <p className="text-[12px] text-muted mt-0.5">
-              Expire objects and earlier versions after a number of days, remove expired delete markers, and abort uploads that never finished.
+              Expire objects and earlier versions after a number of days, remove delete markers left with no versions, and abort uploads that never finished.
             </p>
           </div>
-          <Button icon={<Plus size={13} />} disabled={!readable || adding !== null} onClick={() => setAdding({ ...EMPTY_RULE })}>
-            Add rule
-          </Button>
+          <div className="flex items-center gap-3">
+            {msg && <span className="text-[12px] text-ok">{msg}</span>}
+            <Button icon={<Plus size={13} />} disabled={!readable || adding !== null} onClick={() => setAdding({ ...EMPTY_RULE })}>
+              Add rule
+            </Button>
+          </div>
         </div>
 
         {adding && (
           <form
+            aria-label="New lifecycle rule"
             className="p-4 border-b border-border bg-surface-2 flex flex-col gap-3"
             onSubmit={(e) => {
               e.preventDefault();
-              if (!adding.id.trim() || rules.some((r) => r.id === adding.id.trim())) return;
-              void write([...rules, { ...adding, id: adding.id.trim() }]).then((ok) => ok && setAdding(null));
+              if (!id || taken || noAction) return;
+              void add(adding).then((ok) => ok && setAdding(null));
             }}
           >
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -639,7 +778,7 @@ export function LifecycleTab({
                 value={adding.id}
                 onChange={(e) => setAdding({ ...adding, id: e.target.value })}
                 placeholder="expire-logs"
-                error={rules.some((r) => r.id === adding.id.trim()) ? "A rule with this name exists." : undefined}
+                error={taken ? "A rule with this name exists." : undefined}
                 autoFocus
               />
               <Input
@@ -654,7 +793,10 @@ export function LifecycleTab({
                 type="number"
                 min={0}
                 value={adding.expiration_days}
-                onChange={(e) => setAdding({ ...adding, expiration_days: num(e.target.value) })}
+                onChange={(e) => {
+                  const days = num(e.target.value);
+                  setAdding({ ...adding, expiration_days: days, delete_markers: days > 0 ? false : adding.delete_markers });
+                }}
                 hint="0 leaves objects alone."
               />
               <Input
@@ -663,6 +805,7 @@ export function LifecycleTab({
                 min={0}
                 value={adding.noncurrent_days}
                 onChange={(e) => setAdding({ ...adding, noncurrent_days: num(e.target.value) })}
+                hint="Counted from when a newer version replaced it."
               />
               <Input
                 label="Abort unfinished uploads after (days)"
@@ -671,18 +814,25 @@ export function LifecycleTab({
                 value={adding.abort_days}
                 onChange={(e) => setAdding({ ...adding, abort_days: num(e.target.value) })}
               />
-              <label className="flex items-center gap-2 text-[12.5px] text-text self-center pt-4">
-                <input
-                  type="checkbox"
-                  checked={adding.delete_markers}
-                  onChange={(e) => setAdding({ ...adding, delete_markers: e.target.checked })}
-                  className="w-3.5 h-3.5 accent-accent"
-                />
-                Remove expired delete markers
-              </label>
+              <div className="self-center pt-4">
+                <label className="flex items-center gap-2 text-[12.5px] text-text has-[:disabled]:text-muted">
+                  <input
+                    type="checkbox"
+                    checked={adding.delete_markers}
+                    disabled={adding.expiration_days > 0}
+                    onChange={(e) => setAdding({ ...adding, delete_markers: e.target.checked })}
+                    className="w-3.5 h-3.5 accent-accent"
+                  />
+                  Remove delete markers with no versions left
+                </label>
+                {adding.expiration_days > 0 && (
+                  <p className="mt-1 text-[11px] text-muted">Not with an expiry: expiring objects already removes these.</p>
+                )}
+              </div>
             </div>
+            {noAction && id && <p className="text-[12px] text-muted">Give the rule something to do: one of the days, or the delete markers.</p>}
             <div className="flex gap-2">
-              <Button type="submit" disabled={busy || !adding.id.trim()}>
+              <Button type="submit" variant="primary" disabled={busy || !id || taken || noAction}>
                 Add rule
               </Button>
               <Button type="button" variant="ghost" onClick={() => setAdding(null)}>
@@ -694,7 +844,7 @@ export function LifecycleTab({
 
         {!readable ? (
           <div className="p-4">
-            <Unreadable s={setting} what="lifecycle rules" />
+            <NotYet s={setting} />
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -721,19 +871,21 @@ export function LifecycleTab({
                 {rules.map((r) => (
                   <SelectableRow key={r.id} selected={false}>
                     <Cell className="font-mono text-text">{r.id}</Cell>
-                    <Cell className="font-mono">{r.prefix || <span className="font-sans text-muted">Every key</span>}</Cell>
-                    <Cell>{ruleWords(r)}</Cell>
+                    <Cell>
+                      {r.prefix ? <span className="font-mono">{r.prefix}</span> : <span className="text-muted">Every key</span>}
+                      {r.conditions.length > 0 && <span className="text-muted"> · {r.conditions.join(" · ")}</span>}
+                    </Cell>
+                    <Cell>{r.actions}</Cell>
                     <Cell>
                       <Button
                         size="sm"
                         variant="ghost"
                         disabled={busy}
-                        aria-label={`${r.status === "Enabled" ? "Turn off" : "Turn on"} rule ${r.id}`}
-                        onClick={() =>
-                          void write(rules.map((x) => (x.id === r.id ? { ...x, status: x.status === "Enabled" ? "Disabled" : "Enabled" } : x)))
-                        }
+                        aria-label={`${r.enabled ? "Turn off" : "Turn on"} rule ${r.id}`}
+                        title={r.enabled ? "Turn off" : "Turn on"}
+                        onClick={() => void turn(r.id, !r.enabled)}
                       >
-                        {r.status === "Enabled" ? <Badge kind="ok">On</Badge> : <Badge>Off</Badge>}
+                        {r.enabled ? <Badge kind="ok">On</Badge> : <Badge>Off</Badge>}
                       </Button>
                     </Cell>
                     <Cell align="right">
@@ -742,7 +894,7 @@ export function LifecycleTab({
                         label={`Delete rule ${r.id}`}
                         icon={<Trash2 size={13} />}
                         onClick={() => {
-                          if (confirm(`Delete lifecycle rule ${r.id}?`)) void write(rules.filter((x) => x.id !== r.id));
+                          if (confirm(`Delete lifecycle rule ${r.id}?`)) void remove(r.id);
                         }}
                       />
                     </Cell>

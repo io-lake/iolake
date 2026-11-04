@@ -1,36 +1,37 @@
 import { useCallback, useEffect, useState } from "react";
-import { readS3Setting, type S3Setting } from "./model";
+import {
+  readSetting,
+  type EncryptionDoc,
+  type LifecycleDoc,
+  type LockDoc,
+  type ReplicationDoc,
+  type Setting,
+} from "./model";
 
 export interface BucketSettings {
-  lock: S3Setting;
-  encryption: S3Setting;
-  lifecycle: S3Setting;
-  replication: S3Setting;
+  lock: Setting<LockDoc>;
+  encryption: Setting<EncryptionDoc>;
+  lifecycle: Setting<LifecycleDoc>;
+  replication: Setting<ReplicationDoc>;
 }
 
-/// The settings S3 keeps as bucket sub-resources, for one bucket, read when
-/// the bucket changes. `null` while loading. `reload` reads them again after
-/// a change.
+/// The settings S3 keeps as bucket sub-resources, for one bucket, read from
+/// their admin routes when the bucket changes. `null` while loading.
+/// `reload` reads them again after a change.
 export function useBucketSettings(bucket: string | undefined) {
-  const [state, setState] = useState<{ bucket: string; settings: BucketSettings; n: number } | null>(null);
+  const [state, setState] = useState<{ bucket: string; settings: BucketSettings } | null>(null);
   const [n, setN] = useState(0);
 
   useEffect(() => {
     if (!bucket) return;
     let cancelled = false;
-    // One read first: if the gateway refuses the session, the other three
-    // are answered from that without asking.
-    void readS3Setting(bucket, "object-lock")
-      .then((lock) =>
-        Promise.all([
-          lock,
-          readS3Setting(bucket, "encryption"),
-          readS3Setting(bucket, "lifecycle"),
-          readS3Setting(bucket, "replication"),
-        ]),
-      )
-      .then(([lock, encryption, lifecycle, replication]) => {
-      if (!cancelled) setState({ bucket, settings: { lock, encryption, lifecycle, replication }, n });
+    void Promise.all([
+      readSetting<LockDoc>(bucket, "object-lock"),
+      readSetting<EncryptionDoc>(bucket, "encryption"),
+      readSetting<LifecycleDoc>(bucket, "lifecycle"),
+      readSetting<ReplicationDoc>(bucket, "replication"),
+    ]).then(([lock, encryption, lifecycle, replication]) => {
+      if (!cancelled) setState({ bucket, settings: { lock, encryption, lifecycle, replication } });
     });
     return () => {
       cancelled = true;

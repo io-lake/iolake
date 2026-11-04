@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plus, Search } from "lucide-react";
+import { Lock, Plus, Search } from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import { Badge, Banner, Button, Cell, Input, Select } from "../components/ui";
 import { useProtection } from "../api/protection";
@@ -20,6 +20,8 @@ import {
   loadPublicAccessBlock,
   loadUsage,
   loadUsers,
+  lockFromListing,
+  lockWords,
   mapLimit,
   poolName,
   readPolicy,
@@ -34,12 +36,13 @@ import {
   type UserInfo,
 } from "../components/buckets/model";
 
-type Pill = "all" | "versioned" | "suspended" | "public";
+type Pill = "all" | "versioned" | "suspended" | "locked" | "public";
 
 const PILLS: [Pill, string][] = [
   ["all", "All"],
   ["versioned", "Versioned"],
   ["suspended", "Suspended"],
+  ["locked", "Locked"],
   ["public", "Public"],
 ];
 
@@ -126,6 +129,7 @@ export default function Buckets() {
     p === "all" ||
     (p === "versioned" && b.versioning === 1) ||
     (p === "suspended" && b.versioning === 2) ||
+    (p === "locked" && !!b.object_lock?.enabled) ||
     (p === "public" && isPublic(b.name));
 
   const q = query.trim().toLowerCase();
@@ -343,13 +347,19 @@ export default function Buckets() {
                       <Cell align="right" className="tabular-nums">
                         {u ? formatCount(u.objects) : <span className="text-muted">—</span>}
                       </Cell>
-                      <Cell>
+                      <Cell className="whitespace-nowrap">
                         {v === "on" ? (
                           <span className="text-text">On</span>
                         ) : v === "suspended" ? (
                           <Badge kind="warn">Suspended</Badge>
                         ) : (
                           <span className="text-muted">Off</span>
+                        )}
+                        {b.object_lock?.enabled && (
+                          <span className="ml-1.5 inline-flex items-center gap-1 text-muted" title={`Object lock: ${lockWords(lockFromListing(b.object_lock))}`}>
+                            <Lock size={11} aria-hidden="true" />
+                            locked
+                          </span>
                         )}
                       </Cell>
                       <Cell>

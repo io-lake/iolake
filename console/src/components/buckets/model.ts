@@ -1,9 +1,7 @@
 /// What the Buckets pages read from the gateway, and how they put it into
 /// words. Everything here comes from the admin API (`/_admin/*`, which takes
-/// the console's session), except the bucket settings S3 keeps under
-/// sub-resources (`?object-lock`, `?lifecycle`, `?encryption`,
-/// `?replication`): those have no admin route, so they are read over the S3
-/// path and come back refused when the console signs in with a session.
+/// the console's session), the settings S3 keeps as bucket sub-resources
+/// included: their admin routes take and answer S3's documents as JSON.
 
 // ---- shapes ---------------------------------------------------------------
 
@@ -13,10 +11,17 @@ export interface BucketInfo {
   owner?: string;
   /// 0 = never turned on, 1 = enabled, 2 = suspended.
   versioning?: number;
+  object_lock?: BucketLock;
   /// Empty = the default pool.
   pool?: string;
   /// Empty = the system tenant.
   tenant?: string;
+}
+
+/// A bucket's object lock as the listing gives it: `days` or `years`.
+export interface BucketLock {
+  enabled: boolean;
+  default_retention?: { mode: string; days?: number; years?: number };
 }
 
 export interface PoolInfo {
@@ -137,69 +142,133 @@ export async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Pr
   return out;
 }
 
-/// A bucket setting read over the S3 path.
-/// - `set`: the bucket has one; `doc` is the parsed XML.
-/// - `none`: the bucket has none (S3 answers 404 with a "not found" code).
-/// - `refused`: the gateway would not answer the console's session.
-/// - `error`: anything else.
-export type S3Setting =
-  | { state: "set"; doc: Document }
-  | { state: "none" }
-  | { state: "refused" }
-  | { state: "error"; message: string };
+/// A bucket setting S3 keeps as a sub-resource, read from its admin route
+/// (`/_admin/buckets/{name}/{setting}`), which answers S3's document as
+/// JSON with S3's element names.
+/// - `set`: the bucket has one; `doc` is the document.
+/// - `none`: the bucket has none (404 with S3's "not configured" code).
+/// - `error`: anything else, as a sentence to show.
+export type Setting<T> = { state: "set"; doc: T } | { state: "none" } | { state: "error"; message: string };
 
-/// Once the gateway has turned the console's session away on the S3 path,
-/// it will again: the session is not an S3 credential. Remembered for the
-/// page's life so every later read skips the round trip (and the 403 in the
-/// browser's log).
-let s3Refused = false;
+export type SettingName = "versioning" | "object-lock" | "encryption" | "lifecycle" | "replication";
 
-export function s3SessionRefused() {
-  return s3Refused;
+/// Each setting as a sentence names it.
+const SETTING_WORDS: Record<SettingName, string> = {
+  versioning: "versioning",
+  "object-lock": "object lock",
+  encryption: "default encryption",
+  lifecycle: "lifecycle rules",
+  replication: "replication rules",
+};
+
+/// The 404 codes that mean the bucket has no such setting, as opposed to
+/// `NoSuchBucket`.
+const NOT_CONFIGURED = new Set([
+  "ObjectLockConfigurationNotFoundError",
+  "ServerSideEncryptionConfigurationNotFoundError",
+  "NoSuchLifecycleConfiguration",
+  "ReplicationConfigurationNotFoundError",
+]);
+
+/// A refused read or write of a setting: the sentence to show, with the
+/// status and S3's code so a caller can say more for one it expects (a 409).
+export class SettingError extends Error {
+  readonly status: number;
+  readonly code: string;
+  readonly detail: string;
+  constructor(message: string, status: number, code: string, detail = "") {
+    super(message);
+    this.status = status;
+    this.code = code;
+    this.detail = detail;
+  }
 }
 
-export async function readS3Setting(bucket: string, sub: string): Promise<S3Setting> {
-  if (s3Refused) return { state: "refused" };
+const UNREACHABLE = "The console couldn't reach the gateway. Check the connection and try again.";
+
+/// "Days must be positive" → "Days must be positive."
+const period = (s: string) => (s && !/[.!?]$/.test(s) ? `${s}.` : s);
+
+function settingUrl(bucket: string, name: SettingName) {
+  return `/_admin/buckets/${encodeURIComponent(bucket)}/${name}`;
+}
+
+async function refusal(r: Response, name: SettingName, writing: boolean): Promise<SettingError> {
+  let code = "";
+  let detail = "";
   try {
-    const r = await fetch(`/${encodeURIComponent(bucket)}?${sub}`);
-    const text = await r.text();
-    if (r.ok) return { state: "set", doc: new DOMParser().parseFromString(text, "text/xml") };
-    if (r.status === 403 || r.status === 401) {
-      const msg = new DOMParser().parseFromString(text, "text/xml").querySelector("Message")?.textContent ?? "";
-      if (/anonymous/i.test(msg)) s3Refused = true;
-      return { state: "refused" };
-    }
-    if (r.status === 404) {
-      const code = new DOMParser().parseFromString(text, "text/xml").querySelector("Code")?.textContent ?? "";
-      if (code === "NoSuchBucket") return { state: "error", message: "The bucket no longer exists." };
-      return { state: "none" };
-    }
-    return { state: "error", message: `${r.status} ${r.statusText}` };
-  } catch (e) {
-    return { state: "error", message: e instanceof Error ? e.message : String(e) };
+    const d = (await r.json()) as { code?: string; message?: string };
+    code = d.code ?? "";
+    detail = d.message ?? "";
+  } catch {
+    // Not JSON: a proxy's page, or nothing.
   }
+  const what = SETTING_WORDS[name];
+  const say = (m: string) => new SettingError(m, r.status, code, detail);
+  if (r.status === 401) return say("Your session has ended. Sign in again.");
+  if (r.status === 403)
+    return say(
+      `Only a system admin or an admin of this bucket's tenant can ${writing ? "change" : "see"} its ${what}.`,
+    );
+  if (r.status === 404) return say("This bucket no longer exists.");
+  if (code === "MalformedJSON")
+    return say(`The gateway couldn't read the ${what} the console sent. ${period(detail)}`.trim());
+  if (r.status === 400) return say(`The gateway refused the ${what}: ${period(detail) || "it gave no reason."}`);
+  if (r.status === 409) return say(period(detail) || `The bucket's state doesn't allow this change to its ${what}.`);
+  return say(
+    `The gateway couldn't ${writing ? "save" : "read"} the ${what} (${r.status}${detail ? `: ${detail}` : ""}). Try again in a moment.`,
+  );
 }
 
-/// Write a bucket setting over the S3 path; throws a sentence on failure.
-export async function writeS3Setting(bucket: string, sub: string, method: "PUT" | "DELETE", xml?: string) {
-  if (s3Refused) throw new Error(REFUSED);
-  const r = await fetch(`/${encodeURIComponent(bucket)}?${sub}`, {
-    method,
-    headers: xml ? { "Content-Type": "application/xml" } : undefined,
-    body: xml,
-  });
-  if (r.ok) return;
-  const text = await r.text();
-  if ((r.status === 403 || r.status === 401) && /anonymous/i.test(text)) {
-    s3Refused = true;
-    throw new Error(REFUSED);
+export async function readSetting<T>(bucket: string, name: SettingName): Promise<Setting<T>> {
+  let r: Response;
+  try {
+    r = await fetch(settingUrl(bucket, name));
+  } catch {
+    return { state: "error", message: UNREACHABLE };
   }
-  const msg = new DOMParser().parseFromString(text, "text/xml").querySelector("Message")?.textContent;
-  throw new Error(msg || text || `${r.status} ${r.statusText}`);
+  if (r.ok) {
+    try {
+      return { state: "set", doc: (await r.json()) as T };
+    } catch {
+      return { state: "error", message: `The gateway's answer for the ${SETTING_WORDS[name]} wasn't JSON.` };
+    }
+  }
+  if (r.status === 404) {
+    const e = await refusal(r, name, false);
+    return NOT_CONFIGURED.has(e.code) ? { state: "none" } : { state: "error", message: e.message };
+  }
+  return { state: "error", message: (await refusal(r, name, false)).message };
 }
 
-export const REFUSED =
-  "The gateway refuses the console's session on the S3 API, and has no admin route for this setting yet. Change it with an S3 client.";
+/// Write a setting (`PUT` its document) or remove it (`DELETE`); throws a
+/// `SettingError` with a sentence on failure.
+export async function writeSetting(bucket: string, name: SettingName, method: "PUT" | "DELETE", doc?: unknown) {
+  let r: Response;
+  try {
+    r = await fetch(settingUrl(bucket, name), {
+      method,
+      headers: doc === undefined ? undefined : { "Content-Type": "application/json" },
+      body: doc === undefined ? undefined : JSON.stringify(doc),
+    });
+  } catch {
+    throw new SettingError(UNREACHABLE, 0, "");
+  }
+  if (!r.ok) throw await refusal(r, name, true);
+}
+
+/// Change a bucket's lifecycle rules. A PUT replaces every rule, so the
+/// rules are read again first and `change` edits what the gateway has now,
+/// not what the page last saw: a rule someone else added meanwhile, or a
+/// field the console has no control for (a tag filter, a date), is kept.
+/// No rules left removes the configuration.
+export async function changeLifecycle(bucket: string, change: (rules: LifecycleRuleDoc[]) => LifecycleRuleDoc[]) {
+  const now = await readSetting<LifecycleDoc>(bucket, "lifecycle");
+  if (now.state === "error") throw new SettingError(now.message, 0, "");
+  const next = change(now.state === "set" ? (now.doc.Rule ?? []) : []);
+  if (next.length === 0) await writeSetting(bucket, "lifecycle", "DELETE");
+  else await writeSetting(bucket, "lifecycle", "PUT", { Rule: next } satisfies LifecycleDoc);
+}
 
 // ---- objects --------------------------------------------------------------
 
@@ -484,48 +553,222 @@ export const PUBLIC_WORDS: Record<PublicLevel, string> = {
   write: "Public write",
 };
 
+// ---- settings: documents --------------------------------------------------
+
+/// The documents the setting routes take and answer: S3's configurations,
+/// as JSON with S3's element names. A repeated element is an array; one that
+/// S3 allows once (`Filter > Tag`) is an object.
+
+export interface VersioningDoc {
+  Status?: "Enabled" | "Suspended";
+}
+
+export interface LockDoc {
+  ObjectLockEnabled?: string;
+  Rule?: { DefaultRetention?: { Mode: string; Days?: number; Years?: number } };
+}
+
+export interface EncryptionDoc {
+  Rule?: {
+    ApplyServerSideEncryptionByDefault?: { SSEAlgorithm?: string; KMSMasterKeyID?: string };
+    BucketKeyEnabled?: boolean;
+  }[];
+}
+
+export interface TagDoc {
+  Key: string;
+  Value?: string;
+}
+
+export interface FilterDoc {
+  Prefix?: string;
+  Tag?: TagDoc;
+  ObjectSizeGreaterThan?: number;
+  ObjectSizeLessThan?: number;
+  And?: { Prefix?: string; Tag?: TagDoc[] | TagDoc; ObjectSizeGreaterThan?: number; ObjectSizeLessThan?: number };
+}
+
+export interface LifecycleRuleDoc {
+  ID?: string;
+  Status: string;
+  Filter?: FilterDoc;
+  /// The old top-level prefix, in a rule with no `Filter`.
+  Prefix?: string;
+  Expiration?: { Days?: number; Date?: string; ExpiredObjectDeleteMarker?: boolean };
+  NoncurrentVersionExpiration?: { NoncurrentDays?: number; NewerNoncurrentVersions?: number };
+  AbortIncompleteMultipartUpload?: { DaysAfterInitiation?: number };
+}
+
+export interface LifecycleDoc {
+  Rule?: LifecycleRuleDoc[];
+}
+
+export interface ReplicationRuleDoc {
+  ID?: string;
+  Priority?: number;
+  Status: string;
+  Prefix?: string;
+  Filter?: FilterDoc;
+  DeleteMarkerReplication?: { Status?: string };
+  Destination?: { Bucket?: string };
+}
+
+export interface ReplicationDoc {
+  Role?: string;
+  Rule?: ReplicationRuleDoc[];
+}
+
 // ---- settings in words ----------------------------------------------------
 
-const text = (d: Document | Element, sel: string) => d.querySelector(sel)?.textContent?.trim() ?? "";
+const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
+const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+/// Object lock, from either the setting's document or the bucket listing.
+/// `mode` is empty when there is no default retention.
 export interface LockConfig {
   enabled: boolean;
-  mode: string;
+  mode: "" | "GOVERNANCE" | "COMPLIANCE";
   days: number;
   years: number;
 }
 
-export function parseLock(doc: Document): LockConfig {
+const asMode = (m: string | undefined): LockConfig["mode"] =>
+  m === "GOVERNANCE" || m === "COMPLIANCE" ? m : m ? "COMPLIANCE" : "";
+
+export function lockFromDoc(doc: LockDoc | undefined): LockConfig {
+  const r = doc?.Rule?.DefaultRetention;
+  return { enabled: doc?.ObjectLockEnabled === "Enabled", mode: asMode(r?.Mode), days: r?.Days ?? 0, years: r?.Years ?? 0 };
+}
+
+export function lockFromListing(l: BucketLock | undefined): LockConfig {
+  const r = l?.default_retention;
+  return { enabled: !!l?.enabled, mode: asMode(r?.mode), days: r?.days ?? 0, years: r?.years ?? 0 };
+}
+
+/// What a PUT takes: lock is always on (it can't be turned off), with one
+/// of Days or Years when there is a default retention.
+export function lockDoc(c: LockConfig): LockDoc {
+  if (!c.mode || (c.days <= 0 && c.years <= 0)) return { ObjectLockEnabled: "Enabled" };
   return {
-    enabled: text(doc, "ObjectLockEnabled") === "Enabled",
-    mode: text(doc, "DefaultRetention > Mode") || "COMPLIANCE",
-    days: parseInt(text(doc, "DefaultRetention > Days") || "0", 10),
-    years: parseInt(text(doc, "DefaultRetention > Years") || "0", 10),
+    ObjectLockEnabled: "Enabled",
+    Rule: { DefaultRetention: { Mode: c.mode, ...(c.years > 0 ? { Years: c.years } : { Days: c.days }) } },
   };
 }
 
+function lockSpan(c: LockConfig) {
+  return c.years ? plural(c.years, "year") : c.days ? plural(c.days, "day") : "";
+}
+
+/// "Governance, 7 days".
 export function lockWords(c: LockConfig): string {
   if (!c.enabled) return "Off";
-  const mode = c.mode === "GOVERNANCE" ? "Governance" : "Compliance";
-  const span = c.years
-    ? `${c.years} year${c.years === 1 ? "" : "s"}`
-    : c.days
-      ? `${c.days} day${c.days === 1 ? "" : "s"}`
-      : "";
-  return span ? `${mode}, ${span}` : "On, no default retention";
+  const span = lockSpan(c);
+  if (!c.mode || !span) return "On, no default retention";
+  return `${c.mode === "GOVERNANCE" ? "Governance" : "Compliance"}, ${span}`;
 }
 
-export function encryptionWords(doc: Document): string {
-  const alg = text(doc, "SSEAlgorithm");
-  const key = text(doc, "KMSMasterKeyID");
+/// What the lock does to a new object, in a sentence.
+export function lockSentence(c: LockConfig): string {
+  if (!c.enabled) return "Objects can be deleted and overwritten as usual.";
+  const span = lockSpan(c);
+  if (!c.mode || !span) return "Lock is on, but new objects are kept only when the upload asks for a retention.";
+  if (c.mode === "GOVERNANCE")
+    return `Every new object version is kept for ${span}. A user allowed to bypass governance retention can still delete it.`;
+  return `Every new object version is kept for ${span}. No one can delete it or shorten that, an admin included.`;
+}
+
+/// "SSE-S3 (AES-256)".
+export function encryptionWords(doc: EncryptionDoc | undefined): string {
+  const by = doc?.Rule?.[0]?.ApplyServerSideEncryptionByDefault;
+  const alg = by?.SSEAlgorithm ?? "";
+  if (!alg) return "Off";
   if (alg === "AES256") return "SSE-S3 (AES-256)";
-  if (alg === "aws:kms") return key ? `SSE-KMS · key ${key}` : "SSE-KMS";
-  return alg || "Off";
+  if (alg === "aws:kms" || alg === "aws:kms:dsse") return by?.KMSMasterKeyID ? `SSE-KMS · key ${by.KMSMasterKeyID}` : "SSE-KMS";
+  return alg;
 }
 
+/// What happens to a new object, in a sentence.
+export function encryptionSentence(doc: EncryptionDoc | undefined): string {
+  const by = doc?.Rule?.[0]?.ApplyServerSideEncryptionByDefault;
+  const alg = by?.SSEAlgorithm ?? "";
+  if (!alg) return "New objects are stored unencrypted unless the upload asks for encryption.";
+  if (alg === "AES256") return "Every new object is encrypted with AES-256, under a key the cluster keeps (SSE-S3).";
+  if (alg.startsWith("aws:kms"))
+    return by?.KMSMasterKeyID
+      ? `Every new object is encrypted under the KMS key ${by.KMSMasterKeyID} (SSE-KMS).`
+      : "Every new object is encrypted under the cluster's default KMS key (SSE-KMS).";
+  return `New objects are encrypted with ${alg}.`;
+}
+
+const tagList = (t: TagDoc[] | TagDoc | undefined): TagDoc[] => (t === undefined ? [] : Array.isArray(t) ? t : [t]);
+
+/// Which keys a rule's filter picks, in words: "logs/ · tagged env=dev".
+/// Empty for every key.
+function filterParts(f: FilterDoc | undefined, legacyPrefix: string | undefined) {
+  const prefix = f?.Prefix ?? f?.And?.Prefix ?? legacyPrefix ?? "";
+  const tags = [...tagList(f?.Tag), ...tagList(f?.And?.Tag)];
+  const gt = f?.ObjectSizeGreaterThan ?? f?.And?.ObjectSizeGreaterThan;
+  const lt = f?.ObjectSizeLessThan ?? f?.And?.ObjectSizeLessThan;
+  const extra: string[] = [];
+  if (tags.length) extra.push(`tagged ${tags.map((t) => `${t.Key}=${t.Value ?? ""}`).join(", ")}`);
+  if (gt) extra.push(`over ${formatBytes(gt)}`);
+  if (lt) extra.push(`under ${formatBytes(lt)}`);
+  return { prefix, extra };
+}
+
+/// A lifecycle rule as the page shows it.
 export interface LifecycleRule {
   id: string;
-  status: string;
+  enabled: boolean;
+  prefix: string;
+  /// Filter conditions beyond the prefix (tags, sizes), in words.
+  conditions: string[];
+  /// What the rule does, in words.
+  actions: string;
+}
+
+export function lifecycleRule(r: LifecycleRuleDoc): LifecycleRule {
+  const { prefix, extra } = filterParts(r.Filter, r.Prefix);
+  const parts: string[] = [];
+  const e = r.Expiration;
+  if (e?.Days) parts.push(`objects expire after ${plural(e.Days, "day")}`);
+  if (e?.Date) {
+    const d = new Date(e.Date);
+    parts.push(
+      `objects expire on ${Number.isNaN(d.getTime()) ? e.Date : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}`,
+    );
+  }
+  const n = r.NoncurrentVersionExpiration;
+  if (n?.NoncurrentDays)
+    parts.push(
+      `earlier versions expire after ${plural(n.NoncurrentDays, "day")}${n.NewerNoncurrentVersions ? `, keeping the newest ${n.NewerNoncurrentVersions}` : ""}`,
+    );
+  if (e?.ExpiredObjectDeleteMarker) parts.push("delete markers with no versions left are removed");
+  const a = r.AbortIncompleteMultipartUpload?.DaysAfterInitiation;
+  if (a) parts.push(`unfinished uploads are aborted after ${plural(a, "day")}`);
+  return {
+    id: r.ID ?? "",
+    enabled: r.Status === "Enabled",
+    prefix,
+    conditions: extra,
+    actions: capital(parts.join("; ") || "no actions"),
+  };
+}
+
+/// "2 rules, 1 on · objects under logs/ expire after 30 days".
+export function lifecycleWords(rules: LifecycleRuleDoc[]): string {
+  if (!rules.length) return "None";
+  const all = rules.map(lifecycleRule);
+  const on = all.filter((r) => r.enabled);
+  const head = `${plural(all.length, "rule")}${on.length !== all.length ? `, ${on.length} on` : ""}`;
+  const first = on[0];
+  if (!first) return head;
+  return `${head} · ${first.prefix ? `under ${first.prefix}, ` : ""}${first.actions.charAt(0).toLowerCase()}${first.actions.slice(1)}`;
+}
+
+/// What the "Add rule" form collects.
+export interface LifecycleDraft {
+  id: string;
   prefix: string;
   expiration_days: number;
   noncurrent_days: number;
@@ -533,69 +776,57 @@ export interface LifecycleRule {
   delete_markers: boolean;
 }
 
-export function parseLifecycle(doc: Document): LifecycleRule[] {
-  return Array.from(doc.querySelectorAll("Rule")).map((node) => ({
-    id: text(node, "ID"),
-    status: text(node, "Status") || "Disabled",
-    prefix: text(node, "Filter > Prefix") || text(node, "Prefix"),
-    expiration_days: parseInt(text(node, "Expiration > Days") || "0", 10),
-    noncurrent_days: parseInt(text(node, "NoncurrentVersionExpiration > NoncurrentDays") || "0", 10),
-    abort_days: parseInt(text(node, "AbortIncompleteMultipartUpload > DaysAfterInitiation") || "0", 10),
-    delete_markers: text(node, "Expiration > ExpiredObjectDeleteMarker") === "true",
-  }));
+/// The form as a rule document. S3 takes an expiry in days or the removal
+/// of expired delete markers, not both, so the form offers one at a time.
+export function lifecycleRuleDoc(d: LifecycleDraft): LifecycleRuleDoc {
+  return {
+    ID: d.id.trim(),
+    Status: "Enabled",
+    Filter: d.prefix ? { Prefix: d.prefix } : {},
+    ...(d.expiration_days > 0
+      ? { Expiration: { Days: d.expiration_days } }
+      : d.delete_markers
+        ? { Expiration: { ExpiredObjectDeleteMarker: true } }
+        : {}),
+    ...(d.noncurrent_days > 0 ? { NoncurrentVersionExpiration: { NoncurrentDays: d.noncurrent_days } } : {}),
+    ...(d.abort_days > 0 ? { AbortIncompleteMultipartUpload: { DaysAfterInitiation: d.abort_days } } : {}),
+  };
 }
 
-/// "Objects under logs/ expire after 30 days".
-export function ruleWords(r: LifecycleRule): string {
-  const where = r.prefix ? `under ${r.prefix}` : "";
-  const parts: string[] = [];
-  if (r.expiration_days) parts.push(`objects ${where} expire after ${r.expiration_days} days`.replace("  ", " "));
-  if (r.noncurrent_days) parts.push(`noncurrent versions expire after ${r.noncurrent_days} days`);
-  if (r.abort_days) parts.push(`unfinished uploads are aborted after ${r.abort_days} days`);
-  if (r.delete_markers) parts.push("expired delete markers are removed");
-  const s = parts.join("; ") || "no actions";
-  return s.charAt(0).toUpperCase() + s.slice(1);
+/// A replication destination's target name: S3 writes it as an ARN.
+export const targetName = (arn: string | undefined) => (arn ?? "").replace(/^arn:[^:]*:[^:]*:::/, "");
+
+/// A replication rule as the page shows it.
+export interface ReplicationRule {
+  id: string;
+  enabled: boolean;
+  priority?: number;
+  target: string;
+  /// Which keys it copies, in words.
+  scope: string;
+  deletes: boolean;
 }
 
-export function lifecycleWords(rules: LifecycleRule[]): string {
-  if (!rules.length) return "None";
-  const on = rules.filter((r) => r.status === "Enabled");
-  const head = `${rules.length} rule${rules.length === 1 ? "" : "s"}${on.length !== rules.length ? `, ${on.length} on` : ""}`;
-  return on[0] ? `${head} · ${ruleWords(on[0]).toLowerCase()}` : head;
+export function replicationRule(r: ReplicationRuleDoc): ReplicationRule {
+  const { prefix, extra } = filterParts(r.Filter, r.Prefix);
+  const scope = [prefix ? `Keys under ${prefix}` : "All keys", ...extra].join(", ");
+  return {
+    id: r.ID ?? "",
+    enabled: r.Status === "Enabled",
+    priority: r.Priority,
+    target: targetName(r.Destination?.Bucket),
+    scope,
+    deletes: r.DeleteMarkerReplication?.Status === "Enabled",
+  };
 }
 
-export function lifecycleXml(rules: LifecycleRule[]): string {
-  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const body = rules
-    .map(
-      (r) =>
-        `<Rule><ID>${esc(r.id)}</ID><Status>${r.status}</Status><Filter><Prefix>${esc(r.prefix)}</Prefix></Filter>` +
-        (r.expiration_days > 0
-          ? `<Expiration><Days>${r.expiration_days}</Days>${r.delete_markers ? "<ExpiredObjectDeleteMarker>true</ExpiredObjectDeleteMarker>" : ""}</Expiration>`
-          : "") +
-        (r.noncurrent_days > 0
-          ? `<NoncurrentVersionExpiration><NoncurrentDays>${r.noncurrent_days}</NoncurrentDays></NoncurrentVersionExpiration>`
-          : "") +
-        (r.abort_days > 0
-          ? `<AbortIncompleteMultipartUpload><DaysAfterInitiation>${r.abort_days}</DaysAfterInitiation></AbortIncompleteMultipartUpload>`
-          : "") +
-        `</Rule>`,
-    )
-    .join("");
-  return `<?xml version="1.0" encoding="UTF-8"?><LifecycleConfiguration>${body}</LifecycleConfiguration>`;
-}
-
-export function lockXml(c: LockConfig): string {
-  const retention =
-    c.days > 0 || c.years > 0
-      ? `<Rule><DefaultRetention><Mode>${c.mode}</Mode>${c.days > 0 ? `<Days>${c.days}</Days>` : ""}${c.years > 0 ? `<Years>${c.years}</Years>` : ""}</DefaultRetention></Rule>`
-      : "";
-  return `<?xml version="1.0" encoding="UTF-8"?><ObjectLockConfiguration><ObjectLockEnabled>${c.enabled ? "Enabled" : "Disabled"}</ObjectLockEnabled>${retention}</ObjectLockConfiguration>`;
-}
-
-export function replicationWords(doc: Document): string {
-  const rules = Array.from(doc.querySelectorAll("Rule"));
+/// "To site-b".
+export function replicationWords(doc: ReplicationDoc | undefined): string {
+  const rules = (doc?.Rule ?? []).map(replicationRule);
   if (!rules.length) return "Off";
-  const dests = [...new Set(rules.map((r) => text(r, "Destination > Bucket").replace(/^arn:[^:]*:s3:::/, "")).filter(Boolean))];
-  return dests.length ? `To ${dests.join(", ")}` : `${rules.length} rule${rules.length === 1 ? "" : "s"}`;
+  const on = rules.filter((r) => r.enabled);
+  if (!on.length) return `${plural(rules.length, "rule")}, all off`;
+  const targets = [...new Set(on.map((r) => r.target).filter(Boolean))];
+  const tail = on.length !== rules.length ? ` · ${on.length} of ${rules.length} rules on` : "";
+  return `${targets.length ? `To ${targets.join(", ")}` : plural(on.length, "rule")}${tail}`;
 }

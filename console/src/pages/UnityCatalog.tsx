@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { useCrumbs } from "../shell/crumbs";
 import {
   Database,
   FolderOpen,
@@ -143,6 +145,34 @@ export default function UnityCatalog() {
 
   useEffect(loadCatalogs, []);
 
+  // The catalog browser links here as `?catalog=<name>[&schema=<name>]` for
+  // what it does not edit itself (functions, volumes, models, table create).
+  const [params] = useSearchParams();
+  const linkCat = params.get("catalog");
+  const linkSchema = params.get("schema");
+  useEffect(() => {
+    if (!linkCat) return;
+    let alive = true;
+    unity
+      .getCatalog(linkCat)
+      .then(async (cat) => {
+        if (!alive) return;
+        openCatalog(cat);
+        if (linkSchema) {
+          const schema = await unity.getSchema(linkCat, linkSchema);
+          if (alive) await openSchema(schema, cat);
+        }
+      })
+      .catch((e: Error) => alive && setError(e.message));
+    return () => {
+      alive = false;
+    };
+    // Runs once per link; the open* helpers are recreated every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkCat, linkSchema]);
+
+  useCrumbs([{ label: "Unity advanced view" }]);
+
   const createCatalog = async () => {
     if (!newCatName.trim()) return;
     try {
@@ -215,8 +245,9 @@ export default function UnityCatalog() {
     }
   };
 
-  const openSchema = async (schema: UnitySchemaInfo) => {
-    if (!selectedCat) return;
+  const openSchema = async (schema: UnitySchemaInfo, catArg?: UnityCatalogInfo) => {
+    const selected = catArg ?? selectedCat;
+    if (!selected) return;
     setSelectedSchema(schema);
     setView("tables");
     setLoading(true);
@@ -224,7 +255,7 @@ export default function UnityCatalog() {
     // Load all four entity lists in parallel — each tab is cheap to render
     // and most schemas have few of each type, so up-front is fine. A single
     // failure surfaces but doesn't blank the other lists.
-    const cat = selectedCat.name;
+    const cat = selected.name;
     const [tRes, fRes, vRes, mRes] = await Promise.allSettled([
       unity.listTables(cat, schema.name),
       unity.listFunctions(cat, schema.name),
@@ -480,7 +511,16 @@ export default function UnityCatalog() {
     <div className="p-6">
       <PageHeader
         title="Unity Catalog"
-        description="Databricks-compatible three-level namespace (catalog.schema.table)"
+        description={
+          <>
+            Every Unity entity, with create and edit for tables, functions, volumes and models. Tables are browsed in
+            the{" "}
+            <Link to="/catalog" className="text-accent hover:underline">
+              catalog
+            </Link>
+            .
+          </>
+        }
       />
 
       {/* Breadcrumb */}

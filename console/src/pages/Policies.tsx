@@ -330,7 +330,7 @@ export default function Policies() {
   };
 
   return (
-    <div className="p-6">
+    <div className="px-8 py-6">
       <PageHeader
         title="Policies"
         description="Named IAM policies — create and attach to users or groups"
@@ -346,7 +346,7 @@ export default function Policies() {
               onClick={() => setShowCreate(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-fg rounded-lg text-[12px] font-medium hover:bg-primary-hover"
             >
-              <Plus size={14} /> Create Policy
+              <Plus size={14} /> Create policy
             </button>
           </div>
         }
@@ -450,7 +450,7 @@ export default function Policies() {
       {/* Create dialog */}
       {showCreate && (
         <div className="mb-4 bg-surface rounded-xl border border-border p-4">
-          <h3 className="text-[12px] font-medium mb-2">Create Policy</h3>
+          <h3 className="text-[12px] font-medium mb-2">Create policy</h3>
           <div className="mb-2">
             <input
               value={newName}

@@ -11,17 +11,17 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   children?: ReactNode;
 }
 
-/// Per HANDOFF §4. `primary` is ink-on-paper and inverts under the dark theme,
-/// which is why it uses the primary tokens rather than a fixed colour — it is
-/// the one primary button on a screen. `accent` is the blue action; `danger`
-/// is destructive only.
+/// `primary` is ink on paper and inverts under the dark theme, which is why it
+/// uses the primary tokens rather than a fixed colour: it is the one primary
+/// button on a screen. `accent` is the teal action; `danger` is destructive
+/// only. Focus shows the global ring (index.css).
 const VARIANTS: Record<ButtonVariant, string> = {
   primary:
     "bg-primary text-primary-fg hover:bg-primary-hover border border-transparent",
   secondary:
     "bg-surface text-text border border-border-strong hover:bg-surface-2",
   ghost: "bg-transparent text-muted border border-transparent hover:bg-surface-2 hover:text-text",
-  danger: "bg-err text-white border border-transparent hover:opacity-90",
+  danger: "bg-err text-primary-fg border border-transparent hover:opacity-90",
   accent: "bg-accent text-accent-fg border border-transparent hover:opacity-90",
 };
 
@@ -43,7 +43,6 @@ export default function Button({
       {...rest}
       className={`inline-flex items-center justify-center gap-1.5 rounded-control font-medium
         transition-colors disabled:opacity-40 disabled:cursor-not-allowed
-        focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft
         ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
     >
       {icon}

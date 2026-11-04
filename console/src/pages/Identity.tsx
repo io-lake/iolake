@@ -212,9 +212,9 @@ export default function Identity() {
   };
 
   return (
-    <div className="p-6">
+    <div className="px-8 py-6">
       <PageHeader
-        title="Identity"
+        title="Sign-in providers"
         description={
           sessionTenant
             ? `OIDC provider for ${sessionTenant}`

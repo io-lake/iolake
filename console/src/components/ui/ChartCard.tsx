@@ -21,7 +21,7 @@ export default function ChartCard({
 }) {
   return (
     <div
-      className={`bg-surface border border-border rounded-card shadow-sm p-4 ${className}`}
+      className={`bg-surface border border-border rounded-card shadow-card p-4 ${className}`}
     >
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0">
@@ -40,12 +40,12 @@ export default function ChartCard({
 
 /// Legend entry matching the series colour. Kept here so a chart cannot drift
 /// from its own legend.
-export function LegendDot({ index, label, dark = false }: { index: number; label: string; dark?: boolean }) {
+export function LegendDot({ index, label }: { index: number; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-[11px] text-muted">
       <span
         className="w-2 h-2 rounded-full"
-        style={{ background: seriesColor(index, dark) }}
+        style={{ background: seriesColor(index) }}
       />
       {label}
     </span>

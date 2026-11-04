@@ -18,7 +18,7 @@ export default function Card({
 }) {
   return (
     <div
-      className={`bg-surface border border-border rounded-card shadow-sm ${className}`}
+      className={`bg-surface border border-border rounded-card shadow-card ${className}`}
     >
       {(title || action) && (
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">

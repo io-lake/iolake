@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { LogIn, Lock, User, Building2 } from "lucide-react";
-import mark from "../assets/brand/mark-light.svg";
+import markLight from "../assets/brand/mark-light.svg";
+import markDark from "../assets/brand/mark.svg";
+import { useTheme } from "../shell/theme";
+import { PRODUCT, DOCS_URL } from "../shell/brand";
 import { Button, Input, Banner } from "../components/ui";
 
 interface Props {
@@ -27,6 +30,7 @@ interface TenantSso {
 /// then shows only the tenant's own provider, not the system providers.
 export default function Login({ onLogin, appKind = "ops" }: Props) {
   const tenantApp = appKind === "tenant";
+  const { dark } = useTheme();
   const [accessKey, setAccessKey] = useState("");
   const [secretKey, setSecretKey] = useState("");
   const [remember, setRemember] = useState(false);
@@ -155,10 +159,10 @@ export default function Login({ onLogin, appKind = "ops" }: Props) {
 
       <div className="relative w-full max-w-[400px]">
         <div className="bg-surface border border-border rounded-dialog shadow-sm p-7">
-          <img src={mark} alt="" className="h-10 w-10 mb-5" />
+          <img src={dark ? markDark : markLight} alt="" className="h-10 w-10 mb-5" />
 
           <h1 className="font-display text-[24px] leading-tight font-semibold text-text">
-            Sign in to ObjectIO
+            Sign in to {PRODUCT}
           </h1>
           {/* The artboard also carries cluster and region here. Nothing
               unauthenticated exposes those today, and inventing a label would
@@ -246,7 +250,7 @@ export default function Login({ onLogin, appKind = "ops" }: Props) {
                 Remember connection
               </label>
               <a
-                href="https://objectio.dev/docs/console"
+                href={`${DOCS_URL}/console`}
                 className="text-[12px] text-accent hover:opacity-80"
               >
                 Forgot?
@@ -304,8 +308,8 @@ export default function Login({ onLogin, appKind = "ops" }: Props) {
 
         <p className="mt-4 text-center text-[11px] text-muted">
           Need help? See the{" "}
-          <a href="https://objectio.dev/docs" className="text-accent hover:opacity-80">
-            ObjectIO docs
+          <a href={DOCS_URL} className="text-accent hover:opacity-80">
+            {PRODUCT} docs
           </a>
         </p>
       </div>

@@ -65,16 +65,16 @@ export default function MyAccount() {
   };
 
   return (
-    <div className="p-6">
+    <div className="px-8 py-6">
       <PageHeader
-        title="My Account"
+        title="My account"
         description="Manage your access keys for S3 API access"
         action={
           <button
             onClick={createKey}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-fg rounded-lg text-[12px] font-medium hover:bg-primary-hover"
           >
-            <Plus size={14} /> Create Access Key
+            <Plus size={14} /> Create access key
           </button>
         }
       />

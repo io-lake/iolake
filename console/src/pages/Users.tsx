@@ -186,9 +186,9 @@ export default function UsersPage() {
   };
 
   return (
-    <div className="p-6">
+    <div className="px-8 py-6">
       <PageHeader
-        title="Users & groups"
+        title="Users and keys"
         description="IAM users, access keys, and groups. Policies attach to either."
         action={
           tab === "users" ? (

@@ -126,7 +126,7 @@ export default function Encryption() {
 
   if (loading) {
     return (
-      <div className="p-6">
+      <div className="px-8 py-6">
         <PageHeader title="Encryption" description="Server-side encryption configuration" />
         <p className="text-[13px] text-faint">Loading…</p>
       </div>
@@ -134,7 +134,7 @@ export default function Encryption() {
   }
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="px-8 py-6 space-y-4">
       <PageHeader
         title="Encryption"
         description="Server-side encryption and KMS backend configuration"

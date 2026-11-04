@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Building2, LogIn, ArrowLeft } from "lucide-react";
-import wordmark from "../assets/brand/wordmark-light.svg";
+import wordmarkLight from "../assets/brand/wordmark-light.svg";
+import wordmarkDark from "../assets/brand/wordmark-dark.svg";
+import { useTheme } from "../shell/theme";
+import { PRODUCT } from "../shell/brand";
 
 interface Provider {
   name: string;
@@ -17,6 +20,7 @@ interface Provider {
 /// upstream tenant id in the resulting token.
 export default function Signup() {
   const [providers, setProviders] = useState<Provider[]>([]);
+  const { dark } = useTheme();
   const [loading, setLoading] = useState(true);
   // Read straight from the URL at mount. A failed callback redirects back
   // here with ?error=..., and taking it as initial state rather than setting
@@ -51,7 +55,7 @@ export default function Signup() {
     <div className="min-h-screen bg-gradient-to-br bg-bg flex items-center justify-center p-6">
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-8">
-          <img src={wordmark} alt="ObjectIO" className="h-8" />
+          <img src={dark ? wordmarkDark : wordmarkLight} alt={PRODUCT} className="h-8" />
         </div>
 
         <div className="bg-surface rounded-2xl border border-border shadow-sm p-7">

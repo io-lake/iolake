@@ -11,16 +11,19 @@ import Balancing from "./Balancing";
 
 type TabKey = "topology" | "drives" | "pools" | "balancing";
 
-const TABS: Array<{ key: TabKey; label: string }> = [
+const ALL: TabKey[] = ["topology", "drives", "pools", "balancing"];
+
+/// The node views share one page with tabs; pools are a page of their own
+/// (the sidebar's "Pools and placement").
+const NODE_TABS: Array<{ key: TabKey; label: string }> = [
+  { key: "drives", label: "Drives" },
   { key: "topology", label: "Topology" },
-  { key: "drives", label: "Nodes & drives" },
-  { key: "pools", label: "Storage pools" },
   { key: "balancing", label: "Balancing" },
 ];
 
-/// Unified /cluster page. Tabs map to URL params (`/cluster/:tab`) so deep
-/// links to a specific view still work — the old `/topology`, `/drives` and
-/// `/pools` routes redirect here via App.tsx.
+/// /cluster/:tab. "Nodes and drives" is /cluster/drives (with Topology and
+/// Balancing as tabs); "Pools and placement" is /cluster/pools. The old
+/// `/topology`, `/drives` and `/pools` routes redirect here via App.tsx.
 export default function Cluster() {
   const nav = useNavigate();
   const { tab: urlTab } = useParams<{ tab?: string }>();
@@ -28,8 +31,7 @@ export default function Cluster() {
   const [reloadKey, setReloadKey] = useState(0);
 
   const active: TabKey = useMemo(() => {
-    const valid = TABS.map((t) => t.key);
-    return (valid.includes(urlTab as TabKey) ? urlTab : "topology") as TabKey;
+    return (ALL.includes(urlTab as TabKey) ? urlTab : "drives") as TabKey;
   }, [urlTab]);
 
   const loadHosts = useCallback(() => {
@@ -38,7 +40,7 @@ export default function Cluster() {
 
   useEffect(() => {
     // Normalise the URL so refresh lands on the same tab.
-    if (!urlTab) nav("/cluster/topology", { replace: true });
+    if (!urlTab) nav("/cluster/drives", { replace: true });
   }, [urlTab, nav]);
 
   useEffect(() => {
@@ -54,15 +56,16 @@ export default function Cluster() {
     (h) => h.online && (h.disks ?? []).some((d) => d.status && d.status !== "healthy")
   ).length;
   const down = hosts.length - up;
+  const isPools = active === "pools";
 
   return (
-    <div className="p-6">
+    <div className="px-8 py-6">
       <PageHeader
-        title="Cluster"
-        description="Topology, nodes, pools and placement"
+        title={isPools ? "Pools and placement" : "Nodes and drives"}
+        description={isPools ? "Where data goes, and how it's protected" : "Hosts, OSDs and the disks under them"}
         action={
           <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-3 text-[12px]">
+            <div className={`${isPools ? "hidden" : "hidden sm:flex"} items-center gap-3 text-[12px]`}>
               <span className="inline-flex items-center gap-1.5 text-text-2">
                 <span className="w-[6px] h-[6px] rounded-full bg-ok" />
                 {up} host{up === 1 ? "" : "s"} up
@@ -84,25 +87,29 @@ export default function Cluster() {
               >
                 Refresh
               </Button>
-              <Button
-                variant="secondary"
-                icon={<Plus size={13} />}
-                onClick={() => nav("/cluster/drives")}
-              >
-                Add host
-              </Button>
+              {!isPools && (
+                <Button
+                  variant="secondary"
+                  icon={<Plus size={13} />}
+                  onClick={() => nav("/cluster/drives")}
+                >
+                  Add host
+                </Button>
+              )}
             </div>
           </div>
         }
       />
 
-      <Tabs
-        variant="underline"
-        value={active}
-        onChange={(k) => nav(`/cluster/${k}`)}
-        items={TABS}
-        className="mb-5"
-      />
+      {!isPools && (
+        <Tabs
+          variant="underline"
+          value={active}
+          onChange={(k) => nav(`/cluster/${k}`)}
+          items={NODE_TABS}
+          className="mb-5"
+        />
+      )}
 
       <div key={reloadKey}>
         {active === "topology" && <Topology embedded />}

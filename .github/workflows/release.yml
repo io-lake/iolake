@@ -33,7 +33,7 @@
 #      Tarball / zip each, with LICENSE + NOTICE + README.
 #   3. Builds the universal multi-arch image (Dockerfile target `all`,
 #      linux/amd64 + linux/arm64) and pushes to
-#      ghcr.io/<owner>/objectio:v<version> and :latest.
+#      ghcr.io/<owner>/iolake:v<version> and :latest.
 #   4. Creates a GitHub Release with every tarball/zip + a
 #      SHA256SUMS.txt, using auto-generated release notes.
 #
@@ -42,7 +42,7 @@
 #     (needed to push the version-bump commit + tag + create release).
 #   - Package visibility on GHCR: the image is created under the repo
 #     owner; the first push creates the package, then configure it
-#     as public under Packages → objectio → Package settings.
+#     as public under Packages → iolake → Package settings.
 #
 # Can only be dispatched from the main branch.
 
@@ -70,7 +70,7 @@ permissions:
   packages: write   # push image to ghcr.io
 
 env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/objectio
+  IMAGE: ghcr.io/${{ github.repository_owner }}/iolake
 
 jobs:
   # ------------------------------------------------------------
@@ -120,7 +120,7 @@ jobs:
       - name: Commit, tag, push
         id: tag
         run: |
-          git config user.name  "objectio-release-bot"
+          git config user.name  "iolake-release-bot"
           git config user.email "release-bot@users.noreply.github.com"
           git add Cargo.toml Cargo.lock
           # Tolerate the "version already matches" case — happens when we
@@ -138,9 +138,9 @@ jobs:
           echo "tag=v${{ inputs.version }}" >> "$GITHUB_OUTPUT"
 
   # ------------------------------------------------------------
-  # 2. Build the objectio-aio binary per platform.
+  # 2. Build the iolake-aio binary per platform.
   #
-  # Rationale: the release carries *only* objectio-aio as a download
+  # Rationale: the release carries *only* iolake-aio as a download
   # artifact. Every other binary (gateway, meta, osd, block-gateway,
   # cli, install) ships inside the single container image produced
   # below and consumed by helm — having a separate binary tarball
@@ -151,7 +151,7 @@ jobs:
   # target triples — the "unknown" vendor field in e.g.
   # aarch64-unknown-linux-gnu is correct but confusing.
   #
-  # Windows is not built: objectio-aio transitively depends on
+  # Windows is not built: iolake-aio transitively depends on
   # crates/storage (raw-disk I/O engine) which uses
   # unix-only APIs — ioctl BLKGETSIZE64, O_DIRECT,
   # std::os::unix::fs::FileTypeExt. A windows port would be real
@@ -238,7 +238,7 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # objectio-aio embeds the console SPA at compile time via
+      # iolake-aio embeds the console SPA at compile time via
       # include_dir!("$CARGO_MANIFEST_DIR/../../console/dist"). The tree
       # is .gitignored, so the tag checkout has nothing — build it here
       # before cargo runs.
@@ -275,15 +275,15 @@ jobs:
       - name: Cargo build (aio only)
         shell: bash
         env:
-          OBJECTIO_VERSION: ${{ inputs.version }}
-          OBJECTIO_GIT_COMMIT: ${{ github.sha }}
+          IOLAKE_VERSION: ${{ inputs.version }}
+          IOLAKE_GIT_COMMIT: ${{ github.sha }}
           # Build PCRE2 from the crate's bundled source and link it in,
           # rather than the host's libpcre2-8.so.0, which rc.1 needed.
           PCRE2_SYS_STATIC: "1"
         run: |
           FEAT=""
           if [ -n "${{ matrix.features }}" ]; then FEAT="--features ${{ matrix.features }}"; fi
-          cargo build --release --target ${{ matrix.target }} --bin objectio-aio $FEAT
+          cargo build --release --target ${{ matrix.target }} --bin iolake-aio $FEAT
 
       - name: Rename + checksum
         shell: bash
@@ -291,8 +291,8 @@ jobs:
           VER="${{ inputs.version }}"
           OUT="dist"
           mkdir -p "$OUT"
-          NAME="objectio-aio-v${VER}-${{ matrix.platform }}"
-          cp "target/${{ matrix.target }}/release/objectio-aio" "$OUT/$NAME"
+          NAME="iolake-aio-v${VER}-${{ matrix.platform }}"
+          cp "target/${{ matrix.target }}/release/iolake-aio" "$OUT/$NAME"
           chmod +x "$OUT/$NAME"
           (cd "$OUT" && shasum -a 256 "$NAME" > "$NAME.sha256")
           ls -lh "$OUT"
@@ -300,7 +300,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: aio-${{ matrix.platform }}
-          path: dist/objectio-aio-*
+          path: dist/iolake-aio-*
           if-no-files-found: error
 
   # ------------------------------------------------------------
@@ -341,8 +341,8 @@ jobs:
       - name: glibc, NEEDED, and a run on each distribution
         run: |
           # Artifacts lose the executable bit.
-          chmod +x dist/objectio-aio-*-${{ matrix.platform }}
-          scripts/release/check-portable.sh dist/objectio-aio-*-${{ matrix.platform }}
+          chmod +x dist/iolake-aio-*-${{ matrix.platform }}
+          scripts/release/check-portable.sh dist/iolake-aio-*-${{ matrix.platform }}
 
   # ------------------------------------------------------------
   # 3a. Build the per-arch image on its native runner.
@@ -387,8 +387,8 @@ jobs:
           target: all
           platforms: linux/${{ matrix.arch }}
           build-args: |
-            OBJECTIO_VERSION=${{ inputs.version }}
-            OBJECTIO_GIT_COMMIT=${{ github.sha }}
+            IOLAKE_VERSION=${{ inputs.version }}
+            IOLAKE_GIT_COMMIT=${{ github.sha }}
           push: true
           # Push by digest only — no tag here. The manifest job below
           # stitches the per-arch digests into the version + latest tags.
@@ -453,7 +453,7 @@ jobs:
   #     flips every `tag: latest` in values.yaml to the release tag
   #     so `helm install --version <v>` lands a fully version-pinned
   #     manifest.
-  #     Published at: oci://ghcr.io/<owner>/charts/objectio
+  #     Published at: oci://ghcr.io/<owner>/charts/iolake
   # ------------------------------------------------------------
   publish-chart:
     name: Publish helm chart
@@ -471,7 +471,7 @@ jobs:
       - name: Pin chart + values to release version
         run: |
           VER="${{ inputs.version }}"
-          CHART=deploy/helm/objectio
+          CHART=deploy/helm/iolake
           # Chart.yaml: semver (no 'v') for version, release tag for appVersion
           sed -i -E "s/^version: .*/version: ${VER}/"    "${CHART}/Chart.yaml"
           sed -i -E "s/^appVersion: .*/appVersion: v${VER}/" "${CHART}/Chart.yaml"
@@ -486,9 +486,9 @@ jobs:
 
       - name: helm lint + package
         run: |
-          helm lint deploy/helm/objectio
+          helm lint deploy/helm/iolake
           mkdir -p /tmp/chart
-          helm package deploy/helm/objectio --destination /tmp/chart
+          helm package deploy/helm/iolake --destination /tmp/chart
           ls -lh /tmp/chart
 
       - name: helm push to GHCR
@@ -499,7 +499,7 @@ jobs:
             | helm registry login ghcr.io \
                 --username ${{ github.repository_owner }} \
                 --password-stdin
-          helm push /tmp/chart/objectio-${{ inputs.version }}.tgz \
+          helm push /tmp/chart/iolake-${{ inputs.version }}.tgz \
             oci://ghcr.io/${{ github.repository_owner }}/charts
 
   # ------------------------------------------------------------
@@ -540,8 +540,8 @@ jobs:
           are version-pinned to this release:
 
           \`\`\`sh
-          helm install objectio \\
-            oci://ghcr.io/${{ github.repository_owner }}/charts/objectio \\
+          helm install iolake \\
+            oci://ghcr.io/${{ github.repository_owner }}/charts/iolake \\
             --version ${{ inputs.version }}
           \`\`\`
 
@@ -558,23 +558,23 @@ jobs:
 
           Platforms: \`linux/amd64\`, \`linux/arm64\`.
 
-          ### objectio-aio binary
+          ### iolake-aio binary
 
-          \`objectio-aio\` is the single-binary monolith that runs
+          \`iolake-aio\` is the single-binary monolith that runs
           meta + OSD + gateway in one process — ideal for
           laptops, quick tests, and appliance deployments. Pick
           the right platform:
 
           | Platform | Download |
           |---|---|
-          | Linux x86_64 | \`objectio-aio-${TAG}-linux-amd64\` |
-          | Linux arm64  | \`objectio-aio-${TAG}-linux-arm64\`  |
-          | macOS Apple Silicon | \`objectio-aio-${TAG}-darwin-arm64\` |
+          | Linux x86_64 | \`iolake-aio-${TAG}-linux-amd64\` |
+          | Linux arm64  | \`iolake-aio-${TAG}-linux-arm64\`  |
+          | macOS Apple Silicon | \`iolake-aio-${TAG}-darwin-arm64\` |
 
           \`\`\`sh
-          curl -LO https://github.com/${{ github.repository }}/releases/download/${TAG}/objectio-aio-${TAG}-linux-amd64
-          chmod +x objectio-aio-${TAG}-linux-amd64
-          ./objectio-aio-${TAG}-linux-amd64
+          curl -LO https://github.com/${{ github.repository }}/releases/download/${TAG}/iolake-aio-${TAG}-linux-amd64
+          chmod +x iolake-aio-${TAG}-linux-amd64
+          ./iolake-aio-${TAG}-linux-amd64
           \`\`\`
 
           Verify: \`shasum -a 256 -c SHA256SUMS.txt\`
@@ -595,6 +595,6 @@ jobs:
           body_path: /tmp/header.md
           append_body: true
           files: |
-            dist/objectio-aio-*
+            dist/iolake-aio-*
             dist/SHA256SUMS.txt
           fail_on_unmatched_files: true

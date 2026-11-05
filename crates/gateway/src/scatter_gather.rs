@@ -26,10 +26,10 @@
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use futures::stream::{self, StreamExt};
-use objectio_proto::metadata::{
+use iolake_proto::metadata::{
     GetListingNodesRequest, ListingNode, ObjectMeta, metadata_service_client::MetadataServiceClient,
 };
-use objectio_proto::storage::ListObjectsMetaRequest;
+use iolake_proto::storage::ListObjectsMetaRequest;
 use ring::hmac;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;

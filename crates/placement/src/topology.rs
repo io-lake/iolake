@@ -1,6 +1,6 @@
 //! Cluster topology representation
 
-use objectio_common::{DiskId, DiskStatus, FailureDomain, NodeId, NodeStatus};
+use iolake_common::{DiskId, DiskStatus, FailureDomain, NodeId, NodeStatus};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;

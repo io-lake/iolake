@@ -1,4 +1,4 @@
-//! Counting what an OSD holds while it serves (objectio-docs
+//! Counting what an OSD holds while it serves (iolake-docs
 //! `core/osd-start.md`): its PG summaries and bucket usage, after a start.
 //!
 //! A count walks its prefixes a chunk at a time. Each chunk is read from a
@@ -15,7 +15,7 @@
 //! count, the index of an OSD of ten million shards grew from 22 GB to
 //! 46 GB.
 
-use objectio_storage::metadata::{MetaIndex, MetaSnapshot, MetadataKey};
+use iolake_storage::metadata::{MetaIndex, MetaSnapshot, MetadataKey};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 

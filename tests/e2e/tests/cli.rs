@@ -1,9 +1,9 @@
-//! `obioctl` against a real gateway: the built binary, signing with
+//! `iolakectl` against a real gateway: the built binary, signing with
 //! `SigV4` through the admin API, as an operator would run it.
 //!
-//! Needs `cargo build --bin obioctl --bin objectio-aio` first.
+//! Needs `cargo build --bin iolakectl --bin iolake-aio` first.
 
-use objectio_e2e::{Cluster, binary};
+use iolake_e2e::{Cluster, binary};
 use serde_json::Value;
 use std::path::Path;
 use std::process::{Command, Output};
@@ -24,25 +24,25 @@ impl<'a> Cli<'a> {
     }
 
     fn command(&self) -> Command {
-        let mut cmd = Command::new(binary("obioctl"));
+        let mut cmd = Command::new(binary("iolakectl"));
         cmd.env_clear()
             .env("HOME", self.home.path())
             .env("PATH", std::env::var("PATH").unwrap_or_default())
-            .env("OBJECTIO_ENDPOINT", &self.c.endpoint);
+            .env("IOLAKE_ENDPOINT", &self.c.endpoint);
         // Its block commands speak gRPC to the block gateway, as the
         // cluster's nodes do (mTLS unless the suite runs plain).
-        objectio_e2e::tls::apply(&mut cmd, objectio_e2e::tls::ADMIN);
+        iolake_e2e::tls::apply(&mut cmd, iolake_e2e::tls::ADMIN);
         cmd
     }
 
     /// As the system admin, from the environment.
     fn admin(&self, args: &[&str]) -> Output {
         self.command()
-            .env("OBJECTIO_ACCESS_KEY", &self.c.access_key)
-            .env("OBJECTIO_SECRET_KEY", &self.c.secret_key)
+            .env("IOLAKE_ACCESS_KEY", &self.c.access_key)
+            .env("IOLAKE_SECRET_KEY", &self.c.secret_key)
             .args(args)
             .output()
-            .expect("run obioctl")
+            .expect("run iolakectl")
     }
 
     /// With the credentials of a profile in the profile file.
@@ -52,14 +52,14 @@ impl<'a> Cli<'a> {
             .arg(profile)
             .args(args)
             .output()
-            .expect("run obioctl")
+            .expect("run iolakectl")
     }
 }
 
 fn ok(o: &Output) -> String {
     assert!(
         o.status.success(),
-        "obioctl failed ({}):\nstdout: {}\nstderr: {}",
+        "iolakectl failed ({}):\nstdout: {}\nstderr: {}",
         o.status,
         String::from_utf8_lossy(&o.stdout),
         String::from_utf8_lossy(&o.stderr)
@@ -264,8 +264,8 @@ fn errors_exit_non_zero_with_the_servers_message() {
     // A wrong secret is the server's refusal, not a crash.
     let o = cli
         .command()
-        .env("OBJECTIO_ACCESS_KEY", &cluster.access_key)
-        .env("OBJECTIO_SECRET_KEY", "wrong")
+        .env("IOLAKE_ACCESS_KEY", &cluster.access_key)
+        .env("IOLAKE_SECRET_KEY", "wrong")
         .args(["tenant", "list"])
         .output()
         .unwrap();
@@ -287,11 +287,8 @@ fn errors_exit_non_zero_with_the_servers_message() {
     let key = json(&cli.admin(&["-o", "json", "key", "create", uid]));
     let o = cli
         .command()
-        .env(
-            "OBJECTIO_ACCESS_KEY",
-            key["access_key_id"].as_str().unwrap(),
-        )
-        .env("OBJECTIO_SECRET_KEY_FILE", {
+        .env("IOLAKE_ACCESS_KEY", key["access_key_id"].as_str().unwrap())
+        .env("IOLAKE_SECRET_KEY_FILE", {
             let path = cli.home.path().join("sk");
             std::fs::write(
                 &path,

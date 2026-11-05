@@ -1,6 +1,6 @@
-<p align="center"><img src="assets/readme-banner.png" width="100%" alt="ObjectIO"></p>
+<p align="center"><img src="assets/readme-banner.png" width="100%" alt="IOLake"></p>
 
-# ObjectIO
+# IOLake
 
 **Software-defined storage in Rust:** an S3-compatible object store on an
 erasure-coded, topology-aware storage core, with data-lake catalogs and
@@ -12,15 +12,15 @@ and the ceph s3-tests; the data lake APIs and block are previews, and file is
 planned. Admin API and CLI details may still change between 0.x releases;
 an upgrade from one release to the next, one node at a time, is supported
 from the start. What exists is listed feature by feature in
-**[features](https://object-io.github.io/latest/features/)**, what comes next
-in the **[roadmap](https://object-io.github.io/latest/ROADMAP/)**; the full
-documentation is at **[object-io.github.io](https://object-io.github.io)**.
+**[features](https://iolake.dev/latest/features/)**, what comes next
+in the **[roadmap](https://iolake.dev/latest/ROADMAP/)**; the full
+documentation is at **[iolake.dev](https://iolake.dev)**.
 
 ## Where it stands
 
 | Area | State |
 |---|---|
-| **S3** | The most complete part, and the one being made production-ready first: core operations, multipart, versioning, Object Lock, lifecycle, policies, SSE-S3/KMS/C, CORS, presigned and POST uploads, STS, tenancy, audit, bucket logging, bucket replication. Checked against the [ceph s3-tests](https://object-io.github.io/latest/developer-guide/s3-compatibility/) suite on every run. |
+| **S3** | The most complete part, and the one being made production-ready first: core operations, multipart, versioning, Object Lock, lifecycle, policies, SSE-S3/KMS/C, CORS, presigned and POST uploads, STS, tenancy, audit, bucket logging, bucket replication. Checked against the [ceph s3-tests](https://iolake.dev/latest/developer-guide/s3-compatibility/) suite on every run. |
 | **Storage core** | Erasure coding (Reed-Solomon 4+2 by default, with ISA-L on x86_64 and arm64), placement groups across failure domains, repair, drain, small-object packing, a Raft metadata service that survives losing a node. Rolling upgrades from one release to the next. |
 | **Data lake** | Iceberg REST Catalog, Unity Catalog API and Delta Sharing are built, but not yet tested end to end against real engines (Spark, Trino, PyIceberg): a preview. |
 | **Block** | Volumes over NBD and gRPC with snapshots, clones and thin provisioning. QoS (refused if asked for) and iSCSI/NVMe-oF are not built yet: a preview. |
@@ -35,10 +35,10 @@ for a laptop, a demo or a smoke test (not for production):
 VERSION=v0.1.0-rc.1
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')            # linux | darwin
 ARCH=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
-curl -L -o objectio-aio \
-  "https://github.com/object-io/objectio/releases/download/${VERSION}/objectio-aio-${VERSION}-${OS}-${ARCH}"
-chmod +x objectio-aio
-./objectio-aio --data ~/objectio-data
+curl -L -o iolake-aio \
+  "https://github.com/io-lake/iolake/releases/download/${VERSION}/iolake-aio-${VERSION}-${OS}-${ARCH}"
+chmod +x iolake-aio
+./iolake-aio --data ~/iolake-data
 ```
 
 Release binaries exist for `linux-amd64`, `linux-arm64` and
@@ -52,30 +52,30 @@ aws --endpoint-url http://localhost:9000 s3 cp file.txt s3://my-bucket/
 ```
 
 For a cluster, use the Helm chart and the image
-`ghcr.io/object-io/objectio:<tag>`:
+`ghcr.io/io-lake/iolake:<tag>`:
 
 ```sh
-helm install objectio oci://ghcr.io/object-io/charts/objectio --version 0.1.0-rc.1 -f values.yaml
+helm install iolake oci://ghcr.io/io-lake/charts/iolake --version 0.1.0-rc.1 -f values.yaml
 ```
 
 Installation, administration and the APIs are covered in the
-[documentation](https://object-io.github.io).
+[documentation](https://iolake.dev).
 
 ## Agent skills
 
 Skills that teach a coding agent (Claude Code, Codex, opencode, …) to
-deploy and run ObjectIO (`objectio-ops`) and to build on its APIs
-(`objectio-dev`). `obioctl` carries them:
+deploy and run IOLake (`iolake-ops`) and to build on its APIs
+(`iolake-dev`). `iolakectl` carries them:
 
 ```sh
-obioctl skills install
+iolakectl skills install
 ```
 
 or, in Claude Code, from this repository:
 
 ```
-/plugin install objectio-ops --marketplace object-io/objectio
-/plugin install objectio-dev --marketplace object-io/objectio
+/plugin install iolake-ops --marketplace io-lake/iolake
+/plugin install iolake-dev --marketplace io-lake/iolake
 ```
 
 What each covers: [skills/README.md](skills/README.md).

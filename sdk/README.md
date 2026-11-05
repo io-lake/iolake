@@ -1,6 +1,6 @@
-# ObjectIO management SDKs
+# IOLake management SDKs
 
-Clients for the ObjectIO **management API** — everything under `/_admin/*`,
+Clients for the IOLake **management API** — everything under `/_admin/*`,
 plus STS: tenants and their admins, users and access keys, IAM policies,
 groups and roles, identity providers, temporary credentials from an OIDC
 token, Block Public Access, the audit stream, buckets, pools, nodes, KMS,
@@ -12,12 +12,10 @@ endpoint with a credential these mint or obtain.
 
 | | install | mirrored to |
 |---|---|---|
-| `go/` | `go get github.com/object-io/objectio-go-sdk` | [object-io/objectio-go-sdk](https://github.com/object-io/objectio-go-sdk) |
-| `python/` | `pip install objectio-sdk` | [object-io/objectio-python-sdk](https://github.com/object-io/objectio-python-sdk) |
+| `go/` | `go get github.com/io-lake/iolake-go-sdk` | [io-lake/iolake-go-sdk](https://github.com/io-lake/iolake-go-sdk) |
+| `python/` | `pip install iolake-sdk` | [io-lake/iolake-python-sdk](https://github.com/io-lake/iolake-python-sdk) |
 
-The Python distribution is **`objectio-sdk`** because `objectio` is taken on
-PyPI by an unrelated package, last touched in 2020. The import is still
-`objectio`.
+The Python distribution is **`iolake-sdk`**; the import is `iolake`.
 
 **Source of truth is here.** Each SDK gets a repo of its own because each is
 published on its own: for Go that means a clean import path and plain `v0.1.0`
@@ -56,8 +54,8 @@ tenant takes an optional tenant: a tenant admin's own is implied, the system
 admin names one. See [Identity and Access] and [Public Access] in the docs
 for what each object means.
 
-[Identity and Access]: https://github.com/object-io/objectio-docs/blob/main/operations-guide/administration/iam.md
-[Public Access]: https://github.com/object-io/objectio-docs/blob/main/operations-guide/administration/public-access.md
+[Identity and Access]: https://github.com/io-lake/iolake-docs/blob/main/operations-guide/administration/iam.md
+[Public Access]: https://github.com/io-lake/iolake-docs/blob/main/operations-guide/administration/public-access.md
 
 ## Configuration
 
@@ -65,14 +63,14 @@ Both read the environment, which is how a deployed provisioner is configured:
 
 | | |
 |---|---|
-| `OBJECTIO_ENDPOINT` or `OBJECTIO_URL` | gateway base URL — **required** |
-| `OBJECTIO_ACCESS_KEY` or `OBJECTIO_ACCESS_KEY_FILE` or `AWS_ACCESS_KEY_ID` | |
-| `OBJECTIO_SECRET_KEY` or `OBJECTIO_SECRET_KEY_FILE` or `AWS_SECRET_ACCESS_KEY` | |
-| `OBJECTIO_REGION` or `AWS_REGION` or `AWS_DEFAULT_REGION` | default `us-east-1` |
-| `OBJECTIO_PROVISIONER_USER_ID` | the user per-bucket keys are minted on (see below) |
+| `IOLAKE_ENDPOINT` or `IOLAKE_URL` | gateway base URL — **required** |
+| `IOLAKE_ACCESS_KEY` or `IOLAKE_ACCESS_KEY_FILE` or `AWS_ACCESS_KEY_ID` | |
+| `IOLAKE_SECRET_KEY` or `IOLAKE_SECRET_KEY_FILE` or `AWS_SECRET_ACCESS_KEY` | |
+| `IOLAKE_REGION` or `AWS_REGION` or `AWS_DEFAULT_REGION` | default `us-east-1` |
+| `IOLAKE_PROVISIONER_USER_ID` | the user per-bucket keys are minted on (see below) |
 
 ```go
-app, err := objectio.NewFromEnv()
+app, err := iolake.NewFromEnv()
 ```
 ```python
 app = Client.from_env()
@@ -80,7 +78,7 @@ app = Client.from_env()
 
 The AWS names are fallbacks so one set of variables configures this client and
 the S3 SDK beside it — a pod that already has `AWS_ACCESS_KEY_ID` for
-mountpoint-s3 needs nothing extra. The `OBJECTIO_*` names win when both are set.
+mountpoint-s3 needs nothing extra. The `IOLAKE_*` names win when both are set.
 
 **Prefer the `_FILE` forms in Kubernetes.** A secret in the environment is
 readable from `/proc`, lands in crash dumps, and shows up in `kubectl describe
@@ -91,29 +89,29 @@ key produces a `SignatureDoesNotMatch` that reads like a wrong password.
 ```yaml
 apiVersion: v1
 kind: Secret
-metadata: { name: objectio-provisioner }
+metadata: { name: iolake-provisioner }
 stringData:
   access-key: AKIA…
   secret-key: …
 ---
 # in the pod spec
 env:
-  - name: OBJECTIO_URL
+  - name: IOLAKE_URL
     value: https://s3.example.com
-  - name: OBJECTIO_ACCESS_KEY_FILE
+  - name: IOLAKE_ACCESS_KEY_FILE
     value: /var/run/objectio/access-key
-  - name: OBJECTIO_SECRET_KEY_FILE
+  - name: IOLAKE_SECRET_KEY_FILE
     value: /var/run/objectio/secret-key
-  - name: OBJECTIO_PROVISIONER_USER_ID
+  - name: IOLAKE_PROVISIONER_USER_ID
     value: 97817a81-…
 volumeMounts:
-  - name: objectio-creds
+  - name: iolake-creds
     mountPath: /var/run/objectio
     readOnly: true
 volumes:
-  - name: objectio-creds
+  - name: iolake-creds
     secret:
-      secretName: objectio-provisioner
+      secretName: iolake-provisioner
 ```
 
 The credential must be **unscoped** — a key confined to a bucket is refused on
@@ -125,7 +123,7 @@ minting itself a wider one.
 As the system admin, once:
 
 ```python
-from objectio import Client, PublicAccessBlock, tenant_oidc_provider_name
+from iolake import Client, PublicAccessBlock, tenant_oidc_provider_name
 
 root = Client(endpoint=E, access_key=ADMIN_AK, secret_key=ADMIN_SK)
 root.create_tenant("acme", display_name="Acme")
@@ -140,7 +138,7 @@ As acme's admin — its IdP, a policy, and a role its CI can assume:
 acme = Client(endpoint=E, access_key=key.access_key_id, secret_key=key.secret_access_key)
 acme.put_oidc_provider(tenant_oidc_provider_name("acme"), {
     "issuer_url": "https://keycloak.acme.example/realms/acme",
-    "client_id": "objectio", "claim_name": "groups",
+    "client_id": "iolake", "claim_name": "groups",
 })
 acme.create_policy("data-rw", {"Version": "2012-10-17", "Statement": [{
     "Effect": "Allow", "Action": "s3:*",
@@ -165,8 +163,8 @@ s3 = boto3.client("s3", **creds.boto3_kwargs(E))
 ```
 
 ```go
-sts, _ := objectio.New(objectio.Config{Endpoint: e})   // no keys: STS only
-creds, err := sts.AssumeRoleWithWebIdentity(ctx, objectio.AssumeRoleWithWebIdentityInput{
+sts, _ := iolake.New(iolake.Config{Endpoint: e})   // no keys: STS only
+creds, err := sts.AssumeRoleWithWebIdentity(ctx, iolake.AssumeRoleWithWebIdentityInput{
     RoleArn: roleArn, WebIdentityToken: token, RoleSessionName: "build-42",
 })
 ```
@@ -181,14 +179,14 @@ acme.put_public_access_block(PublicAccessBlock.all_blocked())
 ```
 
 ```go
-_, err := acme.PutPublicAccessBlock(ctx, "", objectio.BlockAll, nil)
+_, err := acme.PutPublicAccessBlock(ctx, "", iolake.BlockAll, nil)
 ```
 
 ## A bucket and a key confined to it
 
 The quickest way to give an app its own storage — a CSI driver or a platform
 operator provisioning on demand. The provisioner is a tenant admin holding
-one unscoped key (`OBJECTIO_PROVISIONER_USER_ID` names its user):
+one unscoped key (`IOLAKE_PROVISIONER_USER_ID` names its user):
 
 ```
 the provisioner, per app
@@ -200,12 +198,12 @@ the provisioner, per app
 
 Two calls, no bucket policy, no extra user per app. It works because the
 provisioner **owns** the bucket it just created — with no policy attached
-ObjectIO authorizes on ownership — and the scope narrows that ownership down
+IOLake authorizes on ownership — and the scope narrows that ownership down
 to the one bucket. The key cannot reach another app's bucket, and cannot be
 used against the management API at all.
 
 ```go
-ba, err := app.ProvisionBucket(ctx, objectio.ProvisionBucketInput{
+ba, err := app.ProvisionBucket(ctx, iolake.ProvisionBucketInput{
     Bucket:            "app-1",
     ProvisionerUserID: provisionerUserID,
 })
@@ -237,7 +235,7 @@ except APIError as e:
 ```
 
 ```go
-if err := app.CreateBucket(ctx, "app-1", ""); err != nil && !objectio.IsAlreadyExists(err) {
+if err := app.CreateBucket(ctx, "app-1", ""); err != nil && !iolake.IsAlreadyExists(err) {
     return err
 }
 ```

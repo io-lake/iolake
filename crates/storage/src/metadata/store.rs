@@ -1,4 +1,4 @@
-//! The OSD's metadata store (objectio-docs `core/storage-engine.md`): a
+//! The OSD's metadata store (iolake-docs `core/storage-engine.md`): a
 //! WAL, the durability boundary, in front of an index whose recent changes
 //! are in memory and the rest on disk ([`DiskIndex`]). Checkpoints write
 //! the memtable to the index file and cut the WAL.
@@ -6,8 +6,8 @@
 use super::disk_index::DiskIndex;
 use super::types::{MetadataKey, MetadataOp};
 use super::wal::{MetadataWal, WalConfig};
-use objectio_common::histogram::{HistogramVec, LATENCY_BUCKETS};
-use objectio_common::{Error, Result};
+use iolake_common::histogram::{HistogramVec, LATENCY_BUCKETS};
+use iolake_common::{Error, Result};
 use parking_lot::{Condvar, Mutex, RwLock};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -40,7 +40,7 @@ pub struct MetadataStoreConfig {
 /// and rebuilt, never by converting in place.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum MetaEngine {
-    /// ObjectIO's own WAL, memtable and redb index file.
+    /// IOLake's own WAL, memtable and redb index file.
     #[default]
     Native,
     /// RocksDB (the `rocksdb` feature).
@@ -293,25 +293,25 @@ impl MetadataStore {
         use std::fmt::Write;
         self.checkpoint_seconds.render(
             out,
-            "objectio_osd_meta_checkpoint_seconds",
+            "iolake_osd_meta_checkpoint_seconds",
             "Time of each metadata checkpoint step: gate (writes held back), flush (memtable to index file), truncate (WAL cut)",
             labels,
         );
         let st = self.wal.sync_stats();
         st.seconds.render(
             out,
-            "objectio_osd_wal_fsync_seconds",
+            "iolake_osd_wal_fsync_seconds",
             "Time for one metadata WAL fdatasync",
             labels,
         );
         for (name, help, v) in [
             (
-                "objectio_osd_wal_syncs_total",
+                "iolake_osd_wal_syncs_total",
                 "Metadata WAL fdatasyncs",
                 st.syncs.load(Ordering::Relaxed),
             ),
             (
-                "objectio_osd_wal_records_synced_total",
+                "iolake_osd_wal_records_synced_total",
                 "Metadata WAL records made durable; divide by syncs for records per fsync",
                 st.records.load(Ordering::Relaxed),
             ),

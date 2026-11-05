@@ -1,11 +1,11 @@
 name: Feature
-description: Something ObjectIO should do that it doesn't.
+description: Something IOLake should do that it doesn't.
 labels: [enhancement]
 body:
   - type: markdown
     attributes:
       value: |
-        Check the [roadmap](https://object-io.github.io/latest/ROADMAP/) and the open issues first: it may be planned already.
+        Check the [roadmap](https://iolake.dev/latest/ROADMAP/) and the open issues first: it may be planned already.
   - type: textarea
     id: problem
     attributes:

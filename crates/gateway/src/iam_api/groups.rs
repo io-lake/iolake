@@ -1,7 +1,7 @@
 //! Groups and their members.
 
 use axum::response::Response;
-use objectio_proto::metadata::{
+use iolake_proto::metadata::{
     AddUserToGroupRequest, CreateGroupRequest, DeleteGroupRequest, GetUserGroupsRequest, GroupMeta,
     ListAttachedPoliciesRequest, ListInlinePoliciesRequest, RemoveUserFromGroupRequest,
     UpdateGroupRequest,
@@ -27,7 +27,7 @@ pub(super) fn group_xml(x: &mut Xml, g: &GroupMeta) {
 
 /// The ARN to authorize a call on a group against.
 pub(super) fn group_resource(g: &GroupMeta) -> String {
-    objectio_auth::policy::canonical_arn(&g.arn).into_owned()
+    iolake_auth::policy::canonical_arn(&g.arn).into_owned()
 }
 
 pub(super) async fn create_group(call: &Call<'_>, actor: &Actor) -> IamResult<Response> {

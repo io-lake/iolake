@@ -1,5 +1,5 @@
 [package]
-name = "objectio-dedup-estimate"
+name = "iolake-dedup-estimate"
 description = "Estimate what deduplication would save on a set of files, offline"
 version.workspace = true
 edition.workspace = true
@@ -7,7 +7,7 @@ license.workspace = true
 publish = false
 
 [[bin]]
-name = "objectio-dedup-estimate"
+name = "iolake-dedup-estimate"
 path = "src/main.rs"
 
 # Uses the gateway's own chunking and fingerprints, so its numbers are
@@ -15,7 +15,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
-objectio-gateway = { workspace = true }
+iolake-gateway = { workspace = true }
 
 [lints]
 workspace = true

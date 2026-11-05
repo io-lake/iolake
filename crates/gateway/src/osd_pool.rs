@@ -3,8 +3,8 @@
 //! Manages connections to multiple OSD nodes for distributed storage operations.
 
 use bytes::Bytes;
-use objectio_proto::metadata::NodePlacement;
-use objectio_proto::storage::storage_service_client::StorageServiceClient;
+use iolake_proto::metadata::NodePlacement;
+use iolake_proto::storage::storage_service_client::StorageServiceClient;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -59,7 +59,7 @@ pub struct StalePlacement;
 pub fn is_stale_epoch(status: &tonic::Status) -> bool {
     status
         .metadata()
-        .get(objectio_proto::STALE_EPOCH_HEADER)
+        .get(iolake_proto::STALE_EPOCH_HEADER)
         .is_some()
 }
 
@@ -147,7 +147,7 @@ pub struct OsdPool {
     stale: Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
     /// Meta, for keys a write or delete left behind on some copies.
     heal: std::sync::OnceLock<
-        objectio_proto::metadata::metadata_service_client::MetadataServiceClient<Channel>,
+        iolake_proto::metadata::metadata_service_client::MetadataServiceClient<Channel>,
     >,
     /// Object metadata reads, several to a call per OSD (B21).
     meta_reads: crate::meta_reads::MetaReads,
@@ -170,7 +170,7 @@ impl OsdPool {
     /// Where keys go whose copies a write or delete left behind.
     pub fn set_heal_queue(
         &self,
-        meta: objectio_proto::metadata::metadata_service_client::MetadataServiceClient<Channel>,
+        meta: iolake_proto::metadata::metadata_service_client::MetadataServiceClient<Channel>,
     ) {
         let _ = self.heal.set(meta);
     }
@@ -184,7 +184,7 @@ impl OsdPool {
         let Some(meta) = self.heal.get() else {
             return;
         };
-        let request = objectio_proto::metadata::HealEnqueueRequest {
+        let request = iolake_proto::metadata::HealEnqueueRequest {
             bucket: bucket.to_string(),
             key: key.to_string(),
             version_id: version_id.to_string(),
@@ -219,7 +219,7 @@ impl OsdPool {
     /// it lacks now rather than at its next walk. Retried like
     /// [`Self::queue_heal`]: the write it follows was likely refused because
     /// the cluster is in trouble, meta perhaps among it.
-    pub async fn report_degraded(&self, request: objectio_proto::metadata::ReportDegradedRequest) {
+    pub async fn report_degraded(&self, request: iolake_proto::metadata::ReportDegradedRequest) {
         let Some(meta) = self.heal.get() else {
             return;
         };
@@ -438,14 +438,14 @@ impl OsdPool {
         // after about 5 s, failing what is in flight on it (writes wait for
         // every shard, so this bounds how long a vanished host holds them).
         // The 3 s cover the TLS handshake too (`transport::connect`).
-        let endpoint = objectio_proto::transport::endpoint(address)
+        let endpoint = iolake_proto::transport::endpoint(address)
             .map_err(OsdPoolError::ConnectionFailed)?
             .connect_timeout(std::time::Duration::from_secs(3))
             .tcp_keepalive(Some(std::time::Duration::from_secs(10)))
             .http2_keep_alive_interval(std::time::Duration::from_secs(2))
             .keep_alive_timeout(std::time::Duration::from_secs(3))
             .keep_alive_while_idle(true);
-        let channel = objectio_proto::transport::connect(&endpoint)
+        let channel = iolake_proto::transport::connect(&endpoint)
             .await
             .map_err(|e| {
                 self.mark_unreachable(address);
@@ -613,12 +613,12 @@ async fn probe_while_marked(
 /// it and waited on it for the HTTP/2 keepalive, 5 s, for as long as it
 /// stayed frozen.
 async fn answers(address: &str) -> bool {
-    use objectio_proto::storage::GetStatusRequest;
+    use iolake_proto::storage::GetStatusRequest;
     let attempt = async {
-        let endpoint = objectio_proto::transport::endpoint(address)
+        let endpoint = iolake_proto::transport::endpoint(address)
             .ok()?
             .connect_timeout(PROBE_TIMEOUT);
-        let channel = objectio_proto::transport::connect(&endpoint).await.ok()?;
+        let channel = iolake_proto::transport::connect(&endpoint).await.ok()?;
         let answer = StorageServiceClient::new(channel)
             .get_status(GetStatusRequest {
                 answer_while_counting: true,
@@ -797,7 +797,7 @@ fn rdma_failure(
 
 /// Whether `data` is the shard the OSD described. A response without a
 /// checksum is taken as is: the field is optional on the wire.
-fn matches_checksum(checksum: Option<&objectio_proto::storage::Checksum>, data: &[u8]) -> bool {
+fn matches_checksum(checksum: Option<&iolake_proto::storage::Checksum>, data: &[u8]) -> bool {
     checksum.is_none_or(|c| c.crc32c == crc32c::crc32c(data))
 }
 
@@ -805,8 +805,8 @@ fn matches_checksum(checksum: Option<&objectio_proto::storage::Checksum>, data: 
 async fn call_write_shard(
     pool: &OsdPool,
     placement: &NodePlacement,
-    request: objectio_proto::storage::WriteShardRequest,
-) -> Result<objectio_proto::storage::BlockLocation, ShardCallError> {
+    request: iolake_proto::storage::WriteShardRequest,
+) -> Result<iolake_proto::storage::BlockLocation, ShardCallError> {
     let mut client = connect_for_shard(pool, placement)
         .await
         .map_err(ShardCallError::Connect)?;
@@ -849,8 +849,8 @@ async fn call_write_shard(
 async fn call_read_shard(
     pool: &OsdPool,
     placement: &NodePlacement,
-    request: objectio_proto::storage::ReadShardRequest,
-) -> Result<objectio_proto::storage::ReadShardResponse, ShardCallError> {
+    request: iolake_proto::storage::ReadShardRequest,
+) -> Result<iolake_proto::storage::ReadShardResponse, ShardCallError> {
     match read_shard_once(pool, placement, request.clone()).await {
         Err(ShardCallError::Status(e)) if closed_by_us(&e) => {
             read_shard_once(pool, placement, request).await
@@ -862,8 +862,8 @@ async fn call_read_shard(
 async fn read_shard_once(
     pool: &OsdPool,
     placement: &NodePlacement,
-    request: objectio_proto::storage::ReadShardRequest,
-) -> Result<objectio_proto::storage::ReadShardResponse, ShardCallError> {
+    request: iolake_proto::storage::ReadShardRequest,
+) -> Result<iolake_proto::storage::ReadShardResponse, ShardCallError> {
     let mut client = connect_for_shard(pool, placement)
         .await
         .map_err(ShardCallError::Connect)?;
@@ -915,9 +915,9 @@ pub async fn write_shard_to_osd(
     ec_k: u32,
     ec_m: u32,
     rdma: Option<RdmaSource<'_>>,
-    pg: Option<&objectio_proto::storage::PgRef>,
-) -> Result<(objectio_proto::storage::BlockLocation, u32), OsdPoolError> {
-    use objectio_proto::storage::{Checksum, RdmaBuffer, ShardId, WriteShardRequest};
+    pg: Option<&iolake_proto::storage::PgRef>,
+) -> Result<(iolake_proto::storage::BlockLocation, u32), OsdPoolError> {
+    use iolake_proto::storage::{Checksum, RdmaBuffer, ShardId, WriteShardRequest};
 
     let shard_id = ShardId {
         object_id: object_id.to_vec(),
@@ -1019,7 +1019,7 @@ pub async fn read_shard_from_osd(
     rdma: Option<&crate::rdma::GatewayRdma>,
 ) -> Result<Bytes, OsdPoolError> {
     use crate::rdma::Fallback;
-    use objectio_proto::storage::{RdmaBuffer, ReadShardRequest, ShardId};
+    use iolake_proto::storage::{RdmaBuffer, ReadShardRequest, ShardId};
 
     let shard_id = ShardId {
         object_id: object_id.to_vec(),
@@ -1129,7 +1129,7 @@ pub async fn read_shard_range_from_osd(
     length: u32,
     expected_crc32c: Option<u32>,
 ) -> Result<Bytes, OsdPoolError> {
-    use objectio_proto::storage::{ReadShardRequest, ShardId};
+    use iolake_proto::storage::{ReadShardRequest, ShardId};
     let request = ReadShardRequest {
         // The OSD checks the whole shard against it before slicing.
         expected_crc32c,
@@ -1230,8 +1230,8 @@ pub struct Withdrawal {
 pub struct Undecided {
     holds: Vec<bool>,
     unsure: Vec<bool>,
-    shards: HashMap<Vec<u8>, objectio_proto::storage::SmallShard>,
-    object_meta: objectio_proto::metadata::ObjectMeta,
+    shards: HashMap<Vec<u8>, iolake_proto::storage::SmallShard>,
+    object_meta: iolake_proto::metadata::ObjectMeta,
 }
 
 impl std::fmt::Display for MetaWriteError {
@@ -1255,7 +1255,7 @@ pub async fn put_object_meta_to_all(
     placements: &[NodePlacement],
     bucket: &str,
     key: &str,
-    object_meta: objectio_proto::metadata::ObjectMeta,
+    object_meta: iolake_proto::metadata::ObjectMeta,
     versioning_enabled: bool,
     expected_object_id: &[u8],
 ) -> Result<Vec<Displaced>, MetaWriteError> {
@@ -1291,11 +1291,11 @@ pub struct MetaWrite<'a> {
     /// Each OSD's small shard of the object, by node id, sent with the
     /// metadata (B21): a copy is then the shard too, so the write needs the
     /// shard quorum as well as the metadata one.
-    pub small_shards: Option<&'a HashMap<Vec<u8>, objectio_proto::storage::SmallShard>>,
+    pub small_shards: Option<&'a HashMap<Vec<u8>, iolake_proto::storage::SmallShard>>,
     /// The fewest copies the write needs, if more than the metadata quorum.
     pub min_copies: usize,
     /// The placement group and epoch the write was placed under (B31).
-    pub pg: Option<&'a objectio_proto::storage::PgRef>,
+    pub pg: Option<&'a iolake_proto::storage::PgRef>,
 }
 
 /// As [`put_object_meta_to_all`], with every option the OSD takes.
@@ -1304,10 +1304,10 @@ pub async fn put_object_meta_with(
     placements: &[NodePlacement],
     bucket: &str,
     key: &str,
-    object_meta: objectio_proto::metadata::ObjectMeta,
+    object_meta: iolake_proto::metadata::ObjectMeta,
     write: MetaWrite<'_>,
 ) -> Result<Vec<Displaced>, MetaWriteError> {
-    use objectio_proto::storage::PutObjectMetaRequest;
+    use iolake_proto::storage::PutObjectMetaRequest;
     let MetaWrite {
         versioning_enabled,
         expected_object_id,
@@ -1356,11 +1356,10 @@ pub async fn put_object_meta_with(
     // outrank a PUT of the key that raced it on some copies, and that PUT,
     // acknowledged, would lose to the old object on every copy once healed.
     if expected_object_id.is_empty() {
-        object_meta.stamp = objectio_common::stamp::CLOCK.next_after(object_meta.stamp);
+        object_meta.stamp = iolake_common::stamp::CLOCK.next_after(object_meta.stamp);
         object_meta.update_stamp = 0;
     } else {
-        object_meta.update_stamp =
-            objectio_common::stamp::CLOCK.next_after(object_meta.update_stamp);
+        object_meta.update_stamp = iolake_common::stamp::CLOCK.next_after(object_meta.update_stamp);
     }
 
     // A copy holding a newer stamp supersedes the write. When that is a
@@ -1468,7 +1467,7 @@ pub async fn put_object_meta_with(
         }
         if restamp && held != 0 && round < MAX_RESTAMPS {
             debug!("{bucket}/{key}: a copy holds stamp {held}; writing again above it");
-            object_meta.stamp = objectio_common::stamp::CLOCK.next_after(held);
+            object_meta.stamp = iolake_common::stamp::CLOCK.next_after(held);
             continue;
         }
         break answers
@@ -1600,10 +1599,10 @@ async fn settle_short_small_write(
     targets: &[NodePlacement],
     holds: &[bool],
     may_hold: &[bool],
-    shards: &HashMap<Vec<u8>, objectio_proto::storage::SmallShard>,
+    shards: &HashMap<Vec<u8>, iolake_proto::storage::SmallShard>,
     bucket: &str,
     key: &str,
-    object_meta: &objectio_proto::metadata::ObjectMeta,
+    object_meta: &iolake_proto::metadata::ObjectMeta,
 ) -> bool {
     let k = object_meta.stripes.first().map_or(0, |s| s.ec_k as usize);
     let held = holds.iter().filter(|&&h| h).count();
@@ -1776,9 +1775,9 @@ async fn copy_holds(
     p: &NodePlacement,
     bucket: &str,
     key: &str,
-    object: &objectio_proto::metadata::ObjectMeta,
+    object: &iolake_proto::metadata::ObjectMeta,
 ) -> Option<bool> {
-    let is_it = |o: Option<objectio_proto::metadata::ObjectMeta>| {
+    let is_it = |o: Option<iolake_proto::metadata::ObjectMeta>| {
         o.is_some_and(|o| o.object_id == object.object_id)
     };
     if is_it(copy_entry(pool, p, bucket, key, "").await?) {
@@ -1801,8 +1800,8 @@ async fn copy_entry(
     bucket: &str,
     key: &str,
     version_id: &str,
-) -> Option<Option<objectio_proto::metadata::ObjectMeta>> {
-    use objectio_proto::storage::GetObjectMetaRequest;
+) -> Option<Option<iolake_proto::metadata::ObjectMeta>> {
+    use iolake_proto::storage::GetObjectMetaRequest;
     let mut client = pool.get_client_for_placement(p).await.ok()?;
     let req = GetObjectMetaRequest {
         bucket: bucket.to_string(),
@@ -1833,7 +1832,7 @@ async fn withdraw_from(
     key: &str,
     object_id: &[u8],
 ) -> Vec<NodePlacement> {
-    use objectio_proto::storage::DeleteObjectMetaRequest;
+    use iolake_proto::storage::DeleteObjectMetaRequest;
     let asks = copies.into_iter().map(|p| async move {
         let Ok(mut client) = pool.get_client_for_placement(&p).await else {
             return Some(p);
@@ -1872,10 +1871,10 @@ async fn report_missing_small_shards(
     pool: &OsdPool,
     targets: &[NodePlacement],
     holds: &[bool],
-    shards: &HashMap<Vec<u8>, objectio_proto::storage::SmallShard>,
+    shards: &HashMap<Vec<u8>, iolake_proto::storage::SmallShard>,
     bucket: &str,
     key: &str,
-    object_meta: &objectio_proto::metadata::ObjectMeta,
+    object_meta: &iolake_proto::metadata::ObjectMeta,
 ) {
     let Some(stripe) = object_meta.stripes.first() else {
         return;
@@ -1892,11 +1891,11 @@ async fn report_missing_small_shards(
     }
     missing.sort_unstable();
     let present = holds.iter().filter(|&&h| h).count();
-    pool.report_degraded(objectio_proto::metadata::ReportDegradedRequest {
+    pool.report_degraded(iolake_proto::metadata::ReportDegradedRequest {
         bucket: bucket.to_string(),
         key: key.to_string(),
         object_id: object_meta.object_id.clone(),
-        stripes: vec![objectio_proto::metadata::DegradedStripe {
+        stripes: vec![iolake_proto::metadata::DegradedStripe {
             stripe_id: stripe.stripe_id,
             missing,
             present: u32::try_from(present).unwrap_or(u32::MAX),
@@ -1928,7 +1927,7 @@ pub async fn get_object_meta_from_any(
     placements: &[NodePlacement],
     bucket: &str,
     key: &str,
-) -> Result<Option<objectio_proto::metadata::ObjectMeta>, OsdPoolError> {
+) -> Result<Option<iolake_proto::metadata::ObjectMeta>, OsdPoolError> {
     get_object_version_meta_from_any(pool, placements, bucket, key, "").await
 }
 
@@ -1940,7 +1939,7 @@ pub async fn get_object_version_meta_from_any(
     bucket: &str,
     key: &str,
     version_id: &str,
-) -> Result<Option<objectio_proto::metadata::ObjectMeta>, OsdPoolError> {
+) -> Result<Option<iolake_proto::metadata::ObjectMeta>, OsdPoolError> {
     read_object_meta(pool, placements, bucket, key, version_id, true, None).await
 }
 
@@ -1960,7 +1959,7 @@ pub async fn get_object_meta_with_shards(
     key: &str,
     every_copy: bool,
     shards: &mut SmallShards,
-) -> Result<Option<objectio_proto::metadata::ObjectMeta>, OsdPoolError> {
+) -> Result<Option<iolake_proto::metadata::ObjectMeta>, OsdPoolError> {
     read_object_meta(pool, placements, bucket, key, "", !every_copy, Some(shards)).await
 }
 
@@ -1973,7 +1972,7 @@ pub async fn get_object_meta_every_copy(
     placements: &[NodePlacement],
     bucket: &str,
     key: &str,
-) -> Result<Option<objectio_proto::metadata::ObjectMeta>, OsdPoolError> {
+) -> Result<Option<iolake_proto::metadata::ObjectMeta>, OsdPoolError> {
     read_object_meta(pool, placements, bucket, key, "", false, None).await
 }
 
@@ -1985,8 +1984,8 @@ async fn read_object_meta(
     version_id: &str,
     at_quorum: bool,
     shards: Option<&mut SmallShards>,
-) -> Result<Option<objectio_proto::metadata::ObjectMeta>, OsdPoolError> {
-    use objectio_proto::storage::GetObjectMetaRequest;
+) -> Result<Option<iolake_proto::metadata::ObjectMeta>, OsdPoolError> {
+    use iolake_proto::storage::GetObjectMetaRequest;
 
     let with_small_shard = shards.is_some();
 
@@ -2008,7 +2007,7 @@ async fn read_object_meta(
             // a parity copy sends only its metadata, and a shard missing
             // from the data copies is read afterwards (B21).
             with_small_shard: with_small_shard
-                && placement.shard_type == objectio_proto::metadata::ShardType::ShardData as i32,
+                && placement.shard_type == iolake_proto::metadata::ShardType::ShardData as i32,
         };
         let mut again = true;
         loop {
@@ -2064,16 +2063,16 @@ async fn read_object_meta(
     // being filled), so it is the answer only when no copy has it.
     let quorum = meta_read_quorum(targets.len());
     let mut answers: futures::stream::FuturesUnordered<_> = asks.collect();
-    let mut newest: Option<objectio_proto::metadata::ObjectMeta> = None;
+    let mut newest: Option<iolake_proto::metadata::ObjectMeta> = None;
     let mut deleted_at = 0u64;
     let mut answered = 0;
     let mut last_err: Option<OsdPoolError> = None;
     // Shards that came with the copies, of whichever object each holds.
-    let mut got: Vec<objectio_proto::storage::SmallShard> = Vec::new();
+    let mut got: Vec<iolake_proto::storage::SmallShard> = Vec::new();
     // Whether the newest object's shards are in hand: k of them, if it
     // keeps them with its metadata and they were asked for.
-    let enough = |newest: &Option<objectio_proto::metadata::ObjectMeta>,
-                  got: &[objectio_proto::storage::SmallShard]| {
+    let enough = |newest: &Option<iolake_proto::metadata::ObjectMeta>,
+                  got: &[iolake_proto::storage::SmallShard]| {
         !with_small_shard
             || newest.as_ref().is_none_or(|o| {
                 small_stripe(o).is_none_or(|s| {
@@ -2087,7 +2086,7 @@ async fn read_object_meta(
             })
     };
     while let Some(answer) = futures::StreamExt::next(&mut answers).await {
-        let live = |newest: &Option<objectio_proto::metadata::ObjectMeta>, deleted_at: u64| {
+        let live = |newest: &Option<iolake_proto::metadata::ObjectMeta>, deleted_at: u64| {
             newest
                 .as_ref()
                 .is_some_and(|o| deleted_at == 0 || deleted_at < o.stamp)
@@ -2119,11 +2118,11 @@ async fn read_object_meta(
     // A delete newer than every copy's object: gone, whatever a copy that
     // missed the delete still holds.
     if let Some(o) = newest.take_if(|o| deleted_at < o.stamp || deleted_at == 0) {
-        if o.required_level > objectio_common::version::FORMAT_LEVEL {
+        if o.required_level > iolake_common::version::FORMAT_LEVEL {
             return Err(OsdPoolError::TooOld(format!(
                 "{bucket}/{key} needs format level {}; this gateway is at {}",
                 o.required_level,
-                objectio_common::version::FORMAT_LEVEL
+                iolake_common::version::FORMAT_LEVEL
             )));
         }
         if let (Some(shards), Some(stripe)) = (shards, small_stripe(&o)) {
@@ -2139,16 +2138,16 @@ async fn read_object_meta(
 
 /// The stripe of `object` whose shards are kept with its metadata (B21).
 fn small_stripe(
-    object: &objectio_proto::metadata::ObjectMeta,
-) -> Option<&objectio_proto::metadata::StripeMeta> {
+    object: &iolake_proto::metadata::ObjectMeta,
+) -> Option<&iolake_proto::metadata::StripeMeta> {
     object.stripes.first().filter(|s| s.shards_in_metadata)
 }
 
 /// Whether `shard` is one of `stripe`'s: a copy holding an older object
 /// sends that object's shard.
 fn shard_of(
-    shard: &objectio_proto::storage::SmallShard,
-    stripe: &objectio_proto::metadata::StripeMeta,
+    shard: &iolake_proto::storage::SmallShard,
+    stripe: &iolake_proto::metadata::StripeMeta,
 ) -> bool {
     shard
         .shard_id
@@ -2164,8 +2163,8 @@ pub async fn get_object_version_meta_from_osd(
     bucket: &str,
     key: &str,
     version_id: &str,
-) -> Result<Option<objectio_proto::metadata::ObjectMeta>, OsdPoolError> {
-    use objectio_proto::storage::GetObjectMetaRequest;
+) -> Result<Option<iolake_proto::metadata::ObjectMeta>, OsdPoolError> {
+    use iolake_proto::storage::GetObjectMetaRequest;
 
     let mut client = pool.get_client_for_placement(primary_placement).await?;
 
@@ -2220,7 +2219,7 @@ pub struct MetaDeleted {
     pub stale: usize,
     /// What those replicas removed, as each had it. Replicas can disagree
     /// (a write racing the delete): each is what that copy named.
-    pub removed: Vec<objectio_proto::metadata::ObjectMeta>,
+    pub removed: Vec<iolake_proto::metadata::ObjectMeta>,
 }
 
 impl MetaDeleted {
@@ -2250,9 +2249,9 @@ pub async fn delete_meta_from_all(
     bucket: &str,
     key: &str,
     version_id: &str,
-    pg: Option<&objectio_proto::storage::PgRef>,
+    pg: Option<&iolake_proto::storage::PgRef>,
 ) -> MetaDeleted {
-    use objectio_proto::storage::DeleteObjectMetaRequest;
+    use iolake_proto::storage::DeleteObjectMetaRequest;
 
     let targets = unique_node_placements(placements);
     if let Some(why) = crate::clock_skew::refusal() {
@@ -2267,7 +2266,7 @@ pub async fn delete_meta_from_all(
     // newer write keeps it; when that is a write this delete follows
     // (through a gateway whose clock is ahead), the delete is stamped
     // above it and sent again, as a superseded PUT is.
-    let mut stamp = objectio_common::stamp::CLOCK.now();
+    let mut stamp = iolake_common::stamp::CLOCK.now();
     let mut removed = Vec::new();
     let mut round = 0;
     let answers = loop {
@@ -2316,7 +2315,7 @@ pub async fn delete_meta_from_all(
             .unwrap_or(0);
         if held != 0 && round < MAX_RESTAMPS {
             debug!("delete {bucket}/{key}: a copy holds stamp {held}; deleting again above it");
-            stamp = objectio_common::stamp::CLOCK.next_after(held);
+            stamp = iolake_common::stamp::CLOCK.next_after(held);
             continue;
         }
         break answers;
@@ -2378,10 +2377,10 @@ pub async fn unreferenced(
     placements: &[NodePlacement],
     bucket: &str,
     key: &str,
-    removed: Vec<objectio_proto::metadata::ObjectMeta>,
+    removed: Vec<iolake_proto::metadata::ObjectMeta>,
     unread: Unread,
-) -> Vec<objectio_proto::metadata::ObjectMeta> {
-    let mut distinct: Vec<objectio_proto::metadata::ObjectMeta> = Vec::new();
+) -> Vec<iolake_proto::metadata::ObjectMeta> {
+    let mut distinct: Vec<iolake_proto::metadata::ObjectMeta> = Vec::new();
     for o in removed {
         if !o.object_id.is_empty() && !distinct.contains(&o) {
             distinct.push(o);
@@ -2486,7 +2485,7 @@ pub struct ShardTarget {
 
 /// Every shard of `object`'s stripes, released on the object's behalf.
 #[must_use]
-pub fn stripe_targets_of(object: &objectio_proto::metadata::ObjectMeta) -> Vec<ShardTarget> {
+pub fn stripe_targets_of(object: &iolake_proto::metadata::ObjectMeta) -> Vec<ShardTarget> {
     let mut targets = stripe_targets(&object.stripes);
     if !object.object_id.is_empty() {
         for t in &mut targets {
@@ -2502,7 +2501,7 @@ pub fn stripe_targets_of(object: &objectio_proto::metadata::ObjectMeta) -> Vec<S
 /// a multipart object's parts are placed by their own keys, and a drained
 /// shard has moved, so the key's current placement can miss both.
 #[must_use]
-pub fn stripe_targets(stripes: &[objectio_proto::metadata::StripeMeta]) -> Vec<ShardTarget> {
+pub fn stripe_targets(stripes: &[iolake_proto::metadata::StripeMeta]) -> Vec<ShardTarget> {
     let mut seen = std::collections::HashSet::new();
     stripes
         .iter()
@@ -2553,7 +2552,7 @@ impl ShardTarget {
 /// stripe's (a multipart object's stripes carry their parts' ids).
 #[must_use]
 pub fn referenced_object_ids(
-    object: &objectio_proto::metadata::ObjectMeta,
+    object: &iolake_proto::metadata::ObjectMeta,
 ) -> std::collections::HashSet<Vec<u8>> {
     std::iter::once(object.object_id.clone())
         .chain(object.stripes.iter().map(|s| s.object_id.clone()))
@@ -2564,7 +2563,7 @@ pub fn referenced_object_ids(
 /// What one replica's `PutObjectMeta` displaced.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Displaced {
-    pub replaced: Option<objectio_proto::metadata::ObjectMeta>,
+    pub replaced: Option<iolake_proto::metadata::ObjectMeta>,
     /// The replaced object is still held there as a version.
     pub version_kept: bool,
     /// That copy already held a newer write; this one was not applied.
@@ -2582,7 +2581,7 @@ pub struct Overwritten {
     /// The copies disagreed: each object any of them displaced, freed once
     /// [`RESTAMP_SETTLE`] has passed if no copy holds it then
     /// ([`reclaim_unsettled`]).
-    pub unsettled: Vec<objectio_proto::metadata::ObjectMeta>,
+    pub unsettled: Vec<iolake_proto::metadata::ObjectMeta>,
 }
 
 /// How long a write can go on being stamped again and resent after a copy
@@ -2625,7 +2624,7 @@ pub fn reclaimable_after_overwrite(
     if replies.iter().any(|d| d.version_kept) {
         return Overwritten::default();
     }
-    let displaced: Vec<&objectio_proto::metadata::ObjectMeta> = replies
+    let displaced: Vec<&iolake_proto::metadata::ObjectMeta> = replies
         .iter()
         .filter_map(|d| d.replaced.as_ref())
         .filter(|o| !o.object_id.is_empty() && !keep.contains(&o.object_id))
@@ -2639,7 +2638,7 @@ pub fn reclaimable_after_overwrite(
             .is_some_and(|r| r.object_id == first.object_id)
     });
     if !unanimous {
-        let mut unsettled: Vec<objectio_proto::metadata::ObjectMeta> = Vec::new();
+        let mut unsettled: Vec<iolake_proto::metadata::ObjectMeta> = Vec::new();
         for o in displaced {
             if !unsettled.contains(o) {
                 unsettled.push(o.clone());
@@ -2661,7 +2660,7 @@ pub fn reclaimable_after_overwrite(
 /// deleting at every location any of them names is harmless where the
 /// shard is not.
 fn targets_of<'a>(
-    objects: impl Iterator<Item = &'a objectio_proto::metadata::ObjectMeta>,
+    objects: impl Iterator<Item = &'a iolake_proto::metadata::ObjectMeta>,
     keep: &std::collections::HashSet<Vec<u8>>,
 ) -> Vec<ShardTarget> {
     let mut seen = std::collections::HashSet::new();
@@ -2679,11 +2678,11 @@ fn targets_of<'a>(
 /// not freed at the first try.
 pub async fn reclaim_unsettled(
     pool: &Arc<OsdPool>,
-    meta: &mut objectio_proto::metadata::metadata_service_client::MetadataServiceClient<Channel>,
+    meta: &mut iolake_proto::metadata::metadata_service_client::MetadataServiceClient<Channel>,
     placements: &[NodePlacement],
     bucket: &str,
     key: &str,
-    unsettled: Vec<objectio_proto::metadata::ObjectMeta>,
+    unsettled: Vec<iolake_proto::metadata::ObjectMeta>,
     keep: &std::collections::HashSet<Vec<u8>>,
 ) -> usize {
     let asked = unsettled.len();
@@ -2704,12 +2703,12 @@ pub async fn reclaim_unsettled(
 /// What releasing `targets` freed: `(owner, stripe id)` pairs whose shards
 /// may go, and the packs whose last object let go.
 async fn freeable(
-    meta: &mut objectio_proto::metadata::metadata_service_client::MetadataServiceClient<Channel>,
+    meta: &mut iolake_proto::metadata::metadata_service_client::MetadataServiceClient<Channel>,
     targets: &[ShardTarget],
 ) -> Result<
     (
         std::collections::HashSet<(Vec<u8>, Vec<u8>)>,
-        Vec<objectio_proto::metadata::StripeMeta>,
+        Vec<iolake_proto::metadata::StripeMeta>,
     ),
     tonic::Status,
 > {
@@ -2727,7 +2726,7 @@ async fn freeable(
         // A batch meta commits whole (an object shared by many parts has
         // more): each stripe id is two writes at most.
         for ids in ids.chunks(RELEASE_BATCH) {
-            let req = objectio_proto::metadata::ReleaseStripesRequest {
+            let req = iolake_proto::metadata::ReleaseStripesRequest {
                 stripe_ids: ids.to_vec(),
                 referrer: owner.clone(),
             };
@@ -2752,15 +2751,15 @@ async fn freeable(
 }
 
 /// Stripe ids in one `ReleaseStripes` call: meta commits each call as one
-/// command of [`objectio_common::META_MAX_OPS`] writes at most, and a
+/// command of [`iolake_common::META_MAX_OPS`] writes at most, and a
 /// stripe is two (its references, and its pack's record).
-const RELEASE_BATCH: usize = objectio_common::META_MAX_OPS / 2;
+const RELEASE_BATCH: usize = iolake_common::META_MAX_OPS / 2;
 
 /// Drop `owner`'s reference to `stripe_ids` without deleting anything: an
 /// object replaced by one that still uses these stripes (a copy onto
 /// itself) stops referencing them, but they are not free.
 pub async fn release_only(
-    meta: &mut objectio_proto::metadata::metadata_service_client::MetadataServiceClient<Channel>,
+    meta: &mut iolake_proto::metadata::metadata_service_client::MetadataServiceClient<Channel>,
     owner: &[u8],
     stripe_ids: Vec<Vec<u8>>,
 ) {
@@ -2769,7 +2768,7 @@ pub async fn release_only(
     }
     for ids in stripe_ids.chunks(RELEASE_BATCH) {
         if let Err(e) = meta
-            .release_stripes(objectio_proto::metadata::ReleaseStripesRequest {
+            .release_stripes(iolake_proto::metadata::ReleaseStripesRequest {
                 stripe_ids: ids.to_vec(),
                 referrer: owner.to_vec(),
             })
@@ -2866,7 +2865,7 @@ const RECLAIM_RETRY_FIRST: std::time::Duration = std::time::Duration::from_secs(
 /// many shards were not freed at the first try.
 pub async fn reclaim_shards(
     pool: &Arc<OsdPool>,
-    meta: &mut objectio_proto::metadata::metadata_service_client::MetadataServiceClient<Channel>,
+    meta: &mut iolake_proto::metadata::metadata_service_client::MetadataServiceClient<Channel>,
     targets: Vec<ShardTarget>,
     reason: Reclaim,
 ) -> usize {
@@ -2913,7 +2912,7 @@ impl Unfreed {
 /// then is counted as failed, its blocks allocated.
 async fn retry_reclaim(
     pool: Arc<OsdPool>,
-    mut meta: objectio_proto::metadata::metadata_service_client::MetadataServiceClient<Channel>,
+    mut meta: iolake_proto::metadata::metadata_service_client::MetadataServiceClient<Channel>,
     mut left: Unfreed,
     reason: Reclaim,
     first: std::time::Duration,
@@ -2954,12 +2953,12 @@ async fn retry_reclaim(
 /// released. Returns what is still not freed.
 async fn reclaim_round(
     pool: &OsdPool,
-    meta: &mut objectio_proto::metadata::metadata_service_client::MetadataServiceClient<Channel>,
+    meta: &mut iolake_proto::metadata::metadata_service_client::MetadataServiceClient<Channel>,
     left: Unfreed,
     reason: Reclaim,
 ) -> Unfreed {
     use futures::StreamExt;
-    use objectio_proto::storage::{DeleteShardRequest, ShardId};
+    use iolake_proto::storage::{DeleteShardRequest, ShardId};
 
     let mut out = Unfreed::default();
     let mut delete = left.delete;
@@ -3013,7 +3012,7 @@ async fn reclaim_round(
         if !addresses.contains_key(&node_id) && !asked_meta {
             asked_meta = true;
             match meta
-                .get_listing_nodes(objectio_proto::metadata::GetListingNodesRequest {
+                .get_listing_nodes(iolake_proto::metadata::GetListingNodesRequest {
                     bucket: String::new(),
                     include_all_states: true,
                 })
@@ -3124,7 +3123,7 @@ mod connection_broke_tests {
 #[cfg(test)]
 mod reclaim_tests {
     use super::*;
-    use objectio_proto::metadata::{ObjectMeta, ShardLocation, StripeMeta};
+    use iolake_proto::metadata::{ObjectMeta, ShardLocation, StripeMeta};
     use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
 
@@ -3389,11 +3388,11 @@ mod reclaim_tests {
     #[tokio::test]
     async fn what_cannot_be_freed_is_retried_then_counted() {
         let pool = Arc::new(OsdPool::new());
-        let meta = objectio_proto::transport::connect_lazy(
-            &tonic::transport::Endpoint::from_static("http://127.0.0.1:1"),
-        );
+        let meta = iolake_proto::transport::connect_lazy(&tonic::transport::Endpoint::from_static(
+            "http://127.0.0.1:1",
+        ));
         let mut meta =
-            objectio_proto::metadata::metadata_service_client::MetadataServiceClient::new(meta);
+            iolake_proto::metadata::metadata_service_client::MetadataServiceClient::new(meta);
         let target = ShardTarget {
             node_id: vec![1; 16],
             address: "http://127.0.0.1:1".into(),
@@ -3414,7 +3413,7 @@ mod reclaim_tests {
         retry_reclaim(pool, meta, left, Reclaim::FailedWrite, zero, zero).await;
         assert!(
             crate::gateway_metrics::render()
-                .contains("objectio_gateway_shard_reclaim_failures_total{reason=\"failed_write\"}")
+                .contains("iolake_gateway_shard_reclaim_failures_total{reason=\"failed_write\"}")
         );
     }
 }
@@ -3482,7 +3481,7 @@ mod fail_fast_tests {
 #[cfg(test)]
 mod tests {
     use super::matches_checksum;
-    use objectio_proto::storage::Checksum;
+    use iolake_proto::storage::Checksum;
 
     fn checksum(crc32c: u32) -> Checksum {
         Checksum {
@@ -3674,8 +3673,8 @@ mod tests {
         assert!(matches_checksum(None, b"anything"));
     }
 
-    use objectio_proto::metadata::{NodePlacement, ObjectMeta};
-    use objectio_proto::storage::{GetObjectMetaRequest, GetObjectMetaResponse};
+    use iolake_proto::metadata::{NodePlacement, ObjectMeta};
+    use iolake_proto::storage::{GetObjectMetaRequest, GetObjectMetaResponse};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
     use std::time::{Duration, Instant};
@@ -3718,8 +3717,8 @@ mod tests {
         calls: Arc<AtomicUsize>,
     }
 
-    impl tonic::server::UnaryService<objectio_proto::storage::GetObjectMetasRequest> for MetaOsdBatch {
-        type Response = objectio_proto::storage::GetObjectMetasResponse;
+    impl tonic::server::UnaryService<iolake_proto::storage::GetObjectMetasRequest> for MetaOsdBatch {
+        type Response = iolake_proto::storage::GetObjectMetasResponse;
         type Future = futures::future::BoxFuture<
             'static,
             Result<tonic::Response<Self::Response>, tonic::Status>,
@@ -3727,7 +3726,7 @@ mod tests {
 
         fn call(
             &mut self,
-            req: tonic::Request<objectio_proto::storage::GetObjectMetasRequest>,
+            req: tonic::Request<iolake_proto::storage::GetObjectMetasRequest>,
         ) -> Self::Future {
             let this = self.clone();
             Box::pin(async move {
@@ -3738,13 +3737,13 @@ mod tests {
                 )
                 .await
                 .into_iter()
-                .map(|response| objectio_proto::storage::GetObjectMetaAnswer {
+                .map(|response| iolake_proto::storage::GetObjectMetaAnswer {
                     response: Some(response),
                     ..Default::default()
                 })
                 .collect();
                 Ok(tonic::Response::new(
-                    objectio_proto::storage::GetObjectMetasResponse { answers },
+                    iolake_proto::storage::GetObjectMetasResponse { answers },
                 ))
             })
         }
@@ -3782,8 +3781,8 @@ mod tests {
                     "/objectio.storage.StorageService/GetObjectMetas" => {
                         let calls = Arc::clone(&osd.batch_calls);
                         Grpc::new(ProstCodec::<
-                            objectio_proto::storage::GetObjectMetasResponse,
-                            objectio_proto::storage::GetObjectMetasRequest,
+                            iolake_proto::storage::GetObjectMetasResponse,
+                            iolake_proto::storage::GetObjectMetasRequest,
                         >::default())
                         .unary(MetaOsdBatch { osd, calls }, req)
                         .await
@@ -4034,12 +4033,12 @@ mod tests {
 pub async fn set_replication_status(
     pool: &OsdPool,
     placements: &[NodePlacement],
-    version: &objectio_proto::metadata::ObjectMeta,
+    version: &iolake_proto::metadata::ObjectMeta,
     target: &str,
     status: &str,
 ) -> Result<(), OsdPoolError> {
-    use objectio_proto::storage::PutObjectMetaRequest;
-    let only_ids = objectio_proto::metadata::ObjectMeta {
+    use iolake_proto::storage::PutObjectMetaRequest;
+    let only_ids = iolake_proto::metadata::ObjectMeta {
         object_id: version.object_id.clone(),
         version_id: version.version_id.clone(),
         ..Default::default()

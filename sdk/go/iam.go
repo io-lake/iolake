@@ -1,4 +1,4 @@
-package objectio
+package iolake
 
 import (
 	"context"
@@ -132,7 +132,7 @@ func (t PolicyTarget) fields() (map[string]string, error) {
 	if len(out) != 1 {
 		// The server would silently pick the first of user, group, role; a
 		// target naming two is almost certainly a bug in the caller.
-		return nil, fmt.Errorf("objectio: PolicyTarget needs exactly one of UserID, GroupID or RoleName")
+		return nil, fmt.Errorf("iolake: PolicyTarget needs exactly one of UserID, GroupID or RoleName")
 	}
 	return out, nil
 }

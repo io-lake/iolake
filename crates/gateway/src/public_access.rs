@@ -22,8 +22,8 @@ use axum::body::{Body, Bytes};
 use axum::extract::{Extension, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use objectio_auth::AuthResult;
-use objectio_proto::metadata::{
+use iolake_auth::AuthResult;
+use iolake_proto::metadata::{
     DeleteConfigRequest, GetBucketSettingRequest, GetConfigRequest, PutBucketSettingRequest,
     SetConfigRequest,
 };
@@ -287,7 +287,7 @@ async fn write_bucket(
 pub async fn refuses_policy(
     state: &AppState,
     bucket: &str,
-    policy: &objectio_auth::BucketPolicy,
+    policy: &iolake_auth::BucketPolicy,
 ) -> bool {
     if !policy.is_public() {
         return false;
@@ -295,7 +295,7 @@ pub async fn refuses_policy(
     let tenant = state
         .meta_client
         .clone()
-        .get_bucket(objectio_proto::metadata::GetBucketRequest {
+        .get_bucket(iolake_proto::metadata::GetBucketRequest {
             name: bucket.to_string(),
         })
         .await
@@ -315,7 +315,7 @@ pub async fn get_policy_status(state: &AppState, bucket: &str) -> Response {
     let policy = state
         .meta_client
         .clone()
-        .get_bucket_policy(objectio_proto::metadata::GetBucketPolicyRequest {
+        .get_bucket_policy(iolake_proto::metadata::GetBucketPolicyRequest {
             bucket: bucket.to_string(),
         })
         .await
@@ -330,7 +330,7 @@ pub async fn get_policy_status(state: &AppState, bucket: &str) -> Response {
         );
     };
     let public =
-        objectio_auth::BucketPolicy::from_json(&policy.policy_json).is_ok_and(|p| p.is_public());
+        iolake_auth::BucketPolicy::from_json(&policy.policy_json).is_ok_and(|p| p.is_public());
     xml_ok(format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
          <PolicyStatus xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">\

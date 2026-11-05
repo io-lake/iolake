@@ -1,50 +1,50 @@
-# ObjectIO agent skills
+# IOLake agent skills
 
 Skills teach a coding agent (Claude Code, Codex, opencode, pi, …) to work
-with ObjectIO: what to do, in what order, and what not to do. Each is a
+with IOLake: what to do, in what order, and what not to do. Each is a
 directory with a `SKILL.md`.
 
 | Skill | For | What it covers |
 |---|---|---|
-| `objectio-deploy` | ops | Installing, sizing, upgrading, monitoring and troubleshooting a deployment: `objectio-aio`, the binaries, the Helm chart |
-| `objectio-admin` | ops | Running a cluster with `obioctl`: tenants, users and keys, policies, buckets, pools, placement groups, repair and drain |
-| `objectio-sdk` | dev | Building on ObjectIO: S3 clients, the Python and Go SDKs, credentials and STS, the data lake APIs |
+| `iolake-deploy` | ops | Installing, sizing, upgrading, monitoring and troubleshooting a deployment: `iolake-aio`, the binaries, the Helm chart |
+| `iolake-admin` | ops | Running a cluster with `iolakectl`: tenants, users and keys, policies, buckets, pools, placement groups, repair and drain |
+| `iolake-sdk` | dev | Building on IOLake: S3 clients, the Python and Go SDKs, credentials and STS, the data lake APIs |
 
-Skills for working *on* ObjectIO, for contributors, are elsewhere: in
+Skills for working *on* IOLake, for contributors, are elsewhere: in
 `.claude/skills/`, loaded when an agent works in a checkout of this repo.
 
 ## Installing them
 
-With `obioctl` (they're compiled into it, so there is nothing to fetch):
+With `iolakectl` (they're compiled into it, so there is nothing to fetch):
 
 ```bash
-obioctl skills list
-obioctl skills install                    # every agent found under $HOME, and ~/.agents/skills
-obioctl skills install --audience ops     # only the operators' skills
-obioctl skills install --agent claude     # one agent (repeatable)
-obioctl skills install --dir ./.claude/skills   # one project
-obioctl skills install --force            # replace older copies, after upgrading obioctl
+iolakectl skills list
+iolakectl skills install                    # every agent found under $HOME, and ~/.agents/skills
+iolakectl skills install --audience ops     # only the operators' skills
+iolakectl skills install --agent claude     # one agent (repeatable)
+iolakectl skills install --dir ./.claude/skills   # one project
+iolakectl skills install --force            # replace older copies, after upgrading iolakectl
 ```
 
 `install` writes to each agent whose home exists: Claude Code
 (`~/.claude/skills`), Codex (`~/.codex/skills`), opencode
 (`~/.config/opencode/skills`), pi (`~/.pi/agent/skills`), and always
 `~/.agents/skills`, which several agents read. A copy that differs from
-the one carried (edited by hand, or from an older `obioctl`) is kept
+the one carried (edited by hand, or from an older `iolakectl`) is kept
 unless `--force` is given.
 
-Without `obioctl`, in Claude Code, this repository is a plugin
-marketplace with two plugins, `objectio-ops` and `objectio-dev`:
+Without `iolakectl`, in Claude Code, this repository is a plugin
+marketplace with two plugins, `iolake-ops` and `iolake-dev`:
 
 ```
-/plugin marketplace add object-io/objectio
-/plugin install objectio-ops@objectio
-/plugin install objectio-dev@objectio
+/plugin marketplace add io-lake/iolake
+/plugin install iolake-ops@iolake
+/plugin install iolake-dev@iolake
 ```
 
 ## Changing them
 
-This directory is the only copy: `obioctl` compiles it in
+This directory is the only copy: `iolakectl` compiles it in
 (`bin/cli/src/skills.rs`) and the marketplace
 (`.claude-plugin/marketplace.json`) points at it. A new skill is added in
 three places, its directory, `SKILLS` in `skills.rs` and a plugin in
@@ -67,4 +67,4 @@ When editing one:
   already knows.
 - **Keep the guides the reference.** A skill is the shape of the job and
   what goes wrong; the full procedure is in the documentation
-  (https://object-io.github.io), linked from the skill.
+  (https://iolake.dev), linked from the skill.

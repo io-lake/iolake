@@ -1,18 +1,18 @@
 [package]
-name = "objectio-osd-bin"
-description = "The objectio-osd binary: the storage daemon (OSD) (the code is in crates/osd)"
+name = "iolake-osd-bin"
+description = "The iolake-osd binary: the storage daemon (OSD) (the code is in crates/osd)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
 
 [[bin]]
-name = "objectio-osd"
+name = "iolake-osd"
 path = "src/main.rs"
 
 [dependencies]
-objectio-osd = { workspace = true }
-objectio-common = { workspace = true }
+iolake-osd = { workspace = true }
+iolake-common = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true }
@@ -24,8 +24,8 @@ tikv-jemallocator = { workspace = true }
 [features]
 default = []
 # Shard I/O through io_uring (Linux).
-io-uring = ["objectio-osd/io-uring"]
+io-uring = ["iolake-osd/io-uring"]
 # Shard transfers over Mooncake Transfer Engine.
-rdma = ["objectio-osd/rdma"]
+rdma = ["iolake-osd/rdma"]
 # The metadata index on RocksDB, with --meta-engine rocksdb.
-rocksdb = ["objectio-osd/rocksdb"]
+rocksdb = ["iolake-osd/rocksdb"]

@@ -2,7 +2,7 @@
 //! with, the `response-*` overrides a GET may ask for, and a plain refusal
 //! for sub-resources that aren't implemented.
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 
 #[test]
 fn an_object_keeps_its_standard_headers() {
@@ -36,7 +36,7 @@ fn an_object_keeps_its_standard_headers() {
         assert_eq!(r.header("x-amz-meta-owner").as_deref(), Some("finance"));
         // Kept as headers, not leaked as metadata.
         assert!(
-            r.headers.iter().all(|(k, _)| !k.contains("objectio")),
+            r.headers.iter().all(|(k, _)| !k.contains("iolake")),
             "{:?}",
             r.headers
         );

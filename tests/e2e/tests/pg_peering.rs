@@ -1,4 +1,4 @@
-//! Peering (B31 phase 2, objectio-docs `core/pg-recovery.md`): each
+//! Peering (B31 phase 2, iolake-docs `core/pg-recovery.md`): each
 //! placement group's members compared, and its state and what each member
 //! lacks recorded. The exit test: in each scenario the computed states and
 //! counts match what the objects actually lack, checked against every
@@ -10,11 +10,11 @@
 use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
 
-use objectio_e2e::ha::HaCluster;
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
-use objectio_proto::metadata::{GetPlacementRequest, ObjectMeta};
-use objectio_proto::storage::GetObjectMetaRequest;
-use objectio_proto::storage::storage_service_client::StorageServiceClient;
+use iolake_e2e::ha::HaCluster;
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_proto::metadata::{GetPlacementRequest, ObjectMeta};
+use iolake_proto::storage::GetObjectMetaRequest;
+use iolake_proto::storage::storage_service_client::StorageServiceClient;
 use serde_json::{Value, json};
 
 const OSDS: usize = 6;
@@ -43,22 +43,19 @@ fn pg_of(
     key: &str,
 ) -> (u32, Vec<String>) {
     let meta = ha.meta_endpoints();
-    objectio_e2e::tls::client();
+    iolake_e2e::tls::client();
     rt.block_on(async {
-        let p = MetadataServiceClient::new(
-            objectio_proto::transport::meta_channel(&meta)
+        let p =
+            MetadataServiceClient::new(iolake_proto::transport::meta_channel(&meta).await.unwrap())
+                .get_placement(GetPlacementRequest {
+                    bucket: bucket.to_string(),
+                    key: key.to_string(),
+                    size: 0,
+                    storage_class: String::new(),
+                })
                 .await
-                .unwrap(),
-        )
-        .get_placement(GetPlacementRequest {
-            bucket: bucket.to_string(),
-            key: key.to_string(),
-            size: 0,
-            storage_class: String::new(),
-        })
-        .await
-        .unwrap()
-        .into_inner();
+                .unwrap()
+                .into_inner();
         (
             p.pg_id,
             p.nodes.iter().map(|n| hex::encode(&n.node_id)).collect(),
@@ -76,7 +73,7 @@ fn copy_on(
 ) -> Option<ObjectMeta> {
     let address = host_port(&ha.osd_endpoint(i));
     rt.block_on(async {
-        let r = StorageServiceClient::new(objectio_e2e::tls::channel(&address).await.ok()?)
+        let r = StorageServiceClient::new(iolake_e2e::tls::channel(&address).await.ok()?)
             .get_object_meta(GetObjectMetaRequest {
                 bucket: bucket.to_string(),
                 key: key.to_string(),

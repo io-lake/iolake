@@ -3,8 +3,8 @@
 //! Adapted from crates/gateway/src/osd_pool.rs.
 
 use bytes::Bytes;
-use objectio_proto::metadata::NodePlacement;
-use objectio_proto::storage::storage_service_client::StorageServiceClient;
+use iolake_proto::metadata::NodePlacement;
+use iolake_proto::storage::storage_service_client::StorageServiceClient;
 use std::collections::HashMap;
 use tokio::sync::RwLock;
 use tonic::transport::Channel;
@@ -103,8 +103,8 @@ impl OsdPool {
 
         let max_message_size = 100 * 1024 * 1024;
         let endpoint =
-            objectio_proto::transport::endpoint(address).map_err(OsdPoolError::ConnectionFailed)?;
-        let channel = objectio_proto::transport::connect(&endpoint)
+            iolake_proto::transport::endpoint(address).map_err(OsdPoolError::ConnectionFailed)?;
+        let channel = iolake_proto::transport::connect(&endpoint)
             .await
             .map_err(|e| OsdPoolError::ConnectionFailed(e.to_string()))?;
 
@@ -183,9 +183,9 @@ pub async fn write_shard_to_osd(
     data: Bytes,
     ec_k: u32,
     ec_m: u32,
-    pg: Option<&objectio_proto::storage::PgRef>,
-) -> Result<(objectio_proto::storage::BlockLocation, u32), OsdPoolError> {
-    use objectio_proto::storage::{Checksum, ShardId, WriteShardRequest};
+    pg: Option<&iolake_proto::storage::PgRef>,
+) -> Result<(iolake_proto::storage::BlockLocation, u32), OsdPoolError> {
+    use iolake_proto::storage::{Checksum, ShardId, WriteShardRequest};
 
     let mut client = pool.get_client_for_placement(placement).await?;
     let crc = crc32c::crc32c(&data);
@@ -244,7 +244,7 @@ pub async fn read_shard_from_osd(
     position: u32,
     expected_crc32c: Option<u32>,
 ) -> Result<Vec<u8>, OsdPoolError> {
-    use objectio_proto::storage::{ReadShardRequest, ShardId};
+    use iolake_proto::storage::{ReadShardRequest, ShardId};
 
     let mut client = pool.get_client_for_placement(placement).await?;
 
@@ -298,14 +298,14 @@ pub async fn read_shard_from_osd(
 
 /// Whether `data` is the shard the OSD described. A response without a
 /// checksum is taken as is: the field is optional on the wire.
-fn matches_checksum(checksum: Option<&objectio_proto::storage::Checksum>, data: &[u8]) -> bool {
+fn matches_checksum(checksum: Option<&iolake_proto::storage::Checksum>, data: &[u8]) -> bool {
     checksum.is_none_or(|c| c.crc32c == crc32c::crc32c(data))
 }
 
 #[cfg(test)]
 mod tests {
     use super::matches_checksum;
-    use objectio_proto::storage::Checksum;
+    use iolake_proto::storage::Checksum;
 
     #[test]
     fn a_damaged_shard_does_not_match_its_checksum() {

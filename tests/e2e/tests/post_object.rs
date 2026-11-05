@@ -11,7 +11,7 @@ use std::time::Duration;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
 use hmac::{Hmac, Mac};
-use objectio_e2e::{Cluster, Response};
+use iolake_e2e::{Cluster, Response};
 use serde_json::{Value, json};
 use sha2::Sha256;
 
@@ -94,7 +94,7 @@ fn post_with(
     file: &[u8],
     headers: &[(&str, &str)],
 ) -> Response {
-    let boundary = "----objectioFormBoundary7MA4YWxkTrZu0gW";
+    let boundary = "----iolakeFormBoundary7MA4YWxkTrZu0gW";
     let mut body = Vec::new();
     for (name, value) in fields {
         body.extend_from_slice(

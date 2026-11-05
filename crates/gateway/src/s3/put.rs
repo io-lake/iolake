@@ -20,8 +20,8 @@ pub(crate) fn is_object_metadata_header(name: &str) -> bool {
 
 /// Whether the bucket's dedup policy asks for bodies written to it to be
 /// noted.
-pub(crate) fn dedup_wanted(placement: &objectio_proto::metadata::GetPlacementResponse) -> bool {
-    use objectio_proto::metadata::DedupMode;
+pub(crate) fn dedup_wanted(placement: &iolake_proto::metadata::GetPlacementResponse) -> bool {
+    use iolake_proto::metadata::DedupMode;
     matches!(placement.dedup_mode(), DedupMode::DryRun | DedupMode::On)
 }
 
@@ -32,7 +32,7 @@ pub(crate) fn dedup_wanted(placement: &objectio_proto::metadata::GetPlacementRes
 pub(crate) fn dedup_dry_run(
     state: &AppState,
     bucket: &str,
-    placement: &objectio_proto::metadata::GetPlacementResponse,
+    placement: &iolake_proto::metadata::GetPlacementResponse,
     body: &Bytes,
     encrypted: bool,
 ) {
@@ -157,7 +157,7 @@ pub(crate) fn condition_refused(code: &str) -> Response {
 /// win, or win on different replicas.
 pub(crate) async fn commit_put(
     state: &Arc<AppState>,
-    placement: &objectio_proto::metadata::GetPlacementResponse,
+    placement: &iolake_proto::metadata::GetPlacementResponse,
     object_meta: ObjectMeta,
     versioning_enabled: bool,
     sent: Vec<ShardTarget>,
@@ -188,7 +188,7 @@ pub(crate) struct CommitRefused {
 /// been stored: a multipart completion keeps its upload for a retry then.
 pub(crate) async fn commit_put_outcome(
     state: &Arc<AppState>,
-    placement: &objectio_proto::metadata::GetPlacementResponse,
+    placement: &iolake_proto::metadata::GetPlacementResponse,
     mut object_meta: ObjectMeta,
     versioning_enabled: bool,
     sent: Vec<ShardTarget>,
@@ -224,13 +224,13 @@ pub(crate) async fn commit_put_outcome(
 /// nothing: the bucket is versioned, so what was current stays a version.
 pub(crate) async fn commit_replica(
     state: &Arc<AppState>,
-    placement: &objectio_proto::metadata::GetPlacementResponse,
+    placement: &iolake_proto::metadata::GetPlacementResponse,
     object_meta: ObjectMeta,
     sent: Vec<ShardTarget>,
     small: Option<&SmallShards>,
 ) -> Result<(), CommitRefused> {
     let (bucket, key) = (object_meta.bucket.clone(), object_meta.key.clone());
-    let pg = objectio_proto::stripe::fence(placement);
+    let pg = iolake_proto::stripe::fence(placement);
     let written = crate::osd_pool::put_object_meta_with(
         &state.osd_pool,
         &placement.nodes,
@@ -291,7 +291,7 @@ const fn is_ambiguous(code: tonic::Code) -> bool {
 /// every If-None-Match after.
 async fn create_conditional(
     state: &Arc<AppState>,
-    req: objectio_proto::metadata::CreateObjectRequest,
+    req: iolake_proto::metadata::CreateObjectRequest,
 ) -> Result<(), tonic::Status> {
     let deadline = std::time::Instant::now() + CONDITIONAL_SETTLE;
     let mut wait = std::time::Duration::from_millis(250);
@@ -319,7 +319,7 @@ async fn create_conditional(
 /// [`commit_put`] for a version written here.
 pub(crate) async fn commit_new(
     state: &Arc<AppState>,
-    placement: &objectio_proto::metadata::GetPlacementResponse,
+    placement: &iolake_proto::metadata::GetPlacementResponse,
     object_meta: ObjectMeta,
     versioning_enabled: bool,
     sent: Vec<ShardTarget>,
@@ -328,7 +328,7 @@ pub(crate) async fn commit_new(
 ) -> Result<(), CommitRefused> {
     // Small shards travel with the metadata (B21): each copy is a shard
     // too, so the write needs the shard quorum (k + 1) as well.
-    let pg = objectio_proto::stripe::fence(placement);
+    let pg = iolake_proto::stripe::fence(placement);
     let write = crate::osd_pool::MetaWrite {
         versioning_enabled,
         small_shards: small.map(|s| &s.shards),
@@ -339,7 +339,7 @@ pub(crate) async fn commit_new(
     let (bucket, key) = (object_meta.bucket.clone(), object_meta.key.clone());
     let what = format!("{bucket}/{key}");
     let nodes = &placement.nodes;
-    let listing_req = objectio_proto::metadata::CreateObjectRequest {
+    let listing_req = iolake_proto::metadata::CreateObjectRequest {
         bucket: bucket.clone(),
         key: key.clone(),
         size: object_meta.size,
@@ -555,7 +555,7 @@ pub(crate) fn spawn_reclaim(
 /// its copies disagreed.
 #[derive(Clone, Copy)]
 pub(crate) struct Copies<'a> {
-    pub nodes: &'a [objectio_proto::metadata::NodePlacement],
+    pub nodes: &'a [iolake_proto::metadata::NodePlacement],
     pub bucket: &'a str,
     pub key: &'a str,
 }
@@ -694,7 +694,7 @@ pub(crate) struct PutPlan {
     legal_hold: Option<LegalHold>,
     version_id: String,
     replica: Option<crate::replication::Replica>,
-    placement: objectio_proto::metadata::GetPlacementResponse,
+    placement: iolake_proto::metadata::GetPlacementResponse,
     condition: PutCondition,
 }
 
@@ -1177,7 +1177,7 @@ async fn put_object_placed(
         && state.rdma.is_none()
         && body.len().div_ceil(scheme.data_shards()) <= state.small_shard_max
         && placement.nodes.len() == total_shards
-        && objectio_proto::stripe::targets(&placement.nodes, total_shards)
+        && iolake_proto::stripe::targets(&placement.nodes, total_shards)
             .iter()
             .all(Option::is_some);
 
@@ -1232,8 +1232,8 @@ async fn put_object_placed(
                 });
                 shards_by_node.insert(
                     node.node_id.clone(),
-                    objectio_proto::storage::SmallShard {
-                        shard_id: Some(objectio_proto::storage::ShardId {
+                    iolake_proto::storage::SmallShard {
+                        shard_id: Some(iolake_proto::storage::ShardId {
                             object_id: object_id.to_vec(),
                             stripe_id: stripe_idx as u64,
                             position: pos,
@@ -1578,10 +1578,10 @@ pub async fn put_object_with_params(
 
 /// What [`write_context`] fetched: each answer as its own call gives it.
 struct WriteContext {
-    encryption: Result<objectio_proto::metadata::GetBucketEncryptionResponse, tonic::Status>,
-    versioning: Result<objectio_proto::metadata::GetBucketVersioningResponse, tonic::Status>,
-    object_lock: Result<objectio_proto::metadata::GetObjectLockConfigResponse, tonic::Status>,
-    placement: Result<objectio_proto::metadata::GetPlacementResponse, tonic::Status>,
+    encryption: Result<iolake_proto::metadata::GetBucketEncryptionResponse, tonic::Status>,
+    versioning: Result<iolake_proto::metadata::GetBucketVersioningResponse, tonic::Status>,
+    object_lock: Result<iolake_proto::metadata::GetObjectLockConfigResponse, tonic::Status>,
+    placement: Result<iolake_proto::metadata::GetPlacementResponse, tonic::Status>,
 }
 
 /// The bucket's encryption, versioning and object lock and the key's
@@ -1594,7 +1594,7 @@ async fn write_context(
 ) -> Result<WriteContext, tonic::Status> {
     #[allow(clippy::result_large_err)] // tonic::Status, as every call returns
     fn unpack<T: prost::Message + Default>(
-        c: Option<objectio_proto::metadata::CallResult>,
+        c: Option<iolake_proto::metadata::CallResult>,
     ) -> Result<T, tonic::Status> {
         let c = c.ok_or_else(|| tonic::Status::internal("meta left out an answer"))?;
         if c.code == 0 {
@@ -1604,7 +1604,7 @@ async fn write_context(
         }
     }
     let r = meta_client
-        .get_write_context(objectio_proto::metadata::GetWriteContextRequest {
+        .get_write_context(iolake_proto::metadata::GetWriteContextRequest {
             placement: Some(GetPlacementRequest {
                 bucket: bucket.to_string(),
                 key: key.to_string(),
@@ -1625,6 +1625,6 @@ async fn write_context(
 /// A small object's shards, sent with its metadata (B21): each OSD's by
 /// node id, and how many copies the write needs.
 pub(crate) struct SmallShards {
-    pub(crate) shards: std::collections::HashMap<Vec<u8>, objectio_proto::storage::SmallShard>,
+    pub(crate) shards: std::collections::HashMap<Vec<u8>, iolake_proto::storage::SmallShard>,
     pub(crate) quorum: usize,
 }

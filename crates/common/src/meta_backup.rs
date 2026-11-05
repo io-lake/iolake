@@ -1,4 +1,4 @@
-//! The container of a meta backup (objectio-docs `core/meta.md`, "Backup,
+//! The container of a meta backup (iolake-docs `core/meta.md`, "Backup,
 //! restore and losing a majority").
 //!
 //! ```text

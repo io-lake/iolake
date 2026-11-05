@@ -16,14 +16,14 @@
 //!
 //! Fail-stop: a write or sync that fails leaves the log refusing every
 //! write after it until it is opened again, and an open refuses a log
-//! damaged anywhere but at its end (objectio-docs `core/storage-engine.md`).
+//! damaged anywhere but at its end (iolake-docs `core/storage-engine.md`).
 //! The one exception is a write the filesystem had no room for (ENOSPC,
 //! EDQUOT): what it left is cut off, that append fails alone, and the log
 //! takes appends again once there is room.
 
 use super::types::{MetadataEntry, MetadataOp};
-use objectio_common::log_tail::whole_record_after;
-use objectio_common::{Error, Result};
+use iolake_common::log_tail::whole_record_after;
+use iolake_common::{Error, Result};
 use parking_lot::Mutex;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
@@ -130,7 +130,7 @@ impl WalRecord {
 /// Metadata Write-Ahead Log
 /// What group commit is buying: records per fsync is `records / syncs`.
 pub struct WalSyncStats {
-    pub seconds: objectio_common::histogram::Histogram,
+    pub seconds: iolake_common::histogram::Histogram,
     pub syncs: AtomicU64,
     pub records: AtomicU64,
 }
@@ -138,8 +138,8 @@ pub struct WalSyncStats {
 impl Default for WalSyncStats {
     fn default() -> Self {
         Self {
-            seconds: objectio_common::histogram::Histogram::new(
-                objectio_common::histogram::LATENCY_BUCKETS,
+            seconds: iolake_common::histogram::Histogram::new(
+                iolake_common::histogram::LATENCY_BUCKETS,
             ),
             syncs: AtomicU64::new(0),
             records: AtomicU64::new(0),
@@ -432,7 +432,7 @@ impl MetadataWal {
     ///
     /// What follows the last whole record is the torn end of an append a
     /// crash interrupted, never acknowledged, unless a whole record follows
-    /// it: then it is damage, and the log is refused (objectio-common
+    /// it: then it is damage, and the log is refused (iolake-common
     /// `log_tail`).
     fn scan_wal<F>(path: &Path, from_lsn: u64, mut callback: F) -> Result<Scanned>
     where
@@ -571,7 +571,7 @@ impl MetadataWal {
     /// it; a crash before then finds at most a torn tail, which the open
     /// cuts off. Any other failure, or a cut that fails, fails the log.
     fn append_failed(&self, writer: &mut LogFile, start: u64, e: &std::io::Error) -> Error {
-        if !objectio_common::error::is_out_of_space(e) {
+        if !iolake_common::error::is_out_of_space(e) {
             return self.fail_io("write", e);
         }
         match writer.cut_back(start) {

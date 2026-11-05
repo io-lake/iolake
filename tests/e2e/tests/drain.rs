@@ -8,9 +8,9 @@
 use std::fmt::Write as _;
 use std::time::{Duration, Instant};
 
-use objectio_e2e::Cluster;
-use objectio_proto::block::block_service_client::BlockServiceClient;
-use objectio_proto::block::{CreateVolumeRequest, FlushRequest, ReadRequest, WriteRequest};
+use iolake_e2e::Cluster;
+use iolake_proto::block::block_service_client::BlockServiceClient;
+use iolake_proto::block::{CreateVolumeRequest, FlushRequest, ReadRequest, WriteRequest};
 use serde_json::json;
 
 const MIB: usize = 1024 * 1024;
@@ -91,7 +91,7 @@ fn admin_state(c: &Cluster, id: &str) -> String {
 
 async fn block_client(port: u16) -> BlockServiceClient<tonic::transport::Channel> {
     loop {
-        if let Ok(c) = objectio_e2e::tls::channel(&format!("127.0.0.1:{port}")).await {
+        if let Ok(c) = iolake_e2e::tls::channel(&format!("127.0.0.1:{port}")).await {
             return BlockServiceClient::new(c).max_decoding_message_size(64 << 20);
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -218,10 +218,10 @@ fn a_drained_osd_can_be_pulled_with_two_more_lost() {
 /// The shards and metadata copies a drained OSD still holds once nothing
 /// refers to them.
 async fn osd_shards(address: String) -> u64 {
-    use objectio_proto::storage::GetStatusRequest;
-    use objectio_proto::storage::storage_service_client::StorageServiceClient;
+    use iolake_proto::storage::GetStatusRequest;
+    use iolake_proto::storage::storage_service_client::StorageServiceClient;
     let mut client = StorageServiceClient::new(
-        objectio_e2e::tls::channel(&address)
+        iolake_e2e::tls::channel(&address)
             .await
             .expect("connect OSD"),
     );

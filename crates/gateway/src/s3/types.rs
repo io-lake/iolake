@@ -485,7 +485,7 @@ impl S3Error {
     }
 
     pub fn from_status(e: &tonic::Status) -> Response {
-        if objectio_proto::is_no_room(e) {
+        if iolake_proto::is_no_room(e) {
             Self::meta_full(e)
         } else if Self::is_unavailable(e) {
             Self::xml_response(

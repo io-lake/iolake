@@ -41,8 +41,8 @@ use axum::body::Body;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
-use objectio_proto::metadata::ObjectMeta;
-use objectio_proto::metadata::{
+use iolake_proto::metadata::ObjectMeta;
+use iolake_proto::metadata::{
     AcquireLeaseRequest, DeleteBucketLifecycleRequest, GetBucketLifecycleRequest,
     LifecycleConfiguration as ProtoConfig, LifecycleRule as ProtoRule, ListBucketsRequest,
     PutBucketLifecycleRequest,
@@ -998,14 +998,14 @@ async fn scan_bucket(
     let versioning = state
         .meta_client
         .clone()
-        .get_bucket_versioning(objectio_proto::metadata::GetBucketVersioningRequest {
+        .get_bucket_versioning(iolake_proto::metadata::GetBucketVersioningRequest {
             bucket: bucket.to_string(),
         })
         .await
         .map_err(|e| e.to_string())?
         .into_inner()
         .state();
-    let versioned = versioning != objectio_proto::metadata::VersioningState::VersioningDisabled;
+    let versioned = versioning != iolake_proto::metadata::VersioningState::VersioningDisabled;
     // List from the longest prefix every enabled rule shares.
     let prefix = common_prefix(
         rules
@@ -1120,7 +1120,7 @@ async fn abort_uploads(
         let mut upload_marker = String::new();
         loop {
             let Ok(page) = client
-                .list_multipart_uploads(objectio_proto::metadata::ListMultipartUploadsRequest {
+                .list_multipart_uploads(iolake_proto::metadata::ListMultipartUploadsRequest {
                     bucket: bucket.to_string(),
                     prefix: rule.prefix.clone(),
                     max_uploads: 1000,

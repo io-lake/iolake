@@ -3,7 +3,7 @@
 //! allowed origin get its headers — on errors too. Nothing else changes:
 //! every request is still authenticated and authorized.
 
-use objectio_e2e::{Cluster, Response};
+use iolake_e2e::{Cluster, Response};
 
 const CONFIG: &[u8] = br#"<CORSConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
   <CORSRule>

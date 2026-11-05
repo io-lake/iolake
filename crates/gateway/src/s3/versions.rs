@@ -65,7 +65,7 @@ pub(crate) fn version_label(version_id: &str) -> &str {
 /// version entry.
 pub(crate) async fn find_version(
     pool: &OsdPool,
-    nodes: &[objectio_proto::metadata::NodePlacement],
+    nodes: &[iolake_proto::metadata::NodePlacement],
     bucket: &str,
     key: &str,
     wanted: &str,

@@ -9,7 +9,7 @@
 //! Reference: "A Fast, Minimal Memory, Consistent Hash Algorithm",
 //! arXiv:1406.2294.
 //!
-//! Used in ObjectIO's placement engine to route `object_id → pg_id`.
+//! Used in IOLake's placement engine to route `object_id → pg_id`.
 //! The PG → OSD hop is an explicit Meta lookup, not another hash.
 
 /// Pick a bucket in `[0, num_buckets)` for the given 64-bit key.

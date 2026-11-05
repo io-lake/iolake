@@ -22,18 +22,18 @@
 //! consistency` job):
 //!
 //! ```text
-//! cargo test -p objectio-osd --test crash_consistency -- --ignored --nocapture
+//! cargo test -p iolake-osd --test crash_consistency -- --ignored --nocapture
 //! ```
 //!
-//! `OBJECTIO_CRASH_DIR` (/tmp) holds the images and logs: sparse, a few GB
+//! `IOLAKE_CRASH_DIR` (/tmp) holds the images and logs: sparse, a few GB
 //! written;
-//! `OBJECTIO_CRASH_SECS` (30) how long the writers run;
-//! `OBJECTIO_CRASH_CUTS` (12) how many marks are replayed.
+//! `IOLAKE_CRASH_SECS` (30) how long the writers run;
+//! `IOLAKE_CRASH_CUTS` (12) how many marks are replayed.
 
-use objectio_osd::service::OsdService;
-use objectio_proto::metadata::{ObjectMeta, ShardLocation, StripeMeta};
-use objectio_proto::storage::storage_service_server::StorageService;
-use objectio_proto::storage::{
+use iolake_osd::service::OsdService;
+use iolake_proto::metadata::{ObjectMeta, ShardLocation, StripeMeta};
+use iolake_proto::storage::storage_service_server::StorageService;
+use iolake_proto::storage::{
     Checksum, GetObjectMetaRequest, PutObjectMetaRequest, ReadShardRequest, ShardId,
     WriteShardRequest,
 };
@@ -120,7 +120,7 @@ impl Logged {
         let t = losetup(&target);
         let l = losetup(&log_file);
         let sectors = len / 512;
-        let name = format!("objectio-crash-{name}-{}", std::process::id());
+        let name = format!("iolake-crash-{name}-{}", std::process::id());
         sudo(&[
             "dmsetup",
             "create",
@@ -264,7 +264,7 @@ fn object_meta(a: &Acked, len: usize) -> ObjectMeta {
         key: a.key.clone(),
         object_id: a.object_id.clone(),
         size: len as u64,
-        stamp: objectio_common::stamp::CLOCK.now(),
+        stamp: iolake_common::stamp::CLOCK.now(),
         stripes: vec![StripeMeta {
             stripe_id: 0,
             ec_k: 4,
@@ -327,14 +327,14 @@ async fn write_one(osd: &OsdService, n: u64) -> Acked {
 }
 
 /// What an OSD opened on replayed images is missing of `acked`.
-/// The metadata engine under test: `OBJECTIO_META_ENGINE` (native, or
+/// The metadata engine under test: `IOLAKE_META_ENGINE` (native, or
 /// rocksdb in a build with that feature), native by default.
-fn engine() -> objectio_storage::metadata::MetaEngine {
-    std::env::var("OBJECTIO_META_ENGINE")
-        .map_or(Ok(objectio_storage::metadata::MetaEngine::Native), |e| {
+fn engine() -> iolake_storage::metadata::MetaEngine {
+    std::env::var("IOLAKE_META_ENGINE")
+        .map_or(Ok(iolake_storage::metadata::MetaEngine::Native), |e| {
             e.parse()
         })
-        .expect("OBJECTIO_META_ENGINE")
+        .expect("IOLAKE_META_ENGINE")
 }
 
 async fn check(data: &Path, state: &Path, acked: &[Acked]) -> Vec<String> {
@@ -385,18 +385,18 @@ async fn acknowledged_writes_survive_a_power_cut_anywhere() {
         root.as_ref().is_ok_and(std::process::ExitStatus::success),
         "needs root through sudo -n (passwordless): {root:?}"
     );
-    let secs: u64 = std::env::var("OBJECTIO_CRASH_SECS")
+    let secs: u64 = std::env::var("IOLAKE_CRASH_SECS")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(30);
-    let cuts: usize = std::env::var("OBJECTIO_CRASH_CUTS")
+    let cuts: usize = std::env::var("IOLAKE_CRASH_CUTS")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(12);
     sudo(&["modprobe", "dm-log-writes"]);
     let run = tempfile::Builder::new()
-        .prefix("objectio-crash-")
-        .tempdir_in(std::env::var("OBJECTIO_CRASH_DIR").unwrap_or_else(|_| "/tmp".into()))
+        .prefix("iolake-crash-")
+        .tempdir_in(std::env::var("IOLAKE_CRASH_DIR").unwrap_or_else(|_| "/tmp".into()))
         .unwrap();
     let dir = run.path();
     let mnt = dir.join("state-mnt");

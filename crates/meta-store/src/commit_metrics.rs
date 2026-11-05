@@ -2,7 +2,7 @@
 //! (fsync) cost every metadata change pays — and Raft snapshots: built
 //! (to send to a replica that fell behind or joined) and installed.
 
-use objectio_common::histogram::{Histogram, HistogramVec, LATENCY_BUCKETS};
+use iolake_common::histogram::{Histogram, HistogramVec, LATENCY_BUCKETS};
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
@@ -26,7 +26,7 @@ pub fn snapshot_installed(elapsed: std::time::Duration) {
     SNAPSHOT_INSTALL_SECONDS.observe_duration(elapsed);
 }
 
-/// What a commit must guarantee (objectio-docs `core/meta-log.md`).
+/// What a commit must guarantee (iolake-docs `core/meta-log.md`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Commit {
     /// On stable storage when it returns, with redb's allocator state saved
@@ -105,19 +105,19 @@ pub fn ready(elapsed: std::time::Duration) {
 pub fn render(out: &mut String) {
     COMMIT_SECONDS.render(
         out,
-        "objectio_meta_commit_seconds",
+        "iolake_meta_commit_seconds",
         "Time to commit one redb write transaction, by kind: durable (with its fsync) or applied (made durable by the next checkpoint)",
         "",
     );
     SNAPSHOT_BUILD_SECONDS.render(
         out,
-        "objectio_meta_raft_snapshot_build_seconds",
+        "iolake_meta_raft_snapshot_build_seconds",
         "Time to build a Raft snapshot of the whole state machine (built in memory)",
         "",
     );
     SNAPSHOT_INSTALL_SECONDS.render(
         out,
-        "objectio_meta_raft_snapshot_install_seconds",
+        "iolake_meta_raft_snapshot_install_seconds",
         "Time to install a Raft snapshot received from the leader",
         "",
     );
@@ -125,8 +125,8 @@ pub fn render(out: &mut String) {
     let _ = std::fmt::Write::write_fmt(
         out,
         format_args!(
-            "# HELP objectio_meta_raft_snapshot_bytes Size of the last Raft snapshot built (held in memory while sent)\n\
-             # TYPE objectio_meta_raft_snapshot_bytes gauge\nobjectio_meta_raft_snapshot_bytes {bytes}\n"
+            "# HELP iolake_meta_raft_snapshot_bytes Size of the last Raft snapshot built (held in memory while sent)\n\
+             # TYPE iolake_meta_raft_snapshot_bytes gauge\niolake_meta_raft_snapshot_bytes {bytes}\n"
         ),
     );
     let repaired = OPEN_REPAIRED.load(Ordering::Relaxed);
@@ -135,10 +135,10 @@ pub fn render(out: &mut String) {
     let _ = std::fmt::Write::write_fmt(
         out,
         format_args!(
-            "# HELP objectio_meta_open_repair 1 if opening the metadata database had to walk all of it (B25: never expected)\n\
-             # TYPE objectio_meta_open_repair gauge\nobjectio_meta_open_repair {repaired}\n\
-             # HELP objectio_meta_open_seconds Time to open the metadata database at start\n\
-             # TYPE objectio_meta_open_seconds gauge\nobjectio_meta_open_seconds {open_s}\n"
+            "# HELP iolake_meta_open_repair 1 if opening the metadata database had to walk all of it (B25: never expected)\n\
+             # TYPE iolake_meta_open_repair gauge\niolake_meta_open_repair {repaired}\n\
+             # HELP iolake_meta_open_seconds Time to open the metadata database at start\n\
+             # TYPE iolake_meta_open_seconds gauge\niolake_meta_open_seconds {open_s}\n"
         ),
     );
     #[allow(clippy::cast_precision_loss)]
@@ -149,10 +149,10 @@ pub fn render(out: &mut String) {
     let _ = std::fmt::Write::write_fmt(
         out,
         format_args!(
-            "# HELP objectio_meta_raft_log_open_seconds Time to open the Raft log at start\n\
-             # TYPE objectio_meta_raft_log_open_seconds gauge\nobjectio_meta_raft_log_open_seconds {log_s}\n\
-             # HELP objectio_meta_ready_seconds Time from the start of the process until meta served (B25: within 30 s after a crash)\n\
-             # TYPE objectio_meta_ready_seconds gauge\nobjectio_meta_ready_seconds {ready_s}\n"
+            "# HELP iolake_meta_raft_log_open_seconds Time to open the Raft log at start\n\
+             # TYPE iolake_meta_raft_log_open_seconds gauge\niolake_meta_raft_log_open_seconds {log_s}\n\
+             # HELP iolake_meta_ready_seconds Time from the start of the process until meta served (B25: within 30 s after a crash)\n\
+             # TYPE iolake_meta_ready_seconds gauge\niolake_meta_ready_seconds {ready_s}\n"
         ),
     );
 }

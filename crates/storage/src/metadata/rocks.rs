@@ -1,6 +1,6 @@
 //! The OSD's metadata index on RocksDB (B27, step 3): an alternative to
 //! [`super::MetadataStore`] behind the same [`MetaIndex`] contract, so the
-//! two can be compared on the same machines (objectio-docs
+//! two can be compared on the same machines (iolake-docs
 //! `core/osd-engines.md`).
 //!
 //! RocksDB keeps its own write-ahead log, memtable and sorted files, and
@@ -11,7 +11,7 @@
 
 use std::path::Path;
 
-use objectio_common::{Error, Result};
+use iolake_common::{Error, Result};
 use rocksdb::{BlockBasedOptions, Cache, DB, Options, WriteBatch, WriteOptions};
 use tracing::error;
 
@@ -151,22 +151,22 @@ impl MetaIndex for RocksIndex {
         use std::fmt::Write;
         for (name, help, prop) in [
             (
-                "objectio_osd_rocksdb_keys_estimate",
+                "iolake_osd_rocksdb_keys_estimate",
                 "Keys in the metadata index (RocksDB's estimate)",
                 "rocksdb.estimate-num-keys",
             ),
             (
-                "objectio_osd_rocksdb_sst_bytes",
+                "iolake_osd_rocksdb_sst_bytes",
                 "Bytes of the metadata index's sorted files",
                 "rocksdb.total-sst-files-size",
             ),
             (
-                "objectio_osd_rocksdb_memtable_bytes",
+                "iolake_osd_rocksdb_memtable_bytes",
                 "Bytes in the metadata index's memtables",
                 "rocksdb.cur-size-all-mem-tables",
             ),
             (
-                "objectio_osd_rocksdb_pending_compaction_bytes",
+                "iolake_osd_rocksdb_pending_compaction_bytes",
                 "Bytes RocksDB estimates its compactions still have to rewrite",
                 "rocksdb.estimate-pending-compaction-bytes",
             ),

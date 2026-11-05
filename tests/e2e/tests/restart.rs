@@ -15,7 +15,7 @@
 //! 10:57:44  WARN  OSD 92486c11 ... missed 3 probes — taking it out of placement
 //! ```
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 /// The floor: a restart must not cost the data.
@@ -128,7 +128,7 @@ fn repeated_restarts_stay_healthy() {
 // that takes its shards with it: the reads then fail because the data really is
 // unreachable, which is a durability question and not this one. What the live
 // cluster had was a *ghost* registration left by an identity reset, holding
-// nothing. `topology_status` in objectio-meta is where that decision lives and
+// nothing. `topology_status` in iolake-meta is where that decision lives and
 // where it is pinned; these tests cover the other half — that requiring a
 // probe before a node counts as Active does not cost a healthy cluster
 // anything on the way back up.
@@ -203,8 +203,7 @@ fn erasure_coded_reads_survive_a_lost_disk() {
     let failed_reads: f64 = metrics
         .lines()
         .filter(|l| {
-            l.starts_with("objectio_gateway_osd_request_errors_total")
-                && l.contains("kind=\"error\"")
+            l.starts_with("iolake_gateway_osd_request_errors_total") && l.contains("kind=\"error\"")
         })
         .filter_map(|l| l.rsplit(' ').next()?.parse::<f64>().ok())
         .sum();

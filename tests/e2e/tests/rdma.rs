@@ -1,19 +1,19 @@
 //! The erasure-coded data path over Mooncake Transfer Engine.
 //!
-//! Needs an `objectio-aio` built with `--features rdma`, which needs a
-//! Mooncake build, and `OBJECTIO_E2E_RDMA` naming the protocol aio is
+//! Needs an `iolake-aio` built with `--features rdma`, which needs a
+//! Mooncake build, and `IOLAKE_E2E_RDMA` naming the protocol aio is
 //! given (`tcp` in CI: no RDMA hardware). So these are ignored by default;
 //! with `--ignored` they fail without it. CI's `rdma` job runs them in a
 //! Mooncake image (`crates/transport-te/ci-test.sh`).
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 fn protocol() -> String {
-    std::env::var("OBJECTIO_E2E_RDMA")
+    std::env::var("IOLAKE_E2E_RDMA")
         .ok()
         .filter(|p| !p.is_empty())
-        .expect("OBJECTIO_E2E_RDMA: the protocol (tcp or rdma) of an aio built with rdma")
+        .expect("IOLAKE_E2E_RDMA: the protocol (tcp or rdma) of an aio built with rdma")
 }
 
 /// Sum of every sample of `name` whose labels contain all of `labels`.
@@ -37,7 +37,7 @@ fn payload(len: usize, seed: u32) -> Vec<u8> {
 /// Every shard of every object moves over Transfer Engine, and every object
 /// comes back byte for byte — from one byte up to two stripes.
 #[test]
-#[ignore = "needs an aio built with rdma, and OBJECTIO_E2E_RDMA; CI: rdma"]
+#[ignore = "needs an aio built with rdma, and IOLAKE_E2E_RDMA; CI: rdma"]
 fn objects_round_trip_with_every_shard_over_transfer_engine() {
     let protocol = protocol();
     let c = Cluster::start_with_ec_and_args(6, 4, 2, &["--rdma", &protocol]);
@@ -56,7 +56,7 @@ fn objects_round_trip_with_every_shard_over_transfer_engine() {
         assert_eq!(got.bytes, body, "{len}-byte object changed over rdma");
     }
 
-    let shards = "objectio_gateway_shard_transfers_total";
+    let shards = "iolake_gateway_shard_transfers_total";
     for direction in ["write", "read"] {
         let dir = format!("direction=\"{direction}\"");
         assert!(
@@ -69,7 +69,7 @@ fn objects_round_trip_with_every_shard_over_transfer_engine() {
         );
     }
     assert!(
-        metric(&c, "objectio_gateway_rdma_fallbacks_total", &[]) < 1.0,
+        metric(&c, "iolake_gateway_rdma_fallbacks_total", &[]) < 1.0,
         "a shard fell back to grpc on a healthy cluster"
     );
 }
@@ -78,7 +78,7 @@ fn objects_round_trip_with_every_shard_over_transfer_engine() {
 /// failed rdma read of the missing shard falls back, and the stripe is
 /// rebuilt from the others.
 #[test]
-#[ignore = "needs an aio built with rdma, and OBJECTIO_E2E_RDMA; CI: rdma"]
+#[ignore = "needs an aio built with rdma, and IOLAKE_E2E_RDMA; CI: rdma"]
 fn a_degraded_read_over_transfer_engine_still_returns_the_object() {
     let protocol = protocol();
     let mut c = Cluster::start_with_ec_and_args(6, 4, 2, &["--rdma", &protocol]);
@@ -107,7 +107,7 @@ fn a_degraded_read_over_transfer_engine_still_returns_the_object() {
     assert!(
         metric(
             &c,
-            "objectio_gateway_shard_transfers_total",
+            "iolake_gateway_shard_transfers_total",
             &["direction=\"read\"", "transport=\"rdma\""]
         ) > 0.0,
         "reads stopped using rdma altogether"

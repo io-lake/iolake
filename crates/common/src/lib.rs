@@ -1,7 +1,7 @@
-//! ObjectIO Common - Shared types and utilities
+//! IOLake Common - Shared types and utilities
 //!
 //! This crate provides common types, error definitions, and utilities
-//! used across all ObjectIO components.
+//! used across all IOLake components.
 
 pub mod checksum;
 pub mod error;

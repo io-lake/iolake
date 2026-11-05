@@ -1,6 +1,6 @@
 [package]
-name = "objectio-common"
-description = "Common types and utilities for ObjectIO"
+name = "iolake-common"
+description = "Common types and utilities for IOLake"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

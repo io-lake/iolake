@@ -119,7 +119,7 @@ message Snapshot {
 message Attachment {
     string volume_id = 1;
     TargetType target_type = 2;
-    string target_address = 3;      // e.g., iqn.2024-01.com.objectio:vol1
+    string target_address = 3;      // e.g., iqn.2024-01.com.iolake:vol1
     string initiator = 4;           // Allowed initiator (e.g., iqn.2024-01.com.client:host1)
     uint64 attached_at = 5;
     bool read_only = 6;

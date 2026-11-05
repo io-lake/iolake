@@ -16,7 +16,7 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use objectio_auth::{AuthResult, IdentityProvider, OidcProvider};
+use iolake_auth::{AuthResult, IdentityProvider, OidcProvider};
 use serde::Deserialize;
 use std::sync::Arc;
 use tracing::{debug, warn};
@@ -210,7 +210,7 @@ pub async fn iceberg_unified_auth_layer(
         && header.starts_with("Bearer ")
         && let Some(ref oidc) = state.oidc_provider
     {
-        let auth_request = objectio_auth::AuthRequest::new(
+        let auth_request = iolake_auth::AuthRequest::new(
             request.method().as_str(),
             request.uri().path(),
             request.headers(),
@@ -237,7 +237,7 @@ pub async fn iceberg_unified_auth_layer(
                         .sigv4_state
                         .meta_client
                         .clone()
-                        .list_groups(objectio_proto::metadata::ListGroupsRequest {
+                        .list_groups(iolake_proto::metadata::ListGroupsRequest {
                             max_results: 1000,
                             marker: String::new(),
                         })
@@ -258,7 +258,7 @@ pub async fn iceberg_unified_auth_layer(
                     group_arns,
                     group_ids,
                     tenant: String::new(),
-                    auth_mode: objectio_auth::AuthMode::Permanent,
+                    auth_mode: iolake_auth::AuthMode::Permanent,
                     scope: None,
                     source_ip: None,
                     source_endpoint: None,
@@ -312,7 +312,7 @@ pub async fn iceberg_unified_auth_layer(
         let auth_result = if session.access_key == "oidc" {
             let mut meta = state.sigv4_state.meta_client.clone();
             match meta
-                .get_user(objectio_proto::metadata::GetUserRequest {
+                .get_user(iolake_proto::metadata::GetUserRequest {
                     user_id: session.user.clone(),
                 })
                 .await
@@ -328,7 +328,7 @@ pub async fn iceberg_unified_auth_layer(
                             group_arns,
                             group_ids,
                             tenant: user.tenant,
-                            auth_mode: objectio_auth::AuthMode::Permanent,
+                            auth_mode: iolake_auth::AuthMode::Permanent,
                             scope: None,
                             source_ip: None,
                             source_endpoint: None,
@@ -366,7 +366,7 @@ pub async fn iceberg_unified_auth_layer(
                         group_arns,
                         group_ids,
                         tenant: cred.tenant,
-                        auth_mode: objectio_auth::AuthMode::Permanent,
+                        auth_mode: iolake_auth::AuthMode::Permanent,
                         scope: None,
                         source_ip: None,
                         source_endpoint: None,
@@ -403,7 +403,7 @@ pub async fn iceberg_unified_auth_layer(
 /// 401 + Set-Cookie that clears the stale browser session. Shared by
 /// both AK/SK and SSO session paths so the browser drops the bad
 /// cookie on the next 401 instead of looping. Cookie name must match
-/// the one console_auth sets (`objectio-session`, with a dash) — the
+/// the one console_auth sets (`iolake-session`, with a dash) — the
 /// underscore form silently fails to clear and the user gets an
 /// unrecoverable 401 loop.
 fn clear_session_response() -> Response {
@@ -411,7 +411,7 @@ fn clear_session_response() -> Response {
         StatusCode::UNAUTHORIZED,
         [(
             axum::http::header::SET_COOKIE,
-            "objectio-session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
+            "iolake-session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
         )],
         "session expired — please log in again",
     )

@@ -6,15 +6,15 @@
 
 use std::time::{Duration, Instant};
 
-use objectio_e2e::ha::HaCluster;
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
-use objectio_proto::metadata::{
+use iolake_e2e::ha::HaCluster;
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_proto::metadata::{
     IcebergCommitTableChange, IcebergCommitTransactionRequest, ShareStripesRequest,
 };
 use serde_json::json;
 
-/// More than one meta command carries ([`objectio_common::META_MAX_OPS`]).
-const TOO_MANY: usize = objectio_common::META_MAX_OPS + 44;
+/// More than one meta command carries ([`iolake_common::META_MAX_OPS`]).
+const TOO_MANY: usize = iolake_common::META_MAX_OPS + 44;
 
 /// Every meta node still runs, says it is healthy, and applies what the
 /// leader commits.
@@ -102,10 +102,10 @@ fn requests_too_big_for_one_command_leave_every_meta_up() {
     // Straight to meta, as a client of another release could send them:
     // refused before they are proposed.
     let rt = tokio::runtime::Runtime::new().unwrap();
-    objectio_e2e::tls::client();
+    iolake_e2e::tls::client();
     rt.block_on(async {
         let mut meta = MetadataServiceClient::new(
-            objectio_proto::transport::meta_channel(&ha.meta_endpoints())
+            iolake_proto::transport::meta_channel(&ha.meta_endpoints())
                 .await
                 .unwrap(),
         );

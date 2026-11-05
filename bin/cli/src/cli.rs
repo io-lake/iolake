@@ -10,31 +10,31 @@ use clap::{Args as ClapArgs, Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
-#[command(name = "obioctl", version, about = "ObjectIO management CLI")]
+#[command(name = "iolakectl", version, about = "IOLake management CLI")]
 #[command(
-    after_help = "Credentials: --access-key/--secret-key, OBJECTIO_ACCESS_KEY(_FILE)/\
-OBJECTIO_SECRET_KEY(_FILE) (AWS_* accepted), or a profile in ~/.objectio/config \
-written by `obioctl configure`."
+    after_help = "Credentials: --access-key/--secret-key, IOLAKE_ACCESS_KEY(_FILE)/\
+IOLAKE_SECRET_KEY(_FILE) (AWS_* accepted), or a profile in ~/.objectio/config \
+written by `iolakectl configure`."
 )]
 pub struct Args {
-    /// Gateway URL, e.g. https://s3.example.com [env: OBJECTIO_ENDPOINT, OBJECTIO_URL]
+    /// Gateway URL, e.g. https://s3.example.com [env: IOLAKE_ENDPOINT, IOLAKE_URL]
     #[arg(long, global = true)]
     pub endpoint: Option<String>,
 
-    /// Access key ID [env: OBJECTIO_ACCESS_KEY, AWS_ACCESS_KEY_ID]
+    /// Access key ID [env: IOLAKE_ACCESS_KEY, AWS_ACCESS_KEY_ID]
     #[arg(long, global = true)]
     pub access_key: Option<String>,
 
-    /// Secret key. Prefer OBJECTIO_SECRET_KEY_FILE or a profile: a flag is
+    /// Secret key. Prefer IOLAKE_SECRET_KEY_FILE or a profile: a flag is
     /// visible in the process list.
     #[arg(long, global = true)]
     pub secret_key: Option<String>,
 
-    /// SigV4 region [env: OBJECTIO_REGION, AWS_REGION] [default: us-east-1]
+    /// SigV4 region [env: IOLAKE_REGION, AWS_REGION] [default: us-east-1]
     #[arg(long, global = true)]
     pub region: Option<String>,
 
-    /// Profile in ~/.objectio/config [env: OBJECTIO_PROFILE] [default: default]
+    /// Profile in ~/.objectio/config [env: IOLAKE_PROFILE] [default: default]
     #[arg(long, global = true)]
     pub profile: Option<String>,
 
@@ -46,7 +46,7 @@ pub struct Args {
     #[arg(
         long,
         global = true,
-        env = "OBJECTIO_BLOCK_ENDPOINT",
+        env = "IOLAKE_BLOCK_ENDPOINT",
         default_value = "http://localhost:9300"
     )]
     pub block_endpoint: String,
@@ -58,7 +58,7 @@ pub struct Args {
     /// mTLS to the block gateway, for `volume` and `snapshot`, when the
     /// cluster runs it between services (A8a).
     #[command(flatten)]
-    pub tls: objectio_proto::transport::TlsArgs,
+    pub tls: iolake_proto::transport::TlsArgs,
 
     #[command(subcommand)]
     pub command: Command,
@@ -560,7 +560,7 @@ pub enum StsCmd {
         /// A file holding the token (e.g. a projected service-account token)
         #[arg(long)]
         token_file: Option<PathBuf>,
-        #[arg(long, default_value = "obioctl")]
+        #[arg(long, default_value = "iolakectl")]
         session_name: String,
         #[arg(long)]
         duration_seconds: Option<u32>,
@@ -708,7 +708,7 @@ pub enum ReplicationTargetCmd {
         /// Credentials there, holding s3:ReplicateObject on the bucket
         #[arg(long)]
         remote_access_key: String,
-        #[arg(long, env = "OBIOCTL_REMOTE_SECRET_KEY", hide_env_values = true)]
+        #[arg(long, env = "IOLAKECTL_REMOTE_SECRET_KEY", hide_env_values = true)]
         remote_secret_key: String,
         /// The remote cluster's SigV4 region (default us-east-1)
         #[arg(long)]
@@ -855,7 +855,7 @@ pub enum ProvisionCmd {
     /// Create a bucket and mint a key scoped to it (two calls, no policy)
     Bucket {
         name: String,
-        /// User the key is minted on (normally the provisioner's own) [env: OBJECTIO_PROVISIONER_USER_ID]
+        /// User the key is minted on (normally the provisioner's own) [env: IOLAKE_PROVISIONER_USER_ID]
         #[arg(long)]
         user: Option<String>,
         /// Confine further to s3://<bucket>/<prefix> (must end in /)
@@ -911,7 +911,7 @@ pub enum MetaCmd {
     /// GET /_admin/meta/export: a backup of meta's whole state machine
     /// (buckets, users, keys, policies, placement, listings, config), taken
     /// from the leader while the cluster serves. Checked as it downloads; a
-    /// transfer cut short fails. Restore it with `objectio-meta restore`.
+    /// transfer cut short fails. Restore it with `iolake-meta restore`.
     Export {
         /// Write the backup here (through PATH.part, renamed once whole);
         /// without it, to standard output.

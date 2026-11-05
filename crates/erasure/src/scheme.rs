@@ -85,7 +85,7 @@ pub fn check_replicas(n: usize) -> Result<(), String> {
 mod tests {
     use super::*;
     use crate::ErasureCodec;
-    use objectio_common::ErasureConfig;
+    use iolake_common::ErasureConfig;
 
     #[test]
     fn mds_profiles_with_parity_pass() {

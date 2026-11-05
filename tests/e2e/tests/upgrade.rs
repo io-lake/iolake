@@ -1,14 +1,14 @@
-//! Rolling upgrades, phase 1 (objectio-docs core/upgrade-path.md): every
+//! Rolling upgrades, phase 1 (iolake-docs core/upgrade-path.md): every
 //! node reports its release and format level, a new cluster starts at this
 //! release's level, and meta refuses a client older than the cluster.
 
 use std::time::{Duration, Instant};
 
-use objectio_common::version::{FORMAT_LEVEL, RELEASE};
-use objectio_e2e::Cluster;
-use objectio_e2e::ha::HaCluster;
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
-use objectio_proto::metadata::{DeleteConfigRequest, GetUpgradeStatusRequest, SetConfigRequest};
+use iolake_common::version::{FORMAT_LEVEL, RELEASE};
+use iolake_e2e::Cluster;
+use iolake_e2e::ha::HaCluster;
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_proto::metadata::{DeleteConfigRequest, GetUpgradeStatusRequest, SetConfigRequest};
 use serde_json::Value;
 
 /// `GET /_admin/upgrade`, once it lists `metas` metas, `osds` OSDs and
@@ -44,12 +44,12 @@ fn meta_client_as(
     user_agent: &str,
 ) -> MetadataServiceClient<tonic::transport::Channel> {
     rt.block_on(async {
-        objectio_e2e::tls::client();
-        let endpoint = objectio_proto::transport::endpoint(endpoint)
+        iolake_e2e::tls::client();
+        let endpoint = iolake_proto::transport::endpoint(endpoint)
             .unwrap()
             .user_agent(user_agent)
             .unwrap();
-        let channel = objectio_proto::transport::connect(&endpoint).await.unwrap();
+        let channel = iolake_proto::transport::connect(&endpoint).await.unwrap();
         MetadataServiceClient::new(channel)
     })
 }
@@ -137,7 +137,7 @@ fn a_client_older_than_the_cluster_is_refused() {
 
     for endpoint in ha.meta_endpoints().split(',') {
         // A release from before levels sends tonic's user-agent alone.
-        let mut old = meta_client_as(&rt, endpoint, "objectio-old");
+        let mut old = meta_client_as(&rt, endpoint, "iolake-old");
         let err = rt
             .block_on(old.get_upgrade_status(GetUpgradeStatusRequest {}))
             .unwrap_err();
@@ -148,7 +148,7 @@ fn a_client_older_than_the_cluster_is_refused() {
             "{endpoint}: {err}"
         );
 
-        let mut current = meta_client_as(&rt, endpoint, &objectio_common::version::user_agent());
+        let mut current = meta_client_as(&rt, endpoint, &iolake_common::version::user_agent());
         rt.block_on(current.get_upgrade_status(GetUpgradeStatusRequest {}))
             .unwrap_or_else(|e| panic!("{endpoint} refused a current client: {e}"));
         drop(current);
@@ -164,11 +164,11 @@ fn the_active_level_is_not_ordinary_config() {
     status_with_everyone(&ha, 3, 6, 1);
     let rt = tokio::runtime::Runtime::new().unwrap();
     let endpoint = ha.meta_endpoints().split(',').next().unwrap().to_string();
-    let mut meta = meta_client_as(&rt, &endpoint, &objectio_common::version::user_agent());
+    let mut meta = meta_client_as(&rt, &endpoint, &iolake_common::version::user_agent());
 
     let err = rt
         .block_on(meta.set_config(SetConfigRequest {
-            key: objectio_common::version::ACTIVE_LEVEL_KEY.to_string(),
+            key: iolake_common::version::ACTIVE_LEVEL_KEY.to_string(),
             value: b"99".to_vec(),
             updated_by: "test".into(),
         }))
@@ -176,7 +176,7 @@ fn the_active_level_is_not_ordinary_config() {
     assert_eq!(err.code(), tonic::Code::PermissionDenied, "{err}");
     let err = rt
         .block_on(meta.delete_config(DeleteConfigRequest {
-            key: objectio_common::version::ACTIVE_LEVEL_KEY.to_string(),
+            key: iolake_common::version::ACTIVE_LEVEL_KEY.to_string(),
         }))
         .unwrap_err();
     drop(meta);
@@ -191,7 +191,7 @@ fn the_active_level_is_not_ordinary_config() {
 /// serve formats it no longer reads.
 #[test]
 fn a_meta_node_of_a_cluster_below_the_baseline_stops_saying_why() {
-    use objectio_common::version::{ACTIVE_LEVEL_KEY, MIN_LEVEL};
+    use iolake_common::version::{ACTIVE_LEVEL_KEY, MIN_LEVEL};
     use prost::Message;
 
     let below = MIN_LEVEL - 1;
@@ -202,7 +202,7 @@ fn a_meta_node_of_a_cluster_below_the_baseline_stops_saying_why() {
         {
             let config: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("config");
             let mut t = txn.open_table(config).unwrap();
-            let entry = objectio_proto::metadata::ConfigEntry {
+            let entry = iolake_proto::metadata::ConfigEntry {
                 key: ACTIVE_LEVEL_KEY.to_string(),
                 value: below.to_string().into_bytes(),
                 updated_at: 1,
@@ -215,10 +215,10 @@ fn a_meta_node_of_a_cluster_below_the_baseline_stops_saying_why() {
         txn.commit().unwrap();
     }
 
-    let grpc = objectio_e2e::free_port();
+    let grpc = iolake_e2e::free_port();
     let log = dir.path().join("meta.log");
-    let mut cmd = std::process::Command::new(objectio_e2e::binary("objectio-meta"));
-    objectio_e2e::tls::apply(&mut cmd, objectio_e2e::tls::META);
+    let mut cmd = std::process::Command::new(iolake_e2e::binary("iolake-meta"));
+    iolake_e2e::tls::apply(&mut cmd, iolake_e2e::tls::META);
     let mut child = cmd
         .args([
             "--node-id",
@@ -230,9 +230,9 @@ fn a_meta_node_of_a_cluster_below_the_baseline_stops_saying_why() {
             "--data-dir",
             &dir.path().display().to_string(),
             "--metrics-port",
-            &objectio_e2e::free_port().to_string(),
+            &iolake_e2e::free_port().to_string(),
             "--admin-port",
-            &objectio_e2e::free_port().to_string(),
+            &iolake_e2e::free_port().to_string(),
             "--ec-k",
             "4",
             "--ec-m",
@@ -242,7 +242,7 @@ fn a_meta_node_of_a_cluster_below_the_baseline_stops_saying_why() {
         .stderr(std::fs::File::create(dir.path().join("meta.err")).unwrap())
         .spawn()
         .unwrap();
-    let status = objectio_e2e::await_exit(&mut child, Duration::from_secs(30));
+    let status = iolake_e2e::await_exit(&mut child, Duration::from_secs(30));
     let output = std::fs::read_to_string(&log).unwrap_or_default()
         + &std::fs::read_to_string(dir.path().join("meta.err")).unwrap_or_default();
     let status = status.unwrap_or_else(|| panic!("meta kept running at level {below}: {output}"));

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# ObjectIO Test VM Setup Script
+# IOLake Test VM Setup Script
 # Creates a minimal Ubuntu 24.04 VM using Multipass with 8 virtual disks
 #
 # Usage:
@@ -8,7 +8,7 @@
 #
 set -euo pipefail
 
-VM_NAME="objectio-test"
+VM_NAME="iolake-test"
 VM_CPUS=2
 VM_MEMORY="4G"
 VM_DISK="20G"
@@ -77,9 +77,9 @@ create_vm() {
     multipass exec "$VM_NAME" -- cloud-init status --wait
 
     # Mount the project directory
-    log_info "Mounting ObjectIO project directory..."
+    log_info "Mounting IOLake project directory..."
     PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-    multipass mount "$PROJECT_DIR" "$VM_NAME":/home/ubuntu/objectio || log_warn "Mount failed - may need to enable mounts in multipass"
+    multipass mount "$PROJECT_DIR" "$VM_NAME":/home/ubuntu/iolake || log_warn "Mount failed - may need to enable mounts in multipass"
 
     log_info "VM created successfully!"
     log_info ""
@@ -130,24 +130,24 @@ shell_vm() {
 setup_disks() {
     check_multipass
     log_info "Setting up virtual disks in VM..."
-    multipass exec "$VM_NAME" -- sudo /usr/local/bin/setup-objectio-disks.sh setup
+    multipass exec "$VM_NAME" -- sudo /usr/local/bin/setup-iolake-disks.sh setup
 }
 
 disk_status() {
     check_multipass
     log_info "Checking disk status in VM..."
-    multipass exec "$VM_NAME" -- sudo /usr/local/bin/setup-objectio-disks.sh status
+    multipass exec "$VM_NAME" -- sudo /usr/local/bin/setup-iolake-disks.sh status
 }
 
 cleanup_disks() {
     check_multipass
     log_info "Cleaning up virtual disks in VM..."
-    multipass exec "$VM_NAME" -- sudo /usr/local/bin/setup-objectio-disks.sh cleanup
+    multipass exec "$VM_NAME" -- sudo /usr/local/bin/setup-iolake-disks.sh cleanup
 }
 
 show_usage() {
     cat << EOF
-ObjectIO Test VM Setup Script
+IOLake Test VM Setup Script
 
 Usage: $0 <command>
 
@@ -176,7 +176,7 @@ The VM will have:
   - ${NUM_DISKS} virtual disks of ${DISK_SIZE_GB}GB each (sparse files)
   - Disks located at ${DISK_DIR}/disk{0-7}.img
   - Loop devices at /dev/loop{10-17}
-  - Each disk has a 4KB ObjectIO superblock
+  - Each disk has a 4KB IOLake superblock
 
 Superblock Format (first 4KB):
   - Bytes 0-7:   Magic number "OBJIO001"

@@ -1,7 +1,7 @@
 //! AWS `SigV4` request signing for the S3 service: the client half, for
-//! requests ObjectIO itself sends (the CLI's, and the replicator's to a
+//! requests IOLake itself sends (the CLI's, and the replicator's to a
 //! target cluster). The gateway's `auth_middleware` verifies them. It
-//! follows the SDKs (`sdk/go/sigv4.go`, `sdk/python/objectio/_sigv4.py`)
+//! follows the SDKs (`sdk/go/sigv4.go`, `sdk/python/iolake/_sigv4.py`)
 //! exactly and is pinned to the same test vectors, so the three cannot drift.
 //!
 //! The rule that matters: the path that is signed and the path that is sent

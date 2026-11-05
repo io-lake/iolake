@@ -9,7 +9,7 @@
 //! Every test here is pinned to a way the date conversion used to get this
 //! wrong.
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 /// A bucket with object lock on, holding `locked.txt`.
@@ -25,7 +25,7 @@ fn retention_body(mode: &str, date: &str) -> String {
     format!("<Retention><Mode>{mode}</Mode><RetainUntilDate>{date}</RetainUntilDate></Retention>")
 }
 
-fn put_retention(c: &Cluster, bucket: &str, mode: &str, date: &str) -> objectio_e2e::Response {
+fn put_retention(c: &Cluster, bucket: &str, mode: &str, date: &str) -> iolake_e2e::Response {
     c.request(
         "PUT",
         &format!("/{bucket}/locked.txt?retention"),

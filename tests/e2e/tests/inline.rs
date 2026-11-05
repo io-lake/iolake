@@ -5,7 +5,7 @@
 //! in its placement already holds. Everything a client can do with an object
 //! has to work the same either way.
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 /// Shard writes the gateway has made so far.
@@ -14,7 +14,7 @@ fn shard_writes(c: &Cluster) -> u64 {
         .text()
         .lines()
         .filter(|l| {
-            l.starts_with("objectio_gateway_shard_latency_seconds_count")
+            l.starts_with("iolake_gateway_shard_latency_seconds_count")
                 && l.contains("direction=\"write\"")
         })
         .filter_map(|l| l.rsplit(' ').next()?.parse::<u64>().ok())

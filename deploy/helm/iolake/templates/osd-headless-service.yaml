@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "iolake.osd.headless" . }}
+  labels:
+    {{- include "iolake.labels" . | nindent 4 }}
+    app.kubernetes.io/component: osd
+spec:
+  type: ClusterIP
+  clusterIP: None
+  # Each OSD is addressed by its pod's name here (its advertise address);
+  # meta judges whether it is up, by its own probes. Readiness (disk
+  # health) only gates rollouts, so it doesn't take the name away.
+  publishNotReadyAddresses: true
+  ports:
+    - name: grpc
+      port: {{ .Values.osd.service.port }}
+      targetPort: grpc
+      protocol: TCP
+  selector:
+    {{- include "iolake.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: osd

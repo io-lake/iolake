@@ -7,7 +7,7 @@
 
 use crate::raw_io::{AlignedBuffer, RawFile};
 use bytes::Bytes;
-use objectio_common::{BlockId, Checksum, Error, Result};
+use iolake_common::{BlockId, Checksum, Error, Result};
 use parking_lot::RwLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -785,11 +785,11 @@ mod tests {
 
     #[test]
     fn test_block_creation() {
-        let data = Bytes::from("Hello, ObjectIO!");
+        let data = Bytes::from("Hello, IOLake!");
         let block = Block::new(data.clone());
 
         assert_eq!(block.data, data);
         assert!(block.verify());
-        assert_eq!(block.size(), 16);
+        assert_eq!(block.size(), data.len());
     }
 }

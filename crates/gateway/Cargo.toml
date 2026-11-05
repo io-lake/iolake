@@ -1,6 +1,6 @@
 [package]
-name = "objectio-gateway"
-description = "S3 API Gateway for ObjectIO"
+name = "iolake-gateway"
+description = "S3 API Gateway for IOLake"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,10 +12,10 @@ path = "src/lib.rs"
 [dependencies]
 blake3 = { workspace = true }
 fastcdc = { workspace = true }
-objectio-common = { workspace = true }
-objectio-erasure = { workspace = true }
-objectio-transport-te = { workspace = true }
-objectio-proto = { workspace = true }
+iolake-common = { workspace = true }
+iolake-erasure = { workspace = true }
+iolake-transport-te = { workspace = true }
+iolake-proto = { workspace = true }
 futures = { workspace = true }
 parking_lot = { workspace = true }
 thiserror = { workspace = true }
@@ -47,12 +47,12 @@ crc32fast = "1.4"
 crc = "3.2"
 serde = { workspace = true }
 serde_json = { workspace = true }
-objectio-auth = { workspace = true, features = ["oidc"] }
-objectio-iceberg = { workspace = true }
-objectio-unity-catalog = { workspace = true }
-objectio-delta-sharing = { workspace = true }
-objectio-kms = { workspace = true }
-objectio-placement = { workspace = true }
+iolake-auth = { workspace = true, features = ["oidc"] }
+iolake-iceberg = { workspace = true }
+iolake-unity-catalog = { workspace = true }
+iolake-delta-sharing = { workspace = true }
+iolake-kms = { workspace = true }
+iolake-placement = { workspace = true }
 async-trait = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true }
@@ -112,7 +112,7 @@ default = []
 # Move shards over Mooncake Transfer Engine (RDMA, or TCP in development) to
 # OSDs that offer it. Linux only, and needs a Mooncake build — see
 # crates/transport-te. Enabled at run time with `--rdma`.
-rdma = ["objectio-transport-te/te"]
+rdma = ["iolake-transport-te/te"]
 # Compile in the PCRE2 pattern backend so requests can select
 # `engine: "pcre2"`. Requires libpcre2-dev at build time.
 pcre2 = ["dep:pcre2"]

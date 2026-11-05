@@ -1,11 +1,11 @@
-# ObjectIO brand assets
+# IOLake brand assets
 
 Mark: the Shard Ring — an O built from eight shards, six data (ink/paper) and two parity (amber, at 12 and 6 o'clock). Never rotate it; never recolor the parity pair.
 
 svg/
-  objectio-mark.svg, -on-dark.svg, -mono.svg        the mark alone (mono uses currentColor)
-  objectio-logo-horizontal*.svg                     primary lockup, type outlined (no font needed)
-  objectio-logo-stacked*.svg                        stacked lockup
+  iolake-mark.svg, -on-dark.svg, -mono.svg        the mark alone (mono uses currentColor)
+  iolake-logo-horizontal*.svg                     primary lockup, type outlined (no font needed)
+  iolake-logo-stacked*.svg                        stacked lockup
   favicon.svg / favicon-small.svg                   full mark ≥48 px; simplified solid ring for 16–32 px
   app-icon.svg                                      512 rounded-square icon
   readme-banner.svg                                 1280×320 header
@@ -18,4 +18,4 @@ Colors: ink #0c121a · graphite #232933 · slate #677284 · mist #ccd1d9 · pape
 Fonts:  Sora 600 (wordmark, headings) · IBM Plex Sans (body) · IBM Plex Mono (code)
 
 README usage:
-  <p align="center"><img src="assets/readme-banner.png" width="100%" alt="ObjectIO"></p>
+  <p align="center"><img src="assets/readme-banner.png" width="100%" alt="IOLake"></p>

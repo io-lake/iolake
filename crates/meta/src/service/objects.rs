@@ -132,12 +132,12 @@ impl MetaService {
         }
         let current_degraded = current_degraded.filter(|c| {
             new_degraded.is_some()
-                || objectio_proto::metadata::DegradedObject::decode(c.as_slice())
+                || iolake_proto::metadata::DegradedObject::decode(c.as_slice())
                     .is_ok_and(|d| d.object_id != req.object_id)
         });
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let mut ops = vec![CasOp {
                 table: CasTable::ObjectListings,
                 key: listing_key.clone(),
@@ -204,7 +204,7 @@ impl MetaService {
         }
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let ops = vec![CasOp {
                 table: CasTable::ObjectListings,
                 key: listing_key,
@@ -382,16 +382,16 @@ impl MetaService {
         let osd_nodes = self.osd_nodes.read();
 
         // Helper — map internal admin state → proto enum value.
-        let admin_state_proto = |s: objectio_common::OsdAdminState| -> i32 {
+        let admin_state_proto = |s: iolake_common::OsdAdminState| -> i32 {
             match s {
-                objectio_common::OsdAdminState::In => {
-                    objectio_proto::metadata::OsdAdminState::OsdAdminIn as i32
+                iolake_common::OsdAdminState::In => {
+                    iolake_proto::metadata::OsdAdminState::OsdAdminIn as i32
                 }
-                objectio_common::OsdAdminState::Out => {
-                    objectio_proto::metadata::OsdAdminState::OsdAdminOut as i32
+                iolake_common::OsdAdminState::Out => {
+                    iolake_proto::metadata::OsdAdminState::OsdAdminOut as i32
                 }
-                objectio_common::OsdAdminState::Draining => {
-                    objectio_proto::metadata::OsdAdminState::OsdAdminDraining as i32
+                iolake_common::OsdAdminState::Draining => {
+                    iolake_proto::metadata::OsdAdminState::OsdAdminDraining as i32
                 }
             }
         };
@@ -399,7 +399,7 @@ impl MetaService {
         // When include_all_states is true, admin UI wants EVERY OSD
         // including Draining / Out / Decommissioning. Scatter-gather
         // callers (the default) only want Active ones.
-        let topology_iter: Box<dyn Iterator<Item = &objectio_placement::topology::NodeInfo>> =
+        let topology_iter: Box<dyn Iterator<Item = &iolake_placement::topology::NodeInfo>> =
             if req.include_all_states {
                 Box::new(topology.all_nodes())
             } else {
@@ -411,13 +411,13 @@ impl MetaService {
         //   address_by_id    — the real OSD endpoint string. The placement
         //                       topology's `address` field is a SocketAddr
         //                       which can't represent DNS names (e.g.
-        //                       "http://objectio-osd-3.objectio-osd-headless:9200")
+        //                       "http://iolake-osd-3.iolake-osd-headless:9200")
         //                       and falls back to "0.0.0.0:9200". If we
         //                       used that, every node would collapse to
         //                       the same address and the gateway's
         //                       address-based dedup would reduce the
         //                       whole cluster to a single row.
-        let admin_state_by_id: std::collections::HashMap<[u8; 16], objectio_common::OsdAdminState> =
+        let admin_state_by_id: std::collections::HashMap<[u8; 16], iolake_common::OsdAdminState> =
             osd_nodes
                 .iter()
                 .map(|n| (n.node_id, n.admin_state))
@@ -450,7 +450,7 @@ impl MetaService {
                     node_id: id_bytes.to_vec(),
                     address,
                     shard_id: idx as u32, // Assign logical shard IDs in order
-                    failure_domain: Some(objectio_proto::metadata::FailureDomainInfo {
+                    failure_domain: Some(iolake_proto::metadata::FailureDomainInfo {
                         region: node.failure_domain.region.clone(),
                         datacenter: node.failure_domain.datacenter.clone(),
                         rack: node.failure_domain.rack.clone(),
@@ -480,7 +480,7 @@ impl MetaService {
 /// with fewer shards than its stripes have positions: erasure-coded stripes
 /// of its own (a slice of a pack is the pack's to repair).
 fn degraded_record(req: &CreateObjectRequest, now: u64) -> Option<Vec<u8>> {
-    use objectio_proto::metadata::{DegradedObject, DegradedStripe};
+    use iolake_proto::metadata::{DegradedObject, DegradedStripe};
     let stripes: Vec<DegradedStripe> = req
         .stripes
         .iter()
@@ -524,7 +524,7 @@ impl MetaService {
     /// shards to spare first.
     pub(crate) fn degraded_objects(
         &self,
-    ) -> Vec<(String, objectio_proto::metadata::DegradedObject, Vec<u8>)> {
+    ) -> Vec<(String, iolake_proto::metadata::DegradedObject, Vec<u8>)> {
         let Some(store) = self.store.as_ref() else {
             return Vec::new();
         };
@@ -532,12 +532,12 @@ impl MetaService {
             .degraded_all()
             .into_iter()
             .filter_map(|(k, v)| {
-                objectio_proto::metadata::DegradedObject::decode(v.as_slice())
+                iolake_proto::metadata::DegradedObject::decode(v.as_slice())
                     .ok()
                     .map(|d| (k, d, v))
             })
             .collect();
-        let spare = |d: &objectio_proto::metadata::DegradedObject| {
+        let spare = |d: &iolake_proto::metadata::DegradedObject| {
             d.stripes
                 .iter()
                 .map(|s| i64::from(s.present) - i64::from(s.needed))
@@ -551,7 +551,7 @@ impl MetaService {
     /// Remove a degraded-object record (B29), if it is still `expected`:
     /// a write of the key meanwhile replaced it with its own.
     pub(crate) async fn forget_degraded(&self, key: &str, expected: Vec<u8>) -> Result<(), String> {
-        use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+        use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
         let Some(raft) = self.raft_handle() else {
             return Ok(());
         };
@@ -579,9 +579,9 @@ impl MetaService {
     pub(crate) async fn record_lost(
         &self,
         key: &str,
-        lost: &objectio_proto::metadata::LostObject,
+        lost: &iolake_proto::metadata::LostObject,
     ) -> Result<(), String> {
-        use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+        use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
         let Some(raft) = self.raft_handle() else {
             return Ok(());
         };
@@ -606,14 +606,14 @@ impl MetaService {
     }
 
     /// How many objects are recorded as lost (B29).
-    pub(crate) fn lost_objects(&self) -> Vec<(String, objectio_proto::metadata::LostObject)> {
+    pub(crate) fn lost_objects(&self) -> Vec<(String, iolake_proto::metadata::LostObject)> {
         self.store
             .as_ref()
             .map(|s| s.lost_all())
             .unwrap_or_default()
             .into_iter()
             .filter_map(|(k, v)| {
-                objectio_proto::metadata::LostObject::decode(v.as_slice())
+                iolake_proto::metadata::LostObject::decode(v.as_slice())
                     .ok()
                     .map(|l| (k, l))
             })
@@ -628,9 +628,9 @@ impl MetaService {
     /// positions reported only order the work.
     pub(crate) async fn report_degraded(
         &self,
-        request: Request<objectio_proto::metadata::ReportDegradedRequest>,
-    ) -> Result<Response<objectio_proto::metadata::ReportDegradedResponse>, Status> {
-        use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+        request: Request<iolake_proto::metadata::ReportDegradedRequest>,
+    ) -> Result<Response<iolake_proto::metadata::ReportDegradedResponse>, Status> {
+        use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
         let req = request.into_inner();
         if req.bucket.is_empty() || req.key.is_empty() || req.object_id.is_empty() {
             return Err(Status::invalid_argument(
@@ -647,15 +647,15 @@ impl MetaService {
             .is_some()
         {
             return Ok(Response::new(
-                objectio_proto::metadata::ReportDegradedResponse { recorded: false },
+                iolake_proto::metadata::ReportDegradedResponse { recorded: false },
             ));
         }
         let Some(raft) = self.raft_handle() else {
             return Ok(Response::new(
-                objectio_proto::metadata::ReportDegradedResponse { recorded: false },
+                iolake_proto::metadata::ReportDegradedResponse { recorded: false },
             ));
         };
-        let record = objectio_proto::metadata::DegradedObject {
+        let record = iolake_proto::metadata::DegradedObject {
             object_id: req.object_id,
             stripes: req.stripes,
             recorded_at: Self::current_timestamp(),
@@ -672,10 +672,10 @@ impl MetaService {
         match raft.client_write(cmd).await {
             Ok(r) => match r.data {
                 MetaResponse::MultiCasOk => Ok(Response::new(
-                    objectio_proto::metadata::ReportDegradedResponse { recorded: true },
+                    iolake_proto::metadata::ReportDegradedResponse { recorded: true },
                 )),
                 MetaResponse::MultiCasConflict { .. } => Ok(Response::new(
-                    objectio_proto::metadata::ReportDegradedResponse { recorded: false },
+                    iolake_proto::metadata::ReportDegradedResponse { recorded: false },
                 )),
                 other => {
                     error!("unexpected raft response for report_degraded: {other:?}");

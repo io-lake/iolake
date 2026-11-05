@@ -1,7 +1,7 @@
-//! ObjectIO Gateway — standalone binary entrypoint.
+//! IOLake Gateway — standalone binary entrypoint.
 //!
 //! Parses CLI, installs the global tracing subscriber, and hands off
-//! to `objectio_gateway::run()`. The same `run()` is invoked in-
+//! to `iolake_gateway::run()`. The same `run()` is invoked in-
 //! process by `bin/aio` for the monolithic dev mode.
 
 #[cfg(not(target_env = "msvc"))]
@@ -12,11 +12,11 @@ use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 fn main() -> anyhow::Result<()> {
-    objectio_gateway::runtime()?.block_on(serve())
+    iolake_gateway::runtime()?.block_on(serve())
 }
 
 async fn serve() -> anyhow::Result<()> {
-    let args = objectio_gateway::Args::parse();
+    let args = iolake_gateway::Args::parse();
 
     tracing_subscriber::registry()
         .with(
@@ -26,5 +26,5 @@ async fn serve() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    objectio_gateway::run(args, objectio_common::shutdown_signal()?).await
+    iolake_gateway::run(args, iolake_common::shutdown_signal()?).await
 }

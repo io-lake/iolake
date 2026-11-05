@@ -29,9 +29,7 @@ use axum::extract::{Request, State};
 use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use objectio_proto::metadata::{
-    GetBucketRequest, GetBucketSettingRequest, PutBucketSettingRequest,
-};
+use iolake_proto::metadata::{GetBucketRequest, GetBucketSettingRequest, PutBucketSettingRequest};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 

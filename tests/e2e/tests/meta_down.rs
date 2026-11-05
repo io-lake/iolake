@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use objectio_e2e::ha::HaCluster;
+use iolake_e2e::ha::HaCluster;
 
 #[test]
 fn with_meta_down_a_delete_or_head_says_retry_not_done() {

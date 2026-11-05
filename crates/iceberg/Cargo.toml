@@ -1,14 +1,14 @@
 [package]
-name = "objectio-iceberg"
-description = "Iceberg REST Catalog for ObjectIO"
+name = "iolake-iceberg"
+description = "Iceberg REST Catalog for IOLake"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-objectio-auth = { workspace = true }
-objectio-common = { workspace = true }
-objectio-proto = { workspace = true }
+iolake-auth = { workspace = true }
+iolake-common = { workspace = true }
+iolake-proto = { workspace = true }
 axum = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

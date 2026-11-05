@@ -1,21 +1,21 @@
-//! Meta backup, restore and forced membership (objectio-docs `core/meta.md`,
+//! Meta backup, restore and forced membership (iolake-docs `core/meta.md`,
 //! "Backup, restore and losing a majority"): three meta nodes, OSDs and a
 //! gateway as separate processes.
 //!
-//! Every meta node's data lost: restored from an `obioctl meta export`, the
+//! Every meta node's data lost: restored from an `iolakectl meta export`, the
 //! cluster serves what the backup held and lists what was written after it.
 //! Two of three lost for good: the survivor, forced to one voter, serves
 //! everything, and the group grows back to three.
 //!
-//! Needs `cargo build --bin objectio-meta --bin objectio-osd --bin
-//! objectio-gateway --bin obioctl` first.
+//! Needs `cargo build --bin iolake-meta --bin iolake-osd --bin
+//! iolake-gateway --bin iolakectl` first.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use objectio_e2e::Cluster;
-use objectio_e2e::ha::HaCluster;
+use iolake_e2e::Cluster;
+use iolake_e2e::ha::HaCluster;
 use serde_json::json;
 
 fn payload(len: usize, seed: u64) -> Vec<u8> {
@@ -146,12 +146,12 @@ fn await_group(ha: &HaCluster, voters: &[u64]) -> usize {
 }
 
 fn export(ha: &HaCluster, file: &Path) {
-    let out = ha.obioctl(
+    let out = ha.iolakectl(
         0,
         &["meta", "export", "--file", &file.display().to_string()],
     );
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(out.status.success(), "obioctl meta export: {stderr}");
+    assert!(out.status.success(), "iolakectl meta export: {stderr}");
     assert!(stderr.contains("meta backup:"), "{stderr}");
     assert!(file.exists(), "{}", file.display());
     assert!(!file.with_extension("backup.part").exists());
@@ -243,9 +243,9 @@ fn a_cluster_restored_from_a_backup_serves_what_it_held_and_lists_what_came_afte
         seen.as_ref() == Some(&want)
     });
     eventually(120, "every placement group relisted", || {
-        ha.meta_metric("objectio_meta_pgs_to_relist") == Some(0.0)
+        ha.meta_metric("iolake_meta_pgs_to_relist") == Some(0.0)
     });
-    assert_eq!(ha.meta_metric("objectio_meta_restored"), Some(1.0));
+    assert_eq!(ha.meta_metric("iolake_meta_restored"), Some(1.0));
 
     // Placement groups in a new epoch era: above anything the OSDs knew.
     let pgs = c
@@ -431,7 +431,7 @@ fn deleting_after_a_restore_never_frees_bytes_another_object_still_reads() {
         c.request("DELETE", &format!("/b/{key}"), &[]).expect(204);
     }
     eventually(30, "the frees held", || {
-        ha.meta_metric("objectio_meta_restore_frees_held_total")
+        ha.meta_metric("iolake_meta_restore_frees_held_total")
             .is_some_and(|n| n >= 2.0)
     });
     // Whatever a reclaim was going to do, it has done (it runs behind the
@@ -510,10 +510,10 @@ fn writes_go_on_to_placement_groups_whose_epoch_moved_after_the_backup() {
 
 /// The shards an OSD holds, as it counts them.
 fn osd_shards(rt: &tokio::runtime::Runtime, address: &str) -> u64 {
-    use objectio_proto::storage::GetStatusRequest;
-    use objectio_proto::storage::storage_service_client::StorageServiceClient;
+    use iolake_proto::storage::GetStatusRequest;
+    use iolake_proto::storage::storage_service_client::StorageServiceClient;
     rt.block_on(async {
-        let channel = objectio_e2e::tls::channel(address)
+        let channel = iolake_e2e::tls::channel(address)
             .await
             .expect("connect OSD");
         StorageServiceClient::new(channel)
@@ -599,7 +599,7 @@ fn an_osd_draining_in_the_backup_is_left_alone_until_its_state_is_set() {
     // and more: still holding what it held, never wiped.
     assert_eq!(osd_state(c, &address).1, "draining");
     eventually(30, "the OSD counted as unconfirmed", || {
-        ha.meta_metric("objectio_meta_restore_osds_unconfirmed") == Some(1.0)
+        ha.meta_metric("iolake_meta_restore_osds_unconfirmed") == Some(1.0)
     });
     std::thread::sleep(Duration::from_secs(75));
     assert_eq!(osd_state(c, &address).1, "draining");
@@ -612,7 +612,7 @@ fn an_osd_draining_in_the_backup_is_left_alone_until_its_state_is_set() {
     // The operator says: in service.
     set("in");
     eventually(30, "the OSD confirmed", || {
-        ha.meta_metric("objectio_meta_restore_osds_unconfirmed") == Some(0.0)
+        ha.meta_metric("iolake_meta_restore_osds_unconfirmed") == Some(0.0)
     });
     assert_eq!(osd_state(c, &address).1, "in");
     assert_all_read(c, "d", &objects, "with the OSD back in");

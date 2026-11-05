@@ -35,7 +35,7 @@ use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, Uri, header};
 use axum::middleware::Next;
 use axum::response::Response;
 use http_body::{Body as HttpBody, Frame, SizeHint};
-use objectio_common::histogram::{CounterVec, label_value};
+use iolake_common::histogram::{CounterVec, label_value};
 use std::sync::LazyLock;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::{debug, info, warn};
@@ -106,42 +106,42 @@ pub fn render(out: &mut String) {
         };
         gauge(
             out,
-            "objectio_gateway_memory_budget_bytes",
+            "iolake_gateway_memory_budget_bytes",
             "The memory budget for request bodies and GET read-ahead (--memory-budget)",
             a.budget.capacity(),
         );
         gauge(
             out,
-            "objectio_gateway_memory_budget_in_use_bytes",
+            "iolake_gateway_memory_budget_in_use_bytes",
             "Bytes of the memory budget held by requests now",
             a.budget.in_use(),
         );
         gauge(
             out,
-            "objectio_gateway_requests_limit",
+            "iolake_gateway_requests_limit",
             "Requests the gateway serves at once (--max-requests)",
             a.max_requests as u64,
         );
         gauge(
             out,
-            "objectio_gateway_requests_admitted",
+            "iolake_gateway_requests_admitted",
             "Requests admitted and not yet finished, response bodies included",
             a.in_flight(),
         );
     }
     REJECTED.render(
         out,
-        "objectio_gateway_requests_rejected_total",
+        "iolake_gateway_requests_rejected_total",
         "Requests refused with 503 SlowDown, by the limit they hit (requests or memory)",
     );
     TIMEOUTS.render(
         out,
-        "objectio_gateway_timeouts_total",
+        "iolake_gateway_timeouts_total",
         "Requests or connections cut off by a timeout, by kind (body, send)",
     );
     GET_ABORTS.render(
         out,
-        "objectio_gateway_get_aborted_total",
+        "iolake_gateway_get_aborted_total",
         "GETs cut off after their headers were sent, by reason",
     );
 }

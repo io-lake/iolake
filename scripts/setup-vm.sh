@@ -1,10 +1,10 @@
 #!/bin/bash
-# Setup multipass VM for ObjectIO testing
+# Setup multipass VM for IOLake testing
 # Creates a VM with 8x10GB sparse disk files
 
 set -e
 
-VM_NAME="objectio-node1"
+VM_NAME="iolake-node1"
 VM_CPUS=4
 VM_MEMORY=4G
 VM_DISK=50G

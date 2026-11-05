@@ -1,4 +1,4 @@
-//! Recovery of every protection scheme (B31 phase 3b, objectio-docs
+//! Recovery of every protection scheme (B31 phase 3b, iolake-docs
 //! `core/pg-recovery.md`, B10): a replicated pool's lost copies are copied
 //! back from an intact one; an LRC pool's lost shard is rebuilt from its
 //! local group, inside the group's rack, and from the whole stripe only
@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::time::{Duration, Instant};
 
-use objectio_e2e::ha::HaCluster;
+use iolake_e2e::ha::HaCluster;
 use serde_json::{Value, json};
 
 fn payload(len: usize, seed: u8) -> Vec<u8> {
@@ -49,7 +49,7 @@ fn pool_and_bucket(ha: &HaCluster, pool: Value, bucket: &str) {
         "PUT",
         &format!("/{bucket}"),
         &[],
-        &[("x-objectio-pool", &name)],
+        &[("x-iolake-pool", &name)],
     )
     .expect(200);
 }
@@ -194,9 +194,9 @@ fn a_replicated_pools_lost_copies_are_copied_back() {
     lose_drives(&mut ha, &[lost], &ids);
     await_clean(&ha, "rep3", 180);
     assert!(
-        metric(&ha, "objectio_meta_pg_replica_copies_total") >= count(&bodies),
+        metric(&ha, "iolake_meta_pg_replica_copies_total") >= count(&bodies),
         "recovery copied {} replicas for {} objects",
-        metric(&ha, "objectio_meta_pg_replica_copies_total"),
+        metric(&ha, "iolake_meta_pg_replica_copies_total"),
         bodies.len()
     );
 
@@ -223,11 +223,11 @@ fn a_replicated_pools_lost_copies_are_copied_back() {
 
 /// Whether the OSD at `address` holds a metadata copy of `bucket/key`.
 fn osd_has_meta(address: &str, bucket: &str, key: &str) -> bool {
-    use objectio_proto::storage::GetObjectMetaRequest;
-    use objectio_proto::storage::storage_service_client::StorageServiceClient;
+    use iolake_proto::storage::GetObjectMetaRequest;
+    use iolake_proto::storage::storage_service_client::StorageServiceClient;
     tokio::runtime::Runtime::new().unwrap().block_on(async {
         let mut client = StorageServiceClient::new(
-            objectio_e2e::tls::channel(address)
+            iolake_e2e::tls::channel(address)
                 .await
                 .expect("connect OSD"),
         );
@@ -314,12 +314,9 @@ fn an_lrc_object_reads_with_a_data_shard_and_its_local_parity_down() {
 #[test]
 fn an_lrc_shard_is_rebuilt_from_its_local_group() {
     let (ha, bodies) = lrc(&[1]);
-    let local = metric(&ha, "objectio_meta_pg_lrc_rebuilds_total{kind=\"local\"}");
-    let global = metric(&ha, "objectio_meta_pg_lrc_rebuilds_total{kind=\"global\"}");
-    let local_reads = metric(
-        &ha,
-        "objectio_meta_pg_lrc_shards_read_total{kind=\"local\"}",
-    );
+    let local = metric(&ha, "iolake_meta_pg_lrc_rebuilds_total{kind=\"local\"}");
+    let global = metric(&ha, "iolake_meta_pg_lrc_rebuilds_total{kind=\"global\"}");
+    let local_reads = metric(&ha, "iolake_meta_pg_lrc_shards_read_total{kind=\"local\"}");
     assert!(
         local >= count(&bodies),
         "{local} local rebuilds for {} objects",
@@ -342,7 +339,7 @@ fn an_lrc_shard_is_rebuilt_from_its_local_group() {
 #[test]
 fn an_lrc_group_short_of_two_is_rebuilt_from_the_whole_stripe() {
     let (ha, bodies) = lrc(&[0, 4]);
-    let global = metric(&ha, "objectio_meta_pg_lrc_rebuilds_total{kind=\"global\"}");
+    let global = metric(&ha, "iolake_meta_pg_lrc_rebuilds_total{kind=\"global\"}");
     assert!(
         global >= 2.0 * count(&bodies),
         "{global} whole-stripe rebuilds for {} objects, two shards each",
@@ -364,7 +361,7 @@ fn a_multipart_objects_parts_are_already_in_its_placement_group() {
     c.request("PUT", "/mpu", &[]).expect(200);
     // Settled before: nothing for recovery to do.
     await_clean(&ha, "default", 60);
-    let shards_before = metric(&ha, "objectio_meta_pg_recovered_shards_total");
+    let shards_before = metric(&ha, "iolake_meta_pg_recovered_shards_total");
 
     let r = c.request("POST", "/mpu/big?uploads", &[]);
     assert!(r.status < 300, "initiate: {}", r.text());
@@ -404,7 +401,7 @@ fn a_multipart_objects_parts_are_already_in_its_placement_group() {
     // Peered (every PG looked at, more than once) and clean.
     std::thread::sleep(Duration::from_secs(8));
     await_clean(&ha, "default", 60);
-    let shards_after = metric(&ha, "objectio_meta_pg_recovered_shards_total");
+    let shards_after = metric(&ha, "iolake_meta_pg_recovered_shards_total");
     assert!(
         (shards_after - shards_before).abs() < 0.5,
         "recovery wrote {} shards for the completed object",

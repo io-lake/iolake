@@ -23,7 +23,7 @@
 //!    switches between async and sync halves. Measurements on NVMe:
 //!    +25% throughput at 4 MiB stripes, -78% p99 at 64 KiB, -90%
 //!    p99.9 at WAL writes. See
-//!    `objectio-docs/architecture/design/core/storage-io-levels.md`.
+//!    `iolake-docs/architecture/design/core/storage-io-levels.md`.
 //!
 //! Backend selection:
 //!
@@ -54,7 +54,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use objectio_common::{Error, Result};
+use iolake_common::{Error, Result};
 
 /// Buffer type used across the trait. Always 4 KiB-aligned so that
 /// both O_DIRECT pread/pwrite and io_uring submissions are valid

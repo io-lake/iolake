@@ -1,13 +1,13 @@
 //! `DeltaLogReader` that fetches commits via presigned S3 URLs.
 //!
-//! Uses `objectio_auth::presign::{presign_get, presign_list_objects_v2}` to
+//! Uses `iolake_auth::presign::{presign_get, presign_list_objects_v2}` to
 //! sign each request with admin credentials, then plain HTTP via `reqwest`.
 //! This works for any tenant's bucket reachable via the gateway endpoint —
 //! cross-tenant Delta sharing is supported by design.
 
 use crate::delta_log::{DeltaLogReader, LogListing, is_checkpoint_key, parse_commit_version};
 use crate::error::DeltaError;
-use objectio_auth::presign::{presign_get, presign_list_objects_v2};
+use iolake_auth::presign::{presign_get, presign_list_objects_v2};
 use serde::Deserialize;
 use std::time::Duration;
 

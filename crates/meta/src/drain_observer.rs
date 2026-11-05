@@ -35,8 +35,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use objectio_proto::metadata::{ObjectMeta, ShardLocation, StripeMeta};
-use objectio_proto::storage::{
+use iolake_proto::metadata::{ObjectMeta, ShardLocation, StripeMeta};
+use iolake_proto::storage::{
     Checksum, DeleteObjectMetaRequest, FindObjectsReferencingNodeRequest, GetObjectMetaRequest,
     GetStatusRequest, PutObjectMetaRequest, ReadShardRequest, ReadShardResponse, ShardId,
     WriteShardRequest, storage_service_client::StorageServiceClient,
@@ -70,7 +70,7 @@ const PER_OSD_TIMEOUT: Duration = Duration::from_secs(10);
 /// Succeeds if at least one write lands.
 async fn fanout_put_object_meta(
     meta: &Arc<MetaService>,
-    object: &objectio_proto::metadata::ObjectMeta,
+    object: &iolake_proto::metadata::ObjectMeta,
     fallback_addr: &str,
     extra_addrs: &[&str],
 ) -> anyhow::Result<()> {
@@ -102,7 +102,7 @@ async fn fanout_put_object_meta(
     // An update of what was read: ordered after its other updates, the same
     // on every copy; its stamp stays, so a newer object still wins.
     let mut object = object.clone();
-    object.update_stamp = objectio_common::stamp::CLOCK.next_after(object.update_stamp);
+    object.update_stamp = iolake_common::stamp::CLOCK.next_after(object.update_stamp);
     let object = &object;
     let mut futs = Vec::with_capacity(addrs.len());
     for addr in &addrs {
@@ -166,7 +166,7 @@ async fn run(meta: Arc<MetaService>, every: Duration, batch: usize) {
     let mut ticker = interval(every);
     ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
     // CRUSH-drift per-shard rebalancer is disabled: the PG balancer
-    // owns placement decisions now, and ObjectIO is greenfield — no
+    // owns placement decisions now, and IOLake is greenfield — no
     // existing-data migration is required. The drain (evacuate-on-
     // admin-state=Draining) sweep stays.
     loop {
@@ -205,15 +205,15 @@ async fn sweep_once(meta: &Arc<MetaService>, batch: usize) -> anyhow::Result<boo
         let osds = meta.osd_nodes_read().clone();
         osds.into_iter()
             .filter(|n| {
-                n.admin_state == objectio_common::OsdAdminState::Draining
-                    || (n.admin_state == objectio_common::OsdAdminState::Out
+                n.admin_state == iolake_common::OsdAdminState::Draining
+                    || (n.admin_state == iolake_common::OsdAdminState::Out
                         && meta.purge_state(n.node_id).is_none())
             })
             // Restored as draining or out: it may be back in, with data
             // the restored state doesn't know. Until an operator says.
             .filter(|n| !meta.osd_to_confirm(&n.node_id))
             .map(|n| {
-                let out = n.admin_state == objectio_common::OsdAdminState::Out;
+                let out = n.admin_state == iolake_common::OsdAdminState::Out;
                 (n.node_id, n.address, out)
             })
             .collect()
@@ -299,7 +299,7 @@ async fn sweep_once(meta: &Arc<MetaService>, batch: usize) -> anyhow::Result<boo
             } else {
                 meta.internal_set_osd_admin_state(
                     node_id,
-                    objectio_common::OsdAdminState::Out,
+                    iolake_common::OsdAdminState::Out,
                     "drain-observer".into(),
                 )
                 .await
@@ -349,8 +349,7 @@ async fn purge_pending(meta: &Arc<MetaService>) {
             let _ = meta.set_purge_state(node_id, None).await;
             continue;
         };
-        if node.admin_state != objectio_common::OsdAdminState::Out || meta.osd_to_confirm(&node_id)
-        {
+        if node.admin_state != iolake_common::OsdAdminState::Out || meta.osd_to_confirm(&node_id) {
             // Only ever a drained, Out OSD. (It can't be put back In while
             // pending; anything else is left alone.) Nor one a restore left
             // pending: it may have been purged and put back in since.
@@ -365,15 +364,15 @@ async fn purge_one(meta: &Arc<MetaService>, node_id: [u8; 16], address: &str) {
     let result = async {
         let channel = tokio::time::timeout(
             PER_OSD_TIMEOUT,
-            objectio_proto::transport::connect(
-                &objectio_proto::transport::endpoint(address).map_err(anyhow::Error::msg)?,
+            iolake_proto::transport::connect(
+                &iolake_proto::transport::endpoint(address).map_err(anyhow::Error::msg)?,
             ),
         )
         .await
         .map_err(|_| anyhow::anyhow!("connect timeout"))??;
         let mut client = StorageServiceClient::new(channel);
         let r = client
-            .purge(objectio_proto::storage::PurgeRequest {
+            .purge(iolake_proto::storage::PurgeRequest {
                 node_id: node_id.to_vec(),
             })
             .await?
@@ -406,8 +405,8 @@ async fn purge_one(meta: &Arc<MetaService>, node_id: [u8; 16], address: &str) {
 async fn query_shard_count(address: &str) -> anyhow::Result<u64> {
     let channel = tokio::time::timeout(
         PER_OSD_TIMEOUT,
-        objectio_proto::transport::connect(
-            &objectio_proto::transport::endpoint(address).map_err(anyhow::Error::msg)?,
+        iolake_proto::transport::connect(
+            &iolake_proto::transport::endpoint(address).map_err(anyhow::Error::msg)?,
         ),
     )
     .await
@@ -509,7 +508,7 @@ async fn migrate_batch(
             if n.node_id == draining {
                 source_alive
             } else {
-                n.admin_state != objectio_common::OsdAdminState::Out
+                n.admin_state != iolake_common::OsdAdminState::Out
             }
         })
         .map(|n| n.address.clone())
@@ -943,7 +942,7 @@ async fn settle_lost(
             ..mv.shard.clone()
         };
         match shard_state(&addr, id).await {
-            Ok(objectio_proto::storage::ShardState::Ok) => good += 1,
+            Ok(iolake_proto::storage::ShardState::Ok) => good += 1,
             Ok(_) => {}
             Err(_) => return Ok(false),
         }
@@ -981,7 +980,7 @@ async fn settle_lost(
             .map_or(0, |d| d.as_secs());
         meta.record_lost(
             &key,
-            &objectio_proto::metadata::LostObject {
+            &iolake_proto::metadata::LostObject {
                 object_id: object.object_id.clone(),
                 stripe_id: mv.shard.stripe_id,
                 good: u32::try_from(good).unwrap_or(u32::MAX),
@@ -1013,14 +1012,11 @@ async fn settle_lost(
 }
 
 /// One shard's state on the OSD at `addr`.
-async fn shard_state(
-    addr: &str,
-    id: ShardId,
-) -> anyhow::Result<objectio_proto::storage::ShardState> {
+async fn shard_state(addr: &str, id: ShardId) -> anyhow::Result<iolake_proto::storage::ShardState> {
     let mut client = StorageServiceClient::new(open_channel(addr).await?);
     let states = tokio::time::timeout(
         PER_OSD_TIMEOUT,
-        client.check_shards(objectio_proto::storage::CheckShardsRequest { shards: vec![id] }),
+        client.check_shards(iolake_proto::storage::CheckShardsRequest { shards: vec![id] }),
     )
     .await
     .map_err(|_| anyhow::anyhow!("check_shards timeout on {addr}"))??
@@ -1030,8 +1026,7 @@ async fn shard_state(
         .first()
         .copied()
         .ok_or_else(|| anyhow::anyhow!("no answer for the shard"))?;
-    objectio_proto::storage::ShardState::try_from(s)
-        .map_err(|_| anyhow::anyhow!("unknown state {s}"))
+    iolake_proto::storage::ShardState::try_from(s).map_err(|_| anyhow::anyhow!("unknown state {s}"))
 }
 
 /// Whether every ObjectMeta copy naming `mv`'s shard is stale: a copy that
@@ -1224,7 +1219,7 @@ async fn write_shard(
     addr: &str,
     shard: &ShardId,
     bytes: prost::bytes::Bytes,
-) -> anyhow::Result<objectio_proto::storage::BlockLocation> {
+) -> anyhow::Result<iolake_proto::storage::BlockLocation> {
     let mut client = StorageServiceClient::new(open_channel(addr).await?)
         .max_encoding_message_size(100 * 1024 * 1024);
     tokio::time::timeout(
@@ -1283,18 +1278,18 @@ async fn rebuild_shard(
     // an MDS codec rebuild other bytes. Any k shards of an MDS stripe
     // decode; an LRC stripe's k may not (a local parity among them), so
     // it reads every one it can.
-    let lrc = stripe.ec_type == objectio_proto::metadata::ErasureType::ErasureLrc as i32;
+    let lrc = stripe.ec_type == iolake_proto::metadata::ErasureType::ErasureLrc as i32;
     let config = if lrc {
-        objectio_common::ErasureConfig::lrc(
+        iolake_common::ErasureConfig::lrc(
             k as u8,
             stripe.ec_local_parity as u8,
             stripe.ec_global_parity as u8,
         )
     } else {
-        objectio_common::ErasureConfig::new(k as u8, m as u8)
+        iolake_common::ErasureConfig::new(k as u8, m as u8)
     };
     let codec =
-        objectio_erasure::ErasureCodec::new(config).map_err(|e| anyhow::anyhow!("codec: {e}"))?;
+        iolake_erasure::ErasureCodec::new(config).map_err(|e| anyhow::anyhow!("codec: {e}"))?;
     let mut survivors: Vec<Option<Vec<u8>>> = vec![None; codec.total_shards()];
     let mut have = 0;
     while let Some((pos, r)) = reads.next().await {
@@ -1324,7 +1319,7 @@ async fn find_affected_objects(
     addr: &str,
     draining: &[u8; 16],
     limit: u32,
-) -> anyhow::Result<Vec<objectio_proto::storage::AffectedObject>> {
+) -> anyhow::Result<Vec<iolake_proto::storage::AffectedObject>> {
     let channel = open_channel(addr).await?;
     let mut client = StorageServiceClient::new(channel);
     let resp = tokio::time::timeout(
@@ -1354,13 +1349,11 @@ pub(crate) async fn open_channel(address: &str) -> anyhow::Result<Channel> {
     {
         return Ok(ch.clone());
     }
-    let endpoint = objectio_proto::transport::endpoint(address).map_err(anyhow::Error::msg)?;
-    let channel = tokio::time::timeout(
-        PER_OSD_TIMEOUT,
-        objectio_proto::transport::connect(&endpoint),
-    )
-    .await
-    .map_err(|_| anyhow::anyhow!("connect timeout"))??;
+    let endpoint = iolake_proto::transport::endpoint(address).map_err(anyhow::Error::msg)?;
+    let channel =
+        tokio::time::timeout(PER_OSD_TIMEOUT, iolake_proto::transport::connect(&endpoint))
+            .await
+            .map_err(|_| anyhow::anyhow!("connect timeout"))??;
     CHANNELS
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -1435,12 +1428,12 @@ fn now_unix() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{DrainStep, Scan, checksum_of, drain_step, verified_shard};
-    use objectio_proto::storage::ReadShardResponse;
+    use iolake_proto::storage::ReadShardResponse;
 
     fn response(data: &[u8], crc32c: Option<u32>) -> ReadShardResponse {
         ReadShardResponse {
             data: data.to_vec().into(),
-            checksum: crc32c.map(|crc32c| objectio_proto::storage::Checksum {
+            checksum: crc32c.map(|crc32c| iolake_proto::storage::Checksum {
                 crc32c,
                 ..Default::default()
             }),

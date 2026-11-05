@@ -1,16 +1,16 @@
 [package]
-name = "objectio-install"
-description = "Sets a host up to run ObjectIO's services under systemd"
+name = "iolake-install"
+description = "Sets a host up to run IOLake's services under systemd"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "objectio-install"
+name = "iolake-install"
 path = "src/main.rs"
 
 [dependencies]
-objectio-storage = { workspace = true }
+iolake-storage = { workspace = true }
 tokio = { workspace = true }
 clap = { workspace = true }
 tracing = { workspace = true }

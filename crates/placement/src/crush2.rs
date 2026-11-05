@@ -14,7 +14,7 @@
 //! 4. **Optional Scoring**: For hot data, consider network distance and load
 
 use crate::topology::{ClusterTopology, NodeInfo};
-use objectio_common::{FailureDomain, NodeId, NodeStatus, ObjectId};
+use iolake_common::{FailureDomain, NodeId, NodeStatus, ObjectId};
 use std::collections::HashMap;
 
 /// Shard type for placement
@@ -571,7 +571,7 @@ pub mod templates {
 mod tests {
     use super::*;
     use crate::topology::{ClusterTopology, FailureDomainInfo, NodeInfo};
-    use objectio_common::NodeStatus;
+    use iolake_common::NodeStatus;
 
     fn create_test_topology() -> ClusterTopology {
         let mut topology = ClusterTopology::new();

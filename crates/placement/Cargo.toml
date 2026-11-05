@@ -1,12 +1,12 @@
 [package]
-name = "objectio-placement"
-description = "Data placement for ObjectIO: placement groups over copysets, and CRUSH 2.0"
+name = "iolake-placement"
+description = "Data placement for IOLake: placement groups over copysets, and CRUSH 2.0"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-objectio-common = { workspace = true }
+iolake-common = { workspace = true }
 xxhash-rust = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }

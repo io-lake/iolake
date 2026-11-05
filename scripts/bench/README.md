@@ -4,11 +4,11 @@ A small throughput/latency benchmark for an S3 endpoint. Standard library
 only — droppable onto any host that can reach the gateway.
 
 ```bash
-./s3bench.py --endpoint https://s3.example.com --bucket objectio-bench
+./s3bench.py --endpoint https://s3.example.com --bucket iolake-bench
 ```
 
 Credentials come from flags or the same environment variables the SDKs use
-(`OBJECTIO_URL`, `OBJECTIO_ACCESS_KEY`, `OBJECTIO_SECRET_KEY`, or the
+(`IOLAKE_URL`, `IOLAKE_ACCESS_KEY`, `IOLAKE_SECRET_KEY`, or the
 `AWS_*` equivalents). The bucket must already exist.
 
 ## What it measures
@@ -56,13 +56,13 @@ separate.
 
 ## baseline.sh
 
-The B4 single-host baseline: ObjectIO (4+2 aio), RustFS (EC:2) and
+The B4 single-host baseline: IOLake (4+2 aio), RustFS (EC:2) and
 SeaweedFS on one disk, the same warp cells (PUT and GET at 4 KiB, 64 KiB,
 1 MiB and 16 MiB, 32 clients, 30 s each). Results and how to read them:
 the developer guide's performance page.
 
 ```bash
-BENCH=/data/bench scripts/bench/baseline.sh objectio rustfs seaweedfs
+BENCH=/data/bench scripts/bench/baseline.sh iolake rustfs seaweedfs
 ```
 
 ## regression.py
@@ -71,8 +71,8 @@ The CI performance check (B4): a build against its base on one machine,
 interleaved, 64 KiB and 4 MiB PUT and GET through a fresh 4+2 aio per run;
 fails when a cell's median throughput falls below 0.85 of the base's.
 CI runs it in the merge queue, and on a pull request labelled `perf`. Two
-release builds, each a directory with `objectio-aio` (the head's also
-`objectio-s3-bench`):
+release builds, each a directory with `iolake-aio` (the head's also
+`iolake-s3-bench`):
 
 ```bash
 scripts/bench/regression.py --base /tmp/base --head target/release

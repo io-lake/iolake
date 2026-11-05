@@ -127,7 +127,7 @@ impl IcebergRole {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use objectio_auth::policy::BucketPolicy;
+    use iolake_auth::policy::BucketPolicy;
 
     #[test]
     fn test_role_from_name() {

@@ -5,7 +5,7 @@
 //! HTTP codes and S3 error names are bucketed to known sets, and OSD
 //! addresses are bounded by the cluster size.
 
-use objectio_common::histogram::{
+use iolake_common::histogram::{
     CounterVec, GaugeVec, HistogramVec, LATENCY_BUCKETS, SIZE_BUCKETS, label_value,
 };
 use std::sync::LazyLock;
@@ -295,171 +295,171 @@ pub fn render() -> String {
     crate::admission::render(&mut out);
     REQUEST_ERRORS.render(
         &mut out,
-        "objectio_s3_request_errors_total",
+        "iolake_s3_request_errors_total",
         "Failed S3 requests by HTTP code and S3 error name",
     );
     AUTH_FAILURES.render(
         &mut out,
-        "objectio_auth_failures_total",
+        "iolake_auth_failures_total",
         "Requests refused by authentication or authorization, by reason",
     );
     IN_FLIGHT.render(
         &mut out,
-        "objectio_s3_requests_in_flight",
+        "iolake_s3_requests_in_flight",
         "S3 requests currently being served",
     );
     REQUEST_SIZE.render(
         &mut out,
-        "objectio_s3_request_size_bytes",
+        "iolake_s3_request_size_bytes",
         "Request body size (Content-Length) by operation",
         "",
     );
     SHARD_LATENCY.render(
         &mut out,
-        "objectio_gateway_shard_latency_seconds",
+        "iolake_gateway_shard_latency_seconds",
         "Time for one shard read or write to an OSD, by OSD",
         "",
     );
     PHASE_LATENCY.render(
         &mut out,
-        "objectio_gateway_request_phase_seconds",
+        "iolake_gateway_request_phase_seconds",
         "Time spent in each phase of a request, by operation and phase",
         "",
     );
     OSD_ERRORS.render(
         &mut out,
-        "objectio_gateway_osd_request_errors_total",
+        "iolake_gateway_osd_request_errors_total",
         "Failed shard calls to an OSD, by kind",
     );
     SHARD_TRANSFERS.render(
         &mut out,
-        "objectio_gateway_shard_transfers_total",
+        "iolake_gateway_shard_transfers_total",
         "Shards moved to or from OSDs, by direction and transport (rdma or grpc)",
     );
     RDMA_FALLBACKS.render(
         &mut out,
-        "objectio_gateway_rdma_fallbacks_total",
+        "iolake_gateway_rdma_fallbacks_total",
         "Shards sent over gRPC to an OSD that offers Transfer Engine, by reason",
     );
     SHARD_CHECKSUM_MISMATCHES.render(
         &mut out,
-        "objectio_gateway_shard_checksum_mismatches_total",
+        "iolake_gateway_shard_checksum_mismatches_total",
         "Shards sent over gRPC that did not match their checksum, by direction",
     );
     HEAL_QUEUED.render(
         &mut out,
-        "objectio_gateway_heal_queued_total",
+        "iolake_gateway_heal_queued_total",
         "Keys a write or delete left behind on some metadata copies, queued for healing",
     );
     QUOTA_REFUSALS.render(
         &mut out,
-        "objectio_s3_quota_refusals_total",
+        "iolake_s3_quota_refusals_total",
         "Writes refused for passing a bucket's or tenant's quota",
     );
     STALE_PLACEMENTS.render(
         &mut out,
-        "objectio_gateway_stale_placement_total",
+        "iolake_gateway_stale_placement_total",
         "Requests placed again because an OSD knew a newer epoch of their placement group",
     );
     SHARDS_RECLAIMED.render(
         &mut out,
-        "objectio_gateway_shards_reclaimed_total",
+        "iolake_gateway_shards_reclaimed_total",
         "Shards deleted from OSDs because nothing references them any more, by reason",
     );
     RECLAIM_FAILURES.render(
         &mut out,
-        "objectio_gateway_shard_reclaim_failures_total",
+        "iolake_gateway_shard_reclaim_failures_total",
         "Shard deletes that failed, leaving the block allocated, by reason",
     );
     DEDUP_CHUNKS.render(
         &mut out,
-        "objectio_dedup_dryrun_chunks_total",
+        "iolake_dedup_dryrun_chunks_total",
         "Chunks the dedup dry-run fingerprinted, by bucket, chunking and whether already stored",
     );
     DEDUP_BYTES.render(
         &mut out,
-        "objectio_dedup_dryrun_bytes_total",
+        "iolake_dedup_dryrun_bytes_total",
         "Bytes the dedup dry-run fingerprinted, by bucket, chunking and whether already stored",
     );
     DEDUP_DROPPED.render(
         &mut out,
-        "objectio_dedup_dryrun_dropped_total",
+        "iolake_dedup_dryrun_dropped_total",
         "Dry-run work given up on (queue full, lookup failed), by reason",
     );
     DEDUP_SKIPPED.render(
         &mut out,
-        "objectio_dedup_dryrun_skipped_total",
+        "iolake_dedup_dryrun_skipped_total",
         "Writes in dry-run buckets that dry-run does not look at, by reason",
     );
     INLINE_OBJECTS.render(
         &mut out,
-        "objectio_gateway_inline_objects_total",
+        "iolake_gateway_inline_objects_total",
         "Objects small enough to be stored in their metadata, with no shards",
     );
     INLINE_BYTES.render(
         &mut out,
-        "objectio_gateway_inline_bytes_total",
+        "iolake_gateway_inline_bytes_total",
         "Bytes of objects stored in their metadata",
     );
     COPIES.render(
         &mut out,
-        "objectio_gateway_copies_total",
+        "iolake_gateway_copies_total",
         "CopyObject requests completed, by mode: reference (shares the source's stripes) or bytes (rewritten)",
     );
     COPIED_BYTES.render(
         &mut out,
-        "objectio_gateway_copied_bytes_total",
+        "iolake_gateway_copied_bytes_total",
         "Bytes CopyObject copied, by mode; reference copies move none of them",
     );
     LIFECYCLE_ACTIONS.render(
         &mut out,
-        "objectio_lifecycle_actions_total",
+        "iolake_lifecycle_actions_total",
         "Lifecycle actions taken, by action (expire, delete_marker, abort_upload) and result",
     );
     LIFECYCLE_SCANS.render(
         &mut out,
-        "objectio_lifecycle_scans_total",
+        "iolake_lifecycle_scans_total",
         "Lifecycle scans over every bucket, by result",
     );
     PACKS_WRITTEN.render(
         &mut out,
-        "objectio_packs_written_total",
+        "iolake_packs_written_total",
         "Packs written and sealed by the packer (small objects stored together)",
     );
     PACK_OBJECTS.render(
         &mut out,
-        "objectio_pack_objects_total",
+        "iolake_pack_objects_total",
         "Small objects moved into packs",
     );
     PACK_BYTES_SAVED.render(
         &mut out,
-        "objectio_pack_bytes_saved_total",
+        "iolake_pack_bytes_saved_total",
         "Raw bytes (shards, before padding and headers) saved by packing: the objects' own stripes less the packs'",
     );
     PACK_RECONCILED.render(
         &mut out,
-        "objectio_pack_reconciled_total",
+        "iolake_pack_reconciled_total",
         "Pack reconciliation outcomes, by action (aborted, released, finished)",
     );
     PACK_COMPACTIONS.render(
         &mut out,
-        "objectio_pack_compactions_total",
+        "iolake_pack_compactions_total",
         "Packs compacted: their live objects moved into a new pack, the old one freed",
     );
     PACK_COMPACTED_OBJECTS.render(
         &mut out,
-        "objectio_pack_compacted_objects_total",
+        "iolake_pack_compacted_objects_total",
         "Objects moved by compaction",
     );
     LIFECYCLE_SCAN_SECONDS.render(
         &mut out,
-        "objectio_lifecycle_scan_seconds",
+        "iolake_lifecycle_scan_seconds",
         "Time one lifecycle scan took",
         "",
     );
     crate::audit::render_metrics(&mut out);
     crate::bucket_logging::render_metrics(&mut out);
-    objectio_erasure::metrics::render(&mut out);
+    iolake_erasure::metrics::render(&mut out);
     crate::replication::render_metrics(&mut out);
     out
 }
@@ -484,17 +484,16 @@ mod tests {
     fn in_flight_returns_to_zero_on_drop() {
         {
             let _a = InFlight::start("TestOp");
-            assert!(render().contains("objectio_s3_requests_in_flight{operation=\"TestOp\"} 1"));
+            assert!(render().contains("iolake_s3_requests_in_flight{operation=\"TestOp\"} 1"));
         }
-        assert!(render().contains("objectio_s3_requests_in_flight{operation=\"TestOp\"} 0"));
+        assert!(render().contains("iolake_s3_requests_in_flight{operation=\"TestOp\"} 0"));
     }
 
     #[test]
     fn checksum_mismatches_are_counted_by_direction() {
         record_shard_checksum_mismatch("read");
         assert!(
-            render()
-                .contains("objectio_gateway_shard_checksum_mismatches_total{direction=\"read\"}")
+            render().contains("iolake_gateway_shard_checksum_mismatches_total{direction=\"read\"}")
         );
     }
 
@@ -506,7 +505,7 @@ mod tests {
         let out = render();
         for phase in ["first", "second"] {
             assert!(out.contains(&format!(
-                "objectio_gateway_request_phase_seconds_count{{operation=\"PhaseTestOp\",phase=\"{phase}\"}} 1"
+                "iolake_gateway_request_phase_seconds_count{{operation=\"PhaseTestOp\",phase=\"{phase}\"}} 1"
             )));
         }
     }

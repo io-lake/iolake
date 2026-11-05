@@ -1,6 +1,6 @@
 //! Chunk mapping for block storage
 //!
-//! Maps logical block addresses (LBAs) to chunk objects stored in ObjectIO.
+//! Maps logical block addresses (LBAs) to chunk objects stored in IOLake.
 
 use crate::{DEFAULT_CHUNK_SIZE, LBA_SIZE};
 
@@ -21,7 +21,7 @@ pub struct ChunkRange {
 /// Maps LBAs to chunks
 ///
 /// Volumes are divided into fixed-size chunks. Each chunk is stored as
-/// an object in ObjectIO's object storage layer.
+/// an object in IOLake's object storage layer.
 ///
 /// ```text
 /// Volume (100GB)

@@ -1,15 +1,15 @@
-# ObjectIO Monitoring Stack
+# IOLake Monitoring Stack
 #
 # Provides Prometheus metrics collection and Grafana visualization
 #
 # Usage:
-#   # Start ObjectIO first (from /data/objectio):
+#   # Start IOLake first (from /data/iolake):
 #   docker compose up -d
 #
 #   # Then start monitoring stack:
 #   docker compose -f docker-compose.monitoring.yml up -d
 #
-#   # Access Grafana at http://localhost:3000 (admin/objectio)
+#   # Access Grafana at http://localhost:3000 (admin/iolake)
 #   # Access Prometheus at http://localhost:9090
 #
 # For production, consider:
@@ -21,7 +21,7 @@ services:
   # Prometheus - Metrics collection and storage
   prometheus:
     image: prom/prometheus:v2.48.0
-    container_name: objectio-prometheus
+    container_name: iolake-prometheus
     hostname: prometheus
     restart: unless-stopped
     command:
@@ -37,17 +37,17 @@ services:
     ports:
       - "9090:9090"
     networks:
-      - objectio-net
+      - iolake-net
 
   # Grafana - Visualization and dashboards
   grafana:
     image: grafana/grafana:10.2.2
-    container_name: objectio-grafana
+    container_name: iolake-grafana
     hostname: grafana
     restart: unless-stopped
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=objectio
+      - GF_SECURITY_ADMIN_PASSWORD=iolake
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_ROOT_URL=http://localhost:3001
       - GF_INSTALL_PLUGINS=grafana-piechart-panel
@@ -58,17 +58,17 @@ services:
     ports:
       - "3001:3000"
     networks:
-      - objectio-net
+      - iolake-net
     depends_on:
       - prometheus
 
 networks:
-  # The network the ObjectIO containers run on
-  objectio-net:
+  # The network the IOLake containers run on
+  iolake-net:
     external: true
 
 volumes:
   prometheus-data:
-    name: objectio-prometheus-data
+    name: iolake-prometheus-data
   grafana-data:
-    name: objectio-grafana-data
+    name: iolake-grafana-data

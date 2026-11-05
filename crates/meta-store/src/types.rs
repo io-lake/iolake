@@ -73,7 +73,7 @@ pub struct OsdNode {
     /// (forced out of placement), or `Draining`. Independent of
     /// heartbeat-derived `NodeStatus` used by the topology; the service
     /// merges the two when rebuilding CRUSH.
-    pub admin_state: objectio_common::OsdAdminState,
+    pub admin_state: iolake_common::OsdAdminState,
     /// Transfer Engine segment (`ip:port`) the OSD accepts shard transfers
     /// on, from its registration. Empty when it has none — gateways then
     /// move its shards as gRPC bytes.
@@ -212,7 +212,7 @@ pub struct MultipartUploadState {
     /// until the gateway says whether it was stored. Its parts are this
     /// object's; nothing may free or change them meanwhile.
     #[prost(message, optional, tag = "13")]
-    pub completing: Option<objectio_proto::metadata::ObjectMeta>,
+    pub completing: Option<iolake_proto::metadata::ObjectMeta>,
     /// When the completion began (Unix seconds).
     #[prost(uint64, tag = "14")]
     pub completing_since: u64,
@@ -235,7 +235,7 @@ pub struct PartState {
     #[prost(string, tag = "6")]
     pub checksum: String,
     #[prost(message, repeated, tag = "7")]
-    pub stripes: Vec<objectio_proto::metadata::StripeMeta>,
+    pub stripes: Vec<iolake_proto::metadata::StripeMeta>,
 }
 
 // ---- IAM types ----
@@ -349,7 +349,7 @@ mod tests {
             disk_ids: vec![[1; 16], [2; 16]],
             topology,
             disk_capacity_bytes: vec![1 << 40, 2 << 40],
-            admin_state: objectio_common::OsdAdminState::Draining,
+            admin_state: iolake_common::OsdAdminState::Draining,
             te_segment: "10.0.0.7:12345".into(),
         }
     }

@@ -31,7 +31,7 @@ fn group_meta(g: &StoredGroup) -> GroupMeta {
 
 impl MetaService {
     /// Refuse what format level `level` adds until the cluster is there
-    /// (objectio-docs core/upgrade-path.md).
+    /// (iolake-docs core/upgrade-path.md).
     #[allow(clippy::result_large_err)] // the Status the RPC returns, as is
     fn require_level(&self, level: u32, what: &str) -> Result<(), Status> {
         if self.active_level() >= level {
@@ -82,8 +82,8 @@ impl MetaService {
     /// The writes that drop everything hanging off `principal` ("user:…",
     /// "group:…", "role:…"): its inline policies and its attachments. A
     /// recreated principal of the same name must start with nothing.
-    fn principal_cleanup_ops(&self, principal: &str) -> Vec<objectio_meta_store::CasOp> {
-        use objectio_meta_store::{CasOp, CasTable};
+    fn principal_cleanup_ops(&self, principal: &str) -> Vec<iolake_meta_store::CasOp> {
+        use iolake_meta_store::{CasOp, CasTable};
         let mut ops: Vec<CasOp> = self
             .inline_policies_of(principal)
             .into_iter()
@@ -113,7 +113,7 @@ impl MetaService {
     pub(super) fn apply_user_event(&self, key: &str, new_value: Option<&[u8]>) {
         let mut m = self.users.write();
         match new_value {
-            Some(bytes) => match objectio_meta_store::record::deserialize::<StoredUser>(bytes) {
+            Some(bytes) => match iolake_meta_store::record::deserialize::<StoredUser>(bytes) {
                 Ok(u) => {
                     m.insert(key.to_string(), u);
                 }
@@ -129,7 +129,7 @@ impl MetaService {
         let mut m = self.access_keys.write();
         match new_value {
             Some(bytes) => {
-                match objectio_meta_store::record::deserialize::<objectio_meta_store::StoredAccessKey>(
+                match iolake_meta_store::record::deserialize::<iolake_meta_store::StoredAccessKey>(
                     bytes,
                 ) {
                     Ok(k) => {
@@ -346,7 +346,7 @@ impl MetaService {
                 ));
             }
             self.require_level(
-                objectio_common::version::FEDERATED_USERS_LEVEL,
+                iolake_common::version::FEDERATED_USERS_LEVEL,
                 "a single sign-on user",
             )?;
             // The binding, not the name, identifies a federated user: an
@@ -412,10 +412,10 @@ impl MetaService {
         // Replicate through Raft. expected=None ensures the user_id
         // hasn't collided with a concurrent create (cryptographically
         // unlikely for UUIDs, but tested correctly by the state machine).
-        let user_bytes = objectio_meta_store::record::serialize(&user)
+        let user_bytes = iolake_meta_store::record::serialize(&user)
             .map_err(|e| Status::internal(format!("user encode: {e}")))?;
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Users,
@@ -536,9 +536,9 @@ impl MetaService {
                 .ok_or_else(|| Status::not_found("user not found"))?;
             let mut new_user = user.clone();
             new_user.status = UserStatus::UserDeleted as i32;
-            let old_bytes = objectio_meta_store::record::serialize(user)
+            let old_bytes = iolake_meta_store::record::serialize(user)
                 .map_err(|e| Status::internal(format!("user encode: {e}")))?;
-            let new_bytes = objectio_meta_store::record::serialize(&new_user)
+            let new_bytes = iolake_meta_store::record::serialize(&new_user)
                 .map_err(|e| Status::internal(format!("user encode: {e}")))?;
             (old_bytes, new_bytes, new_user)
         };
@@ -561,9 +561,9 @@ impl MetaService {
                 if let Some(key) = keys.get(key_id) {
                     let mut new_key = key.clone();
                     new_key.status = KeyStatus::KeyInactive as i32;
-                    let old_b = objectio_meta_store::record::serialize(key)
+                    let old_b = iolake_meta_store::record::serialize(key)
                         .map_err(|e| Status::internal(format!("key encode: {e}")))?;
-                    let new_b = objectio_meta_store::record::serialize(&new_key)
+                    let new_b = iolake_meta_store::record::serialize(&new_key)
                         .map_err(|e| Status::internal(format!("key encode: {e}")))?;
                     key_transitions.push((key_id.clone(), old_b, new_b, new_key));
                 }
@@ -578,16 +578,16 @@ impl MetaService {
             if g.member_user_ids.contains(&req.user_id) {
                 let mut after = g.clone();
                 after.member_user_ids.retain(|m| m != &req.user_id);
-                let old_b = objectio_meta_store::record::serialize(g)
+                let old_b = iolake_meta_store::record::serialize(g)
                     .map_err(|e| Status::internal(format!("group encode: {e}")))?;
-                let new_b = objectio_meta_store::record::serialize(&after)
+                let new_b = iolake_meta_store::record::serialize(&after)
                     .map_err(|e| Status::internal(format!("group encode: {e}")))?;
                 group_transitions.push((g.group_id.clone(), old_b, new_b, after));
             }
         }
 
         if self.raft_handle().is_some() {
-            use objectio_meta_store::{CasOp, CasTable};
+            use iolake_meta_store::{CasOp, CasTable};
             let mut ops = Vec::with_capacity(1 + key_transitions.len());
             for (kid, old_b, new_b, _) in &key_transitions {
                 ops.push(CasOp {
@@ -626,11 +626,7 @@ impl MetaService {
                 store.put_group(gid, group);
             }
             for op in self.principal_cleanup_ops(&principal) {
-                store.write_named(
-                    objectio_meta_store::cas_table_name(&op.table),
-                    &op.key,
-                    None,
-                );
+                store.write_named(iolake_meta_store::cas_table_name(&op.table), &op.key, None);
             }
         }
 
@@ -690,10 +686,10 @@ impl MetaService {
             operation: req.operation,
         };
 
-        let key_bytes = objectio_meta_store::record::serialize(&key)
+        let key_bytes = iolake_meta_store::record::serialize(&key)
             .map_err(|e| Status::internal(format!("access key encode: {e}")))?;
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     // No enum variant yet for access_keys — use Named
@@ -805,11 +801,11 @@ impl MetaService {
             .get(&req.access_key_id)
             .cloned()
             .ok_or_else(|| Status::not_found("access key not found"))?;
-        let expected_bytes = objectio_meta_store::record::serialize(&current)
+        let expected_bytes = iolake_meta_store::record::serialize(&current)
             .map_err(|e| Status::internal(format!("access key encode: {e}")))?;
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::AccessKeys,
@@ -852,12 +848,12 @@ impl MetaService {
 
     pub(crate) async fn get_access_key(
         &self,
-        request: Request<objectio_proto::metadata::GetAccessKeyRequest>,
-    ) -> Result<Response<objectio_proto::metadata::GetAccessKeyResponse>, Status> {
+        request: Request<iolake_proto::metadata::GetAccessKeyRequest>,
+    ) -> Result<Response<iolake_proto::metadata::GetAccessKeyResponse>, Status> {
         let id = request.into_inner().access_key_id;
         let key = self.access_keys.read().get(&id).cloned();
         Ok(Response::new(
-            objectio_proto::metadata::GetAccessKeyResponse {
+            iolake_proto::metadata::GetAccessKeyResponse {
                 found: key.is_some(),
                 access_key: key.map(|k| AccessKeyMeta {
                     access_key_id: k.access_key_id,
@@ -946,11 +942,11 @@ impl MetaService {
             created_at: now,
             path: stored_path(&path),
         };
-        let group_bytes = objectio_meta_store::record::serialize(&group)
+        let group_bytes = iolake_meta_store::record::serialize(&group)
             .map_err(|e| Status::internal(format!("group encode: {e}")))?;
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Groups,
@@ -1016,11 +1012,11 @@ impl MetaService {
         }
         new.arn = group_arn(&tenant, &new.path, &new.group_name);
         let enc = |g: &StoredGroup| -> Result<Vec<u8>, Box<Status>> {
-            objectio_meta_store::record::serialize(g)
+            iolake_meta_store::record::serialize(g)
                 .map_err(|e| Box::new(Status::internal(format!("group encode: {e}"))))
         };
         self.cas_one(
-            objectio_meta_store::CasTable::Groups,
+            iolake_meta_store::CasTable::Groups,
             &req.group_id,
             Some(enc(&old).map_err(|e| *e)?),
             Some(enc(&new).map_err(|e| *e)?),
@@ -1046,7 +1042,7 @@ impl MetaService {
             let g = groups
                 .get(&req.group_id)
                 .ok_or_else(|| Status::not_found("group not found"))?;
-            objectio_meta_store::record::serialize(g)
+            iolake_meta_store::record::serialize(g)
                 .map_err(|e| Status::internal(format!("group encode: {e}")))?
         };
 
@@ -1054,7 +1050,7 @@ impl MetaService {
         // `cas_in_order`).
         let principal = format!("group:{}", req.group_id);
         if self.raft_handle().is_some() {
-            use objectio_meta_store::{CasOp, CasTable};
+            use iolake_meta_store::{CasOp, CasTable};
             let mut ops = self.principal_cleanup_ops(&principal);
             ops.push(CasOp {
                 table: CasTable::Groups,
@@ -1068,11 +1064,7 @@ impl MetaService {
         } else if let Some(store) = &self.store {
             store.delete_group(&req.group_id);
             for op in self.principal_cleanup_ops(&principal) {
-                store.write_named(
-                    objectio_meta_store::cas_table_name(&op.table),
-                    &op.key,
-                    None,
-                );
+                store.write_named(iolake_meta_store::cas_table_name(&op.table), &op.key, None);
             }
         }
 
@@ -1141,17 +1133,17 @@ impl MetaService {
             if current.member_user_ids.contains(&req.user_id) {
                 return Err(Status::already_exists("user already in group"));
             }
-            let expected = objectio_meta_store::record::serialize(&current)
+            let expected = iolake_meta_store::record::serialize(&current)
                 .map_err(|e| Status::internal(format!("group encode: {e}")))?;
             let mut new_group = current;
             new_group.member_user_ids.push(req.user_id.clone());
             (expected, new_group)
         };
-        let new_bytes = objectio_meta_store::record::serialize(&new_group)
+        let new_bytes = iolake_meta_store::record::serialize(&new_group)
             .map_err(|e| Status::internal(format!("group encode: {e}")))?;
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Groups,
@@ -1201,17 +1193,17 @@ impl MetaService {
             if !current.member_user_ids.contains(&req.user_id) {
                 return Err(Status::not_found("user not in group"));
             }
-            let expected = objectio_meta_store::record::serialize(&current)
+            let expected = iolake_meta_store::record::serialize(&current)
                 .map_err(|e| Status::internal(format!("group encode: {e}")))?;
             let mut new_group = current;
             new_group.member_user_ids.retain(|id| id != &req.user_id);
             (expected, new_group)
         };
-        let new_bytes = objectio_meta_store::record::serialize(&new_group)
+        let new_bytes = iolake_meta_store::record::serialize(&new_group)
             .map_err(|e| Status::internal(format!("group encode: {e}")))?;
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Groups,
@@ -1292,10 +1284,10 @@ impl MetaService {
             updated_at: now,
         };
 
-        let bytes = objectio_meta_store::record::serialize(&filter)
+        let bytes = iolake_meta_store::record::serialize(&filter)
             .map_err(|e| Status::internal(format!("data_filter encode: {e}")))?;
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::DataFilters,
@@ -1390,12 +1382,12 @@ impl MetaService {
             let Some(f) = filters.get(&req.filter_id) else {
                 return Ok(Response::new(DeleteDataFilterResponse { success: false }));
             };
-            objectio_meta_store::record::serialize(f)
+            iolake_meta_store::record::serialize(f)
                 .map_err(|e| Status::internal(format!("data_filter encode: {e}")))?
         };
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::DataFilters,
@@ -1517,7 +1509,7 @@ impl MetaService {
         let bytes = policy.encode_to_vec();
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::IamPolicies,
@@ -1620,7 +1612,7 @@ impl MetaService {
         };
 
         if self.raft_handle().is_some() {
-            use objectio_meta_store::{CasOp, CasTable};
+            use iolake_meta_store::{CasOp, CasTable};
             let mut ops = Vec::with_capacity(1 + attachment_transitions.len());
             for (key, old, new, _) in &attachment_transitions {
                 ops.push(CasOp {
@@ -1676,7 +1668,7 @@ impl MetaService {
         let policy_name = req.policy_name;
 
         // Validate the policy exists: a stored one, or an AWS managed one.
-        if objectio_auth::managed::attached(&policy_name).is_none()
+        if iolake_auth::managed::attached(&policy_name).is_none()
             && !self.iam_policies.read().contains_key(&policy_name)
         {
             return Err(Status::not_found(format!(
@@ -1718,7 +1710,7 @@ impl MetaService {
         let new_bytes = new_policies_vec.join(",").into_bytes();
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::PolicyAttachments,
@@ -1786,7 +1778,7 @@ impl MetaService {
         };
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let new_value = if new_after.is_empty() {
                 None
             } else {
@@ -1851,7 +1843,7 @@ impl MetaService {
         new.policy_json = req.policy_json;
         new.updated_at = Self::current_timestamp();
         self.cas_one(
-            objectio_meta_store::CasTable::IamPolicies,
+            iolake_meta_store::CasTable::IamPolicies,
             &req.name,
             Some(old.encode_to_vec()),
             Some(new.encode_to_vec()),
@@ -1915,11 +1907,11 @@ impl MetaService {
             new.arn = arn;
         }
         let enc = |u: &StoredUser| -> Result<Vec<u8>, Box<Status>> {
-            objectio_meta_store::record::serialize(u)
+            iolake_meta_store::record::serialize(u)
                 .map_err(|e| Box::new(Status::internal(format!("user encode: {e}"))))
         };
         self.cas_one(
-            objectio_meta_store::CasTable::Users,
+            iolake_meta_store::CasTable::Users,
             &req.user_id,
             Some(enc(&old).map_err(|e| *e)?),
             Some(enc(&new).map_err(|e| *e)?),
@@ -1963,11 +1955,11 @@ impl MetaService {
         let mut new = old.clone();
         new.status = req.status;
         let enc = |k: &StoredAccessKey| -> Result<Vec<u8>, Box<Status>> {
-            objectio_meta_store::record::serialize(k)
+            iolake_meta_store::record::serialize(k)
                 .map_err(|e| Box::new(Status::internal(format!("key encode: {e}"))))
         };
         self.cas_one(
-            objectio_meta_store::CasTable::AccessKeys,
+            iolake_meta_store::CasTable::AccessKeys,
             &req.access_key_id,
             Some(enc(&old).map_err(|e| *e)?),
             Some(enc(&new).map_err(|e| *e)?),
@@ -1994,8 +1986,8 @@ impl MetaService {
 
     pub(crate) async fn get_sts_signing_key(
         &self,
-        _request: Request<objectio_proto::metadata::GetStsSigningKeyRequest>,
-    ) -> Result<Response<objectio_proto::metadata::GetStsSigningKeyResponse>, Status> {
+        _request: Request<iolake_proto::metadata::GetStsSigningKeyRequest>,
+    ) -> Result<Response<iolake_proto::metadata::GetStsSigningKeyResponse>, Status> {
         const TABLE: &str = "cluster_secrets";
         const KEY: &str = "sts-signing-key";
         let read = || {
@@ -2006,7 +1998,7 @@ impl MetaService {
         };
         if let Some(key) = read() {
             return Ok(Response::new(
-                objectio_proto::metadata::GetStsSigningKeyResponse { key },
+                iolake_proto::metadata::GetStsSigningKeyResponse { key },
             ));
         }
         // First use: one random key, created only if none exists, so two
@@ -2015,7 +2007,7 @@ impl MetaService {
         rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut fresh);
         match self
             .cas_one(
-                objectio_meta_store::CasTable::Named(TABLE.into()),
+                iolake_meta_store::CasTable::Named(TABLE.into()),
                 KEY,
                 None,
                 Some(fresh),
@@ -2028,7 +2020,7 @@ impl MetaService {
             Err(e) => return Err(e),
         }
         read()
-            .map(|key| Response::new(objectio_proto::metadata::GetStsSigningKeyResponse { key }))
+            .map(|key| Response::new(iolake_proto::metadata::GetStsSigningKeyResponse { key }))
             .ok_or_else(|| Status::unavailable("STS signing key not readable yet; retry"))
     }
 
@@ -2080,7 +2072,7 @@ impl MetaService {
         role.created_at = now;
         role.updated_at = now;
         self.cas_one(
-            objectio_meta_store::CasTable::Named(ROLES_TABLE.into()),
+            iolake_meta_store::CasTable::Named(ROLES_TABLE.into()),
             &iam_key(&role.tenant, &role.name),
             None,
             Some(role.encode_to_vec()),
@@ -2151,7 +2143,7 @@ impl MetaService {
         }
         new.updated_at = Self::current_timestamp();
         self.cas_one(
-            objectio_meta_store::CasTable::Named(ROLES_TABLE.into()),
+            iolake_meta_store::CasTable::Named(ROLES_TABLE.into()),
             &req.name,
             Some(old.encode_to_vec()),
             Some(new.encode_to_vec()),
@@ -2174,8 +2166,8 @@ impl MetaService {
         // not inherit them.
         let principal = format!("role:{name}");
         let mut ops = self.principal_cleanup_ops(&principal);
-        ops.push(objectio_meta_store::CasOp {
-            table: objectio_meta_store::CasTable::Named(ROLES_TABLE.into()),
+        ops.push(iolake_meta_store::CasOp {
+            table: iolake_meta_store::CasTable::Named(ROLES_TABLE.into()),
             key: name.clone(),
             expected: Some(old.encode_to_vec()),
             new_value: None,
@@ -2238,7 +2230,7 @@ impl MetaService {
             updated_at: now,
         };
         self.cas_one(
-            objectio_meta_store::CasTable::Named(INLINE_POLICIES_TABLE.into()),
+            iolake_meta_store::CasTable::Named(INLINE_POLICIES_TABLE.into()),
             &key,
             current,
             Some(policy.encode_to_vec()),
@@ -2306,7 +2298,7 @@ impl MetaService {
                 ))
             })?;
         self.cas_one(
-            objectio_meta_store::CasTable::Named(INLINE_POLICIES_TABLE.into()),
+            iolake_meta_store::CasTable::Named(INLINE_POLICIES_TABLE.into()),
             &key,
             Some(current),
             None,
@@ -2353,9 +2345,9 @@ mod iam_api_tests {
         let store = Arc::new(MetaStore::open(dir.path().join("meta.redb")).unwrap());
         let svc = MetaService::with_store(EcConfig::default(), store);
         svc.config.write().insert(
-            objectio_common::version::ACTIVE_LEVEL_KEY.to_string(),
+            iolake_common::version::ACTIVE_LEVEL_KEY.to_string(),
             ConfigEntry {
-                key: objectio_common::version::ACTIVE_LEVEL_KEY.to_string(),
+                key: iolake_common::version::ACTIVE_LEVEL_KEY.to_string(),
                 value: level.to_string().into_bytes(),
                 ..Default::default()
             },
@@ -2400,7 +2392,7 @@ mod iam_api_tests {
 
     #[tokio::test]
     async fn names_are_case_insensitive_and_the_arn_follows_a_rename() {
-        let (_d, svc) = service(objectio_common::version::MIN_LEVEL);
+        let (_d, svc) = service(iolake_common::version::MIN_LEVEL);
         let alice = user(&svc, "Alice", "/team/").await.unwrap();
         assert_eq!(alice.arn, "arn:objectio:iam::user/team/Alice");
         assert_eq!(alice.path, "/team/");
@@ -2447,7 +2439,7 @@ mod iam_api_tests {
 
     #[tokio::test]
     async fn a_sign_on_is_only_ever_the_user_bound_to_its_issuer_and_subject() {
-        let (_d, svc) = service(objectio_common::version::FEDERATED_USERS_LEVEL);
+        let (_d, svc) = service(iolake_common::version::FEDERATED_USERS_LEVEL);
         // A user no sign-on created: its name is taken, never adopted.
         let admin = user(&svc, "admin", "/").await.unwrap();
         let taken = sign_on(&svc, "admin", "", "https://idp", "s1")
@@ -2493,7 +2485,7 @@ mod iam_api_tests {
 
     #[tokio::test]
     async fn sign_on_users_wait_for_the_cluster_to_reach_their_level() {
-        let (_d, svc) = service(objectio_common::version::FEDERATED_USERS_LEVEL - 1);
+        let (_d, svc) = service(iolake_common::version::FEDERATED_USERS_LEVEL - 1);
         let early = sign_on(&svc, "alice", "", "https://idp", "s1")
             .await
             .unwrap_err();
@@ -2502,7 +2494,7 @@ mod iam_api_tests {
 
     #[tokio::test]
     async fn a_deleted_role_takes_its_policies_and_a_new_one_starts_empty() {
-        let (_d, svc) = service(objectio_common::version::MIN_LEVEL);
+        let (_d, svc) = service(iolake_common::version::MIN_LEVEL);
         let role = || RoleObject {
             name: "ci".into(),
             tenant: String::new(),
@@ -2565,7 +2557,7 @@ mod iam_api_tests {
 
     #[tokio::test]
     async fn a_deleted_user_leaves_its_groups_and_policies() {
-        let (_d, svc) = service(objectio_common::version::MIN_LEVEL);
+        let (_d, svc) = service(iolake_common::version::MIN_LEVEL);
         let alice = user(&svc, "alice", "/").await.unwrap();
         let group = svc
             .create_group(Request::new(CreateGroupRequest {
@@ -2604,7 +2596,7 @@ mod iam_api_tests {
 
     #[tokio::test]
     async fn a_group_renamed_keeps_its_id_and_its_arn_follows() {
-        let (_d, svc) = service(objectio_common::version::MIN_LEVEL);
+        let (_d, svc) = service(iolake_common::version::MIN_LEVEL);
         let create = |name: &str| {
             svc.create_group(Request::new(CreateGroupRequest {
                 group_name: name.into(),
@@ -2642,7 +2634,7 @@ mod iam_api_tests {
 
     #[tokio::test]
     async fn only_known_aws_managed_policies_attach() {
-        let (_d, svc) = service(objectio_common::version::MIN_LEVEL);
+        let (_d, svc) = service(iolake_common::version::MIN_LEVEL);
         let alice = user(&svc, "alice", "/").await.unwrap();
         let attach = |name: &str| {
             svc.attach_policy(Request::new(AttachPolicyRequest {

@@ -15,8 +15,8 @@ use axum::Json;
 use axum::extract::{Extension, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use objectio_auth::AuthResult;
-use objectio_proto::metadata::{
+use iolake_auth::AuthResult;
+use iolake_proto::metadata::{
     AddUserToGroupRequest, AttachPolicyRequest, CreateGroupRequest, CreatePolicyRequest,
     CreateRoleRequest, DeleteGroupRequest, DeletePolicyRequest, DeleteRoleRequest,
     DetachPolicyRequest, GetPolicyRequest, GetRoleRequest, GroupMeta, ListAttachedPoliciesRequest,
@@ -118,9 +118,9 @@ fn policy_document(v: &Value, what: &str) -> Result<String, Response> {
         str::to_string,
     );
     let parsed = if what == "trust policy" {
-        objectio_auth::BucketPolicy::from_trust_json(&text)
+        iolake_auth::BucketPolicy::from_trust_json(&text)
     } else {
-        objectio_auth::BucketPolicy::from_json(&text)
+        iolake_auth::BucketPolicy::from_json(&text)
     };
     parsed
         .map(|_| text)
@@ -478,7 +478,7 @@ async fn attachable(
     tenant: &str,
     name: &str,
 ) -> Result<String, Response> {
-    if objectio_auth::managed::attached(name).is_some() {
+    if iolake_auth::managed::attached(name).is_some() {
         return Ok(name.to_string());
     }
     if !tenant.is_empty() && get_policy(state, &key(tenant, name)).await.is_some() {

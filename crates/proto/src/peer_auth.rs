@@ -40,7 +40,7 @@ impl Roles {
     pub const GATEWAY: Self = Self(1 << 2);
     /// A block gateway.
     pub const BLOCK_GATEWAY: Self = Self(1 << 3);
-    /// An operator's tool: `obioctl`'s block commands, the Raft bootstrap.
+    /// An operator's tool: `iolakectl`'s block commands, the Raft bootstrap.
     pub const ADMIN: Self = Self(1 << 4);
     /// Every role.
     pub const ALL: Self = Self(0b1_1111);
@@ -113,7 +113,7 @@ const BLOCK: Roles = Roles::BLOCK_GATEWAY;
 const ADMIN: Roles = Roles::ADMIN;
 /// Meta and the gateways. Meta is allowed every meta call: a follower
 /// forwards each call it gets to the leader under its own certificate
-/// (`objectio-meta`'s `forward`), after checking the caller's here.
+/// (`iolake-meta`'s `forward`), after checking the caller's here.
 const GW: Roles = GATEWAY.or(META);
 /// Every service.
 const NODES: Roles = META.or(OSD).or(GATEWAY).or(BLOCK);
@@ -395,7 +395,7 @@ pub const RULES: &[(&str, &[(&str, Roles)])] = &[
     (
         BLOCK_SERVICE,
         &[
-            // An operator's: `obioctl volume|snapshot`.
+            // An operator's: `iolakectl volume|snapshot`.
             ("CreateVolume", ADMIN),
             ("DeleteVolume", ADMIN),
             ("GetVolume", ADMIN),
@@ -488,7 +488,7 @@ fn cached_roles(der: &[u8]) -> Roles {
 ///
 /// Those its certificate names. A certificate naming none comes from a
 /// release before roles: in a cluster still running one (its active level
-/// below [`objectio_common::version::PEER_ROLES_LEVEL`]) it is taken for
+/// below [`iolake_common::version::PEER_ROLES_LEVEL`]) it is taken for
 /// any role, so the upgrade can roll; once the upgrade is finalized, it
 /// has none.
 #[must_use]
@@ -506,8 +506,8 @@ pub fn peer_roles(certs: Option<&[impl AsRef<[u8]>]>) -> Roles {
 
 /// Whether the cluster still runs a release from before roles.
 fn before_roles() -> bool {
-    let active = objectio_common::version::active_level();
-    active != 0 && active < objectio_common::version::PEER_ROLES_LEVEL
+    let active = iolake_common::version::active_level();
+    active != 0 && active < iolake_common::version::PEER_ROLES_LEVEL
 }
 
 /// Refuses each gRPC call its peer's roles don't allow, when mTLS is on
@@ -721,13 +721,13 @@ mod tests {
     fn a_certificate_without_roles_is_any_role_only_before_the_upgrade_is_finalized() {
         let certs = [cert_with_uris(&[])];
         // A process that hasn't heard the cluster's level yet: none.
-        assert_eq!(objectio_common::version::active_level(), 0);
+        assert_eq!(iolake_common::version::active_level(), 0);
         assert!(peer_roles(Some(&certs[..])).is_empty());
-        objectio_common::version::set_active_level(objectio_common::version::PEER_ROLES_LEVEL - 1);
+        iolake_common::version::set_active_level(iolake_common::version::PEER_ROLES_LEVEL - 1);
         assert_eq!(peer_roles(Some(&certs[..])), Roles::ALL);
         let osd = [cert_with_uris(&["spiffe://objectio/osd"])];
         assert_eq!(peer_roles(Some(&osd[..])), Roles::OSD, "roles are roles");
-        objectio_common::version::set_active_level(objectio_common::version::PEER_ROLES_LEVEL);
+        iolake_common::version::set_active_level(iolake_common::version::PEER_ROLES_LEVEL);
         assert!(peer_roles(Some(&certs[..])).is_empty());
         assert!(peer_roles(None::<&[Vec<u8>]>).is_empty());
     }

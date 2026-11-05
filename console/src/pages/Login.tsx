@@ -250,7 +250,7 @@ export default function Login({ onLogin, appKind = "ops" }: Props) {
                 Remember connection
               </label>
               <a
-                href={`${DOCS_URL}/console`}
+                href={DOCS_URL}
                 className="text-[12px] text-accent hover:opacity-80"
               >
                 Forgot?

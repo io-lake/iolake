@@ -20,8 +20,8 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
-use objectio_auth::presign::presign_get;
-use objectio_proto::metadata::DeltaShareTableEntry;
+use iolake_auth::presign::presign_get;
+use iolake_proto::metadata::DeltaShareTableEntry;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::time::Duration;
@@ -432,7 +432,7 @@ fn file_key(table_root: &str, file_path: &str) -> String {
 mod tests {
     use super::*;
     use crate::delta_log::{AddAction, MetadataAction, ProtocolAction};
-    use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
+    use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
     use std::collections::HashMap;
 
     fn delta_entry() -> DeltaShareTableEntry {

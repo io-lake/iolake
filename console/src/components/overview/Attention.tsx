@@ -6,7 +6,7 @@ import { driveName, osdName, hostName, rebuildBreakdown } from "./cluster";
 import { count, percent, plural } from "./format";
 import { LinkButton, Panel } from "./Panel";
 
-/// The OSD's client-write cutoff (`--full-ratio`, `OBJECTIO_OSD_FULL_RATIO`):
+/// The OSD's client-write cutoff (`--full-ratio`, `IOLAKE_OSD_FULL_RATIO`):
 /// past it a drive refuses client writes and keeps the rest for repair. The
 /// console can't read an OSD's setting, so it states the default as one.
 const FULL_RATIO_PCT = 95;

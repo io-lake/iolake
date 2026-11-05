@@ -3,18 +3,17 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-# The distribution is "objectio-sdk" because "objectio" is taken on PyPI by an
-# unrelated (and unmaintained since 2020) package. The import stays `objectio`
-# — `pip install objectio-sdk` then `import objectio`, the same shape as
+# The distribution is "iolake-sdk"; the import is `iolake` —
+# `pip install iolake-sdk` then `import iolake`, the same shape as
 # python-dateutil → dateutil.
-name = "objectio-sdk"
+name = "iolake-sdk"
 version = "0.1.0rc1"
-description = "Client for the ObjectIO management API (/_admin/*)"
+description = "Client for the IOLake management API (/_admin/*)"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "Apache-2.0" }
-authors = [{ name = "ObjectIO" }]
-keywords = ["objectio", "s3", "object-storage", "iam", "provisioning"]
+authors = [{ name = "IOLake" }]
+keywords = ["iolake", "s3", "object-storage", "iam", "provisioning"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
@@ -34,9 +33,9 @@ dependencies = []
 dev = ["pytest>=7"]
 
 [project.urls]
-Homepage = "https://github.com/object-io/objectio"
-Source = "https://github.com/object-io/objectio-python-sdk"
-Issues = "https://github.com/object-io/objectio/issues"
+Homepage = "https://github.com/io-lake/iolake"
+Source = "https://github.com/io-lake/iolake-python-sdk"
+Issues = "https://github.com/io-lake/iolake/issues"
 
 [tool.setuptools.packages.find]
-include = ["objectio*"]
+include = ["iolake*"]

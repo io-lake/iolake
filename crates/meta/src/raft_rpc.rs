@@ -5,7 +5,7 @@
 
 //! Server-side tonic handler for the `RaftRpc` service.
 //!
-//! Mirrors the client-side transport in [`objectio_meta_store::raft_network`].
+//! Mirrors the client-side transport in [`iolake_meta_store::raft_network`].
 //! For each of the three inter-meta RPCs we:
 //!
 //! 1. JSON-decode the envelope payload into an openraft request type.
@@ -27,16 +27,16 @@
 //! answer leaves, and on entries or a snapshot from another leader.
 //!
 //! A follower without room for what its leader sends (below half its
-//! reserve, `objectio_meta_store::disk_space`) refuses entries and
-//! snapshot chunks, `objectio_proto::no_room`, before they reach openraft,
+//! reserve, `iolake_meta_store::disk_space`) refuses entries and
+//! snapshot chunks, `iolake_proto::no_room`, before they reach openraft,
 //! which would stop for good on a write the filesystem refused. It falls
 //! behind, and catches up once there is room. Heartbeats and votes are
 //! always taken: refusing them would start elections.
 
 use std::sync::Arc;
 
-use objectio_meta_store::{DiskSpace, MetaTypeConfig};
-use objectio_proto::raft::{RaftEnvelope, raft_rpc_server::RaftRpc};
+use iolake_meta_store::{DiskSpace, MetaTypeConfig};
+use iolake_proto::raft::{RaftEnvelope, raft_rpc_server::RaftRpc};
 use openraft::Raft;
 use openraft::Vote;
 use openraft::raft::{AppendEntriesRequest, InstallSnapshotRequest, VoteRequest};
@@ -86,7 +86,7 @@ impl RaftRpcService {
         match &self.space {
             Some(space) => space
                 .admit_entries(bytes)
-                .map_err(|e| objectio_proto::no_room(format!("meta node {}: {e}", self.self_id))),
+                .map_err(|e| iolake_proto::no_room(format!("meta node {}: {e}", self.self_id))),
             None => Ok(()),
         }
     }
@@ -258,7 +258,7 @@ mod room_tests {
             }]
         };
         let refused = append(entry()).await.expect_err("no room");
-        assert!(objectio_proto::is_no_room(&refused), "{refused}");
+        assert!(iolake_proto::is_no_room(&refused), "{refused}");
         append(Vec::new()).await.expect("a heartbeat is taken");
         std::fs::write(&free, "1000000").unwrap();
         append(entry()).await.expect("taken with room");

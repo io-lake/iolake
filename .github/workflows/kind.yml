@@ -38,13 +38,13 @@ jobs:
       - name: cluster and chart (builds the images)
         run: deploy/kind/setup.sh
       - name: every pod ready
-        run: kubectl -n objectio wait --for=condition=Ready pod --all --field-selector=status.phase=Running --timeout=600s
+        run: kubectl -n iolake wait --for=condition=Ready pod --all --field-selector=status.phase=Running --timeout=600s
       - name: meta HA
         run: deploy/kind/meta-ha-test.sh
       - name: state on failure
         if: failure()
         run: |
-          kubectl -n objectio get pods -o wide
-          for p in $(kubectl -n objectio get pods -o name); do
-            echo "== $p"; kubectl -n objectio logs "$p" --all-containers --tail=80 || true
+          kubectl -n iolake get pods -o wide
+          for p in $(kubectl -n iolake get pods -o name); do
+            echo "== $p"; kubectl -n iolake logs "$p" --all-containers --tail=80 || true
           done

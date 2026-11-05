@@ -1,3 +1,3 @@
-module github.com/object-io/objectio-go-sdk
+module github.com/io-lake/iolake-go-sdk
 
 go 1.22

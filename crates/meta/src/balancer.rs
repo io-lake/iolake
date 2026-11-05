@@ -50,8 +50,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use objectio_placement::CopysetPool;
-use objectio_proto::metadata::{ErasureType, PlacementGroup, PoolConfig};
+use iolake_placement::CopysetPool;
+use iolake_proto::metadata::{ErasureType, PlacementGroup, PoolConfig};
 use prost::Message;
 use rand::SeedableRng;
 use std::collections::HashMap;
@@ -468,7 +468,7 @@ async fn commit_pg(
     old_bytes: Vec<u8>,
     new_bytes: Vec<u8>,
 ) -> anyhow::Result<()> {
-    use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse, MetaStore};
+    use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse, MetaStore};
 
     let Some(raft) = meta.raft_handle() else {
         return Err(anyhow::anyhow!("no raft handle — cannot commit PG move"));

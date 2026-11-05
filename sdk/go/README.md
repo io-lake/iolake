@@ -1,17 +1,17 @@
-# objectio-go-sdk
+# iolake-go-sdk
 
-Go client for the **ObjectIO management API** — the `/_admin/*` surface that
+Go client for the **IOLake management API** — the `/_admin/*` surface that
 manages tenants, users and access keys, buckets and their policies, IAM
 policies, groups and roles, identity providers, Block Public Access, and the
 cluster itself — plus the STS call that turns an OIDC token into temporary
 credentials.
 
 ```bash
-go get github.com/object-io/objectio-go-sdk
+go get github.com/io-lake/iolake-go-sdk
 ```
 
 ```go
-import "github.com/object-io/objectio-go-sdk"
+import "github.com/io-lake/iolake-go-sdk"
 ```
 
 It deliberately does **not** do S3 data operations. Use aws-sdk-go-v2 (or
@@ -25,16 +25,16 @@ this into a CSI driver or an operator pulls in nothing else.
 ## Configure
 
 ```go
-app, err := objectio.NewFromEnv()
+app, err := iolake.NewFromEnv()
 ```
 
 | | |
 |---|---|
-| `OBJECTIO_ENDPOINT` or `OBJECTIO_URL` | gateway base URL — **required** |
-| `OBJECTIO_ACCESS_KEY_FILE` · `OBJECTIO_ACCESS_KEY` · `AWS_ACCESS_KEY_ID` | the first set |
-| `OBJECTIO_SECRET_KEY_FILE` · `OBJECTIO_SECRET_KEY` · `AWS_SECRET_ACCESS_KEY` | the first set |
-| `OBJECTIO_REGION` · `AWS_REGION` · `AWS_DEFAULT_REGION` | the first set; default `us-east-1` |
-| `OBJECTIO_PROVISIONER_USER_ID` | the user bucket keys are minted on |
+| `IOLAKE_ENDPOINT` or `IOLAKE_URL` | gateway base URL — **required** |
+| `IOLAKE_ACCESS_KEY_FILE` · `IOLAKE_ACCESS_KEY` · `AWS_ACCESS_KEY_ID` | the first set |
+| `IOLAKE_SECRET_KEY_FILE` · `IOLAKE_SECRET_KEY` · `AWS_SECRET_ACCESS_KEY` | the first set |
+| `IOLAKE_REGION` · `AWS_REGION` · `AWS_DEFAULT_REGION` | the first set; default `us-east-1` |
+| `IOLAKE_PROVISIONER_USER_ID` | the user bucket keys are minted on |
 
 Prefer the `_FILE` forms in Kubernetes — that is how a Secret is projected, and
 a secret in the environment is readable from `/proc` and lands in crash dumps.
@@ -51,7 +51,7 @@ minting itself a wider one.
 One bucket per consumer, and one credential confined to it:
 
 ```go
-ba, err := app.ProvisionBucket(ctx, objectio.ProvisionBucketInput{
+ba, err := app.ProvisionBucket(ctx, iolake.ProvisionBucketInput{
     Bucket:            "app-1",
     ProvisionerUserID: provisionerUserID,
 })
@@ -59,7 +59,7 @@ ba, err := app.ProvisionBucket(ctx, objectio.ProvisionBucketInput{
 ```
 
 Two calls, no bucket policy and no extra user: the provisioner owns the bucket
-it just created — with no policy attached ObjectIO authorizes on ownership —
+it just created — with no policy attached IOLake authorizes on ownership —
 and the scope narrows that to the one bucket.
 
 Hand it to the S3 client:
@@ -89,7 +89,7 @@ can each have a policy called `readers`.
 ```go
 doc := json.RawMessage(`{"Version":"2012-10-17","Statement":[...]}`)
 app.CreatePolicy(ctx, "readers", doc, "", false)
-app.AttachPolicy(ctx, "readers", objectio.PolicyTarget{UserID: uid}, "")
+app.AttachPolicy(ctx, "readers", iolake.PolicyTarget{UserID: uid}, "")
 g, _ := app.CreateGroup(ctx, "devs", "")
 app.AddGroupMember(ctx, g.GroupID, uid)
 ```
@@ -99,7 +99,7 @@ because the server replaces those objects whole — a field a PUT leaves out is
 reset, not kept:
 
 ```go
-root.UpdateTenant(ctx, "acme", func(t *objectio.Tenant) { t.QuotaBytes = 1 << 40 })
+root.UpdateTenant(ctx, "acme", func(t *iolake.Tenant) { t.QuotaBytes = 1 << 40 })
 ```
 
 ## Roles and STS
@@ -109,8 +109,8 @@ exchanges it for a role's temporary credentials. The call is unsigned — the
 token is the proof — so the client needs no keys:
 
 ```go
-sts, _ := objectio.New(objectio.Config{Endpoint: endpoint})
-creds, err := sts.AssumeRoleWithWebIdentity(ctx, objectio.AssumeRoleWithWebIdentityInput{
+sts, _ := iolake.New(iolake.Config{Endpoint: endpoint})
+creds, err := sts.AssumeRoleWithWebIdentity(ctx, iolake.AssumeRoleWithWebIdentityInput{
     RoleArn:          "arn:obio:iam::acme:role/ci",
     WebIdentityToken: token,
     RoleSessionName:  "build-42",
@@ -126,12 +126,12 @@ so set it again before writing a provider back.
 
 ## Errors
 
-Non-2xx answers are `*objectio.APIError` with the status code. The S3 and STS
+Non-2xx answers are `*iolake.APIError` with the status code. The S3 and STS
 calls answer with XML error documents, and their code lands in `Code`:
 
 ```go
 _, err := app.GetBucketPublicAccessBlock(ctx, "app-1")
-var ae *objectio.APIError
+var ae *iolake.APIError
 if errors.As(err, &ae) && ae.Code == "NoSuchPublicAccessBlockConfiguration" { … }
 ```
 
@@ -172,7 +172,7 @@ go run ./example -endpoint http://127.0.0.1:9000 -access-key AKIA… -secret-key
 
 ```bash
 go test ./...                                   # no server needed
-OBJECTIO_ENDPOINT=http://127.0.0.1:9000 OBJECTIO_ACCESS_KEY=… OBJECTIO_SECRET_KEY=… \
+IOLAKE_ENDPOINT=http://127.0.0.1:9000 IOLAKE_ACCESS_KEY=… IOLAKE_SECRET_KEY=… \
   go test -tags integration ./...               # against a live gateway, as system admin
 ```
 
@@ -183,5 +183,5 @@ unset.
 ---
 
 **This repository is generated.** It is mirrored from `sdk/go/` in
-[object-io/objectio](https://github.com/object-io/objectio) on every push to
+[io-lake/iolake](https://github.com/io-lake/iolake) on every push to
 `main`. Open issues and pull requests there — changes made here are overwritten.

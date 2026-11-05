@@ -1,4 +1,4 @@
-//! A host set up with `objectio-install` runs a cluster that serves S3
+//! A host set up with `iolake-install` runs a cluster that serves S3
 //! (issue #59).
 //!
 //! The installer wrote units that started meta and the gateway with only
@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-use objectio_e2e::{Cluster, binary, free_port, free_ports};
+use iolake_e2e::{Cluster, binary, free_port, free_ports};
 
 /// The processes started from units, killed on drop. A failing test prints
 /// the end of each one's log.
@@ -52,14 +52,14 @@ impl Services {
     }
 
     /// As [`Self::start`], under mTLS with the test certificate of
-    /// `identity` (`OBJECTIO_TLS_*`, as a drop-in's `Environment=` sets).
+    /// `identity` (`IOLAKE_TLS_*`, as a drop-in's `Environment=` sets).
     fn start_as(&mut self, host: &Path, unit: &str, identity: Option<&str>) {
         let argv = exec_start(host, unit);
         let log = host.join(format!("{unit}.log"));
         let out = std::fs::File::create(&log).expect("log file");
         let mut cmd = Command::new(&argv[0]);
         if let Some(identity) = identity {
-            objectio_e2e::tls::apply(&mut cmd, identity);
+            iolake_e2e::tls::apply(&mut cmd, identity);
         }
         let child = cmd
             .args(&argv[1..])
@@ -111,21 +111,21 @@ fn exec_start(host: &Path, unit: &str) -> Vec<String> {
     argv
 }
 
-/// `objectio-install` with `args`; panics with its output if it fails.
+/// `iolake-install` with `args`; panics with its output if it fails.
 fn installer(args: &[&str]) -> String {
     match try_installer(args) {
         Ok(out) => out,
-        Err(e) => panic!("objectio-install {args:?}: {e}"),
+        Err(e) => panic!("iolake-install {args:?}: {e}"),
     }
 }
 
-/// `objectio-install` with `args`: its standard output, or both outputs
+/// `iolake-install` with `args`: its standard output, or both outputs
 /// if it fails.
 fn try_installer(args: &[&str]) -> Result<String, String> {
-    let out = Command::new(binary("objectio-install"))
+    let out = Command::new(binary("iolake-install"))
         .args(args)
         .output()
-        .expect("run objectio-install");
+        .expect("run iolake-install");
     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
     if out.status.success() {
         Ok(stdout)
@@ -137,10 +137,10 @@ fn try_installer(args: &[&str]) -> Result<String, String> {
     }
 }
 
-/// `objectio-install init` for a host under `root`, the binaries this
+/// `iolake-install init` for a host under `root`, the binaries this
 /// build's.
 fn install(root: &Path, args: &[&str]) {
-    let bin_dir = binary("objectio-meta");
+    let bin_dir = binary("iolake-meta");
     let bin_dir = bin_dir.parent().unwrap().display().to_string();
     let root = root.display().to_string();
     let mut all = vec!["init", "--root", &root, "--bin-dir", &bin_dir, "--systemd"];
@@ -265,11 +265,11 @@ fn one_host_set_up_by_the_installer_serves_s3() {
         .collect();
     written.sort();
     assert_eq!(written, ["osd-0.toml", "osd-1.toml", "osd-2.toml"]);
-    let meta_argv = exec_start(root, "objectio-meta");
+    let meta_argv = exec_start(root, "iolake-meta");
     assert!(!meta_argv.iter().any(|a| a == "--config"), "{meta_argv:?}");
 
     let mut services = Services::new();
-    services.start(root, "objectio-meta");
+    services.start(root, "iolake-meta");
     await_listening(admin, "meta's admin port");
     let out = installer(&["cluster", "init", &format!("127.0.0.1:{admin}")]);
     assert!(out.contains("voters [1]"), "{out}");
@@ -277,10 +277,10 @@ fn one_host_set_up_by_the_installer_serves_s3() {
     installer(&["cluster", "init", &format!("127.0.0.1:{admin}")]);
 
     for unit in [
-        "objectio-osd-0",
-        "objectio-osd-1",
-        "objectio-osd-2",
-        "objectio-gateway",
+        "iolake-osd-0",
+        "iolake-osd-1",
+        "iolake-osd-2",
+        "iolake-gateway",
     ] {
         services.start(root, unit);
     }
@@ -346,13 +346,13 @@ fn three_hosts_set_up_by_the_installer_serve_s3() {
     assert!(
         !hosts[1]
             .path()
-            .join("etc/systemd/system/objectio-gateway.service")
+            .join("etc/systemd/system/iolake-gateway.service")
             .exists()
     );
 
     let mut services = Services::new();
     for (i, host) in hosts.iter().enumerate() {
-        services.start(host.path(), "objectio-meta");
+        services.start(host.path(), "iolake-meta");
         await_listening(ports[i].1, "meta's admin port");
     }
     let nodes: Vec<String> = ports
@@ -367,9 +367,9 @@ fn three_hosts_set_up_by_the_installer_serve_s3() {
     installer(&args);
 
     for host in &hosts {
-        services.start(host.path(), "objectio-osd-0");
+        services.start(host.path(), "iolake-osd-0");
     }
-    services.start(hosts[0].path(), "objectio-gateway");
+    services.start(hosts[0].path(), "iolake-gateway");
     await_listening(gateway, "the gateway");
     // Every meta node writes the admin's keys: the third host's will do.
     let (ak, sk) = admin_keys(&hosts[2].path().join("var/lib/objectio/meta"));
@@ -383,8 +383,8 @@ fn three_hosts_set_up_by_the_installer_serve_s3() {
 /// forms the group.
 #[test]
 fn cluster_init_under_mtls_takes_an_admin_certificate() {
-    let certs = objectio_e2e::tls::files().expect(
-        "OBJECTIO_E2E_PLAIN is set: the cluster runs plain gRPC, and this test is about mTLS",
+    let certs = iolake_e2e::tls::files().expect(
+        "IOLAKE_E2E_PLAIN is set: the cluster runs plain gRPC, and this test is about mTLS",
     );
     let host = tempfile::tempdir().expect("tempdir");
     let root = host.path();
@@ -407,7 +407,7 @@ fn cluster_init_under_mtls_takes_an_admin_certificate() {
         ],
     );
     let mut services = Services::new();
-    services.start_as(root, "objectio-meta", Some(objectio_e2e::tls::META));
+    services.start_as(root, "iolake-meta", Some(iolake_e2e::tls::META));
     await_listening(admin, "meta's admin port");
     let node = format!("127.0.0.1:{admin}");
 
@@ -433,9 +433,9 @@ fn cluster_init_under_mtls_takes_an_admin_certificate() {
         ])
     };
     // Another role's certificate reads /status, but /init is refused.
-    let e = with(objectio_e2e::tls::GATEWAY).expect_err("a gateway's certificate formed a group");
+    let e = with(iolake_e2e::tls::GATEWAY).expect_err("a gateway's certificate formed a group");
     assert!(e.contains("403") && e.contains("role admin"), "{e}");
 
-    let out = with(objectio_e2e::tls::ADMIN).unwrap_or_else(|e| panic!("as admin: {e}"));
+    let out = with(iolake_e2e::tls::ADMIN).unwrap_or_else(|e| panic!("as admin: {e}"));
     assert!(out.contains("voters [1]"), "{out}");
 }

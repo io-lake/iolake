@@ -59,10 +59,10 @@
 //! A round that can't reach a quorum is tried again until the gate's
 //! timeout (one `election_timeout_min`); then the calls waiting on it are
 //! answered UNAVAILABLE, which clients retry, reaching a node that serves
-//! (`objectio_proto::transport::meta_channel` leaves a node out while its
+//! (`iolake_proto::transport::meta_channel` leaves a node out while its
 //! probe says it isn't serving).
 //!
-//! Except on the only voter (one meta node, as in `objectio-aio`): its
+//! Except on the only voter (one meta node, as in `iolake-aio`): its
 //! quorum is itself, so openraft confirms its round as soon as its Raft
 //! core takes the request, and a round waits on nothing but this node.
 //! The core takes it after the log append it is busy with, which syncs:
@@ -96,7 +96,7 @@ type Confirm = Box<dyn Fn() -> Round + Send + Sync>;
 type Alone = Box<dyn Fn() -> bool + Send + Sync>;
 type Outcome = Shared<Pin<Box<dyn Future<Output = Result<(), String>> + Send>>>;
 
-type MetaRaft = openraft::Raft<objectio_meta_store::MetaTypeConfig>;
+type MetaRaft = openraft::Raft<iolake_meta_store::MetaTypeConfig>;
 
 /// How long a failed round waits before the next, so a failure that is
 /// immediate (connections refused) doesn't spin.

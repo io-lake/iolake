@@ -1,18 +1,18 @@
 [package]
-name = "objectio-gateway-bin"
-description = "The objectio-gateway binary: the S3 API gateway (the code is in crates/gateway)"
+name = "iolake-gateway-bin"
+description = "The iolake-gateway binary: the S3 API gateway (the code is in crates/gateway)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
 
 [[bin]]
-name = "objectio-gateway"
+name = "iolake-gateway"
 path = "src/main.rs"
 
 [dependencies]
-objectio-gateway = { workspace = true }
-objectio-common = { workspace = true }
+iolake-gateway = { workspace = true }
+iolake-common = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true }
@@ -24,8 +24,8 @@ tikv-jemallocator = { workspace = true }
 [features]
 default = []
 # Shard transfers over Mooncake Transfer Engine.
-rdma = ["objectio-gateway/rdma"]
+rdma = ["iolake-gateway/rdma"]
 # The PCRE2 grep engine.
-pcre2 = ["objectio-gateway/pcre2"]
+pcre2 = ["iolake-gateway/pcre2"]
 # The Hyperscan grep engine.
-hyperscan = ["objectio-gateway/hyperscan"]
+hyperscan = ["iolake-gateway/hyperscan"]

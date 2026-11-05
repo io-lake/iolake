@@ -5,7 +5,7 @@
 
 use std::time::{Duration, Instant};
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 const OBJECT: usize = 4 << 20;

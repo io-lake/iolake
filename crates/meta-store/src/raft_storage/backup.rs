@@ -1,14 +1,14 @@
 //! Backups of the state machine, and a node made the only voter: from a
 //! backup (a restore) or from its own data (a forced membership, the
-//! others lost for good). objectio-docs `core/meta.md`, "Backup, restore
+//! others lost for good). iolake-docs `core/meta.md`, "Backup, restore
 //! and losing a majority".
 //!
 //! A backup is the state machine as a snapshot carries it, in the
-//! container of [`objectio_common::meta_backup`], under a [`BackupHeader`].
+//! container of [`iolake_common::meta_backup`], under a [`BackupHeader`].
 //! A restore installs it as a snapshot is installed; both tools then make
 //! the same changes and end in the same state: the caller's own
 //! state-machine commands applied (what a restore to an older point needs,
-//! decided in `objectio-meta`), the membership one voter, a snapshot of the
+//! decided in `iolake-meta`), the membership one voter, a snapshot of the
 //! result kept as the current one (what a learner is sent), the log purged
 //! up to it and a vote past every entry held.
 
@@ -16,8 +16,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::{BufReader, BufWriter, Seek, Write};
 use std::path::Path;
 
-use objectio_common::meta_backup;
-use objectio_common::{Error, Result};
+use iolake_common::meta_backup;
+use iolake_common::{Error, Result};
 use openraft::{
     LogId, Membership, RaftLogReader, RaftStorage, SnapshotMeta, StoredMembership, Vote,
 };
@@ -94,7 +94,7 @@ fn config_value(txn: &redb::ReadTransaction, key: &str) -> Result<Option<Vec<u8>
     let Some(v) = table.get(key).map_err(|e| storage("config", e))? else {
         return Ok(None);
     };
-    let entry = objectio_proto::metadata::ConfigEntry::decode(v.value())
+    let entry = iolake_proto::metadata::ConfigEntry::decode(v.value())
         .map_err(|e| storage(&format!("config {key}"), e))?;
     Ok(Some(entry.value))
 }
@@ -131,14 +131,14 @@ impl MetaRaftStorage {
             .filter(|v| v.len() == 16)
             .map(|v| v.iter().map(|b| format!("{b:02x}")).collect())
             .unwrap_or_default();
-        let active_level = config_value(&txn, objectio_common::version::ACTIVE_LEVEL_KEY)?
+        let active_level = config_value(&txn, iolake_common::version::ACTIVE_LEVEL_KEY)?
             .and_then(|v| String::from_utf8(v).ok())
             .and_then(|v| v.trim().parse().ok())
             .unwrap_or(0);
         let header = BackupHeader {
-            format_level: objectio_common::version::FORMAT_LEVEL,
+            format_level: iolake_common::version::FORMAT_LEVEL,
             active_level,
-            release: objectio_common::version::RELEASE.to_string(),
+            release: iolake_common::version::RELEASE.to_string(),
             cluster_id,
             last_applied: state.last_applied,
             membership: state.membership,
@@ -198,7 +198,7 @@ impl MetaRaftStorage {
             ));
         }
         let header = Self::backup_header(backup)?;
-        if let Some(why) = objectio_common::version::incompatibility(header.active_level) {
+        if let Some(why) = iolake_common::version::incompatibility(header.active_level) {
             return Err(Error::PreconditionFailed(format!(
                 "the backup was taken at format level {}: {why}",
                 header.active_level
@@ -512,7 +512,7 @@ mod tests {
             .into_iter()
             .find(|(k, _)| k == key)
             .map(|(_, v)| {
-                objectio_proto::metadata::ConfigEntry::decode(v.as_slice())
+                iolake_proto::metadata::ConfigEntry::decode(v.as_slice())
                     .unwrap()
                     .value
             })
@@ -723,7 +723,7 @@ mod tests {
     #[tokio::test]
     async fn a_backup_from_a_level_this_binary_cant_run_at_is_refused() {
         let (dir, mut src) = source().await;
-        let level = objectio_common::version::FORMAT_LEVEL + 1;
+        let level = iolake_common::version::FORMAT_LEVEL + 1;
         let entry = set_config(3, 4, "cluster/active_level", level.to_string().as_bytes());
         src.append_to_log(vec![entry.clone()]).await.unwrap();
         src.apply_to_state_machine(&[entry]).await.unwrap();

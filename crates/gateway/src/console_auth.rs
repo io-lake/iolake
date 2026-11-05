@@ -4,7 +4,7 @@
 //! 1. **AK/SK**: `POST /_console/api/login` with access key + secret key
 //! 2. **OIDC SSO**: `GET /_console/api/oidc/authorize` → redirect to provider → callback
 //!
-//! Both methods result in the same `objectio-session` cookie.
+//! Both methods result in the same `iolake-session` cookie.
 
 use axum::{
     Extension, Json,
@@ -13,7 +13,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use hmac::{Hmac, Mac};
-use objectio_proto::metadata::GetAccessKeyForAuthRequest;
+use iolake_proto::metadata::GetAccessKeyForAuthRequest;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::sync::Arc;
@@ -23,9 +23,9 @@ use crate::s3::AppState;
 
 /// State for OIDC console routes
 pub struct ConsoleOidcState {
-    pub oidc_provider: Option<Arc<objectio_auth::OidcProvider>>,
+    pub oidc_provider: Option<Arc<iolake_auth::OidcProvider>>,
     pub external_endpoint: String,
-    pub meta_client: objectio_proto::metadata::metadata_service_client::MetadataServiceClient<
+    pub meta_client: iolake_proto::metadata::metadata_service_client::MetadataServiceClient<
         tonic::transport::Channel,
     >,
 }
@@ -33,7 +33,7 @@ pub struct ConsoleOidcState {
 /// Build an OidcProvider from a stored identity config (identity/openid/{name})
 pub(crate) fn build_oidc_provider_from_config(
     config: &serde_json::Value,
-) -> Option<objectio_auth::OidcProvider> {
+) -> Option<iolake_auth::OidcProvider> {
     let issuer_url = config.get("issuer_url")?.as_str()?.to_string();
     let client_id = config.get("client_id")?.as_str()?.to_string();
     let client_secret = config
@@ -58,19 +58,17 @@ pub(crate) fn build_oidc_provider_from_config(
         .unwrap_or("groups")
         .to_string();
 
-    Some(objectio_auth::OidcProvider::new(
-        objectio_auth::OidcConfig {
-            issuer_url,
-            client_id,
-            client_secret,
-            audience,
-            jwks_uri: None,
-            token_endpoint: None,
-            groups_claim,
-            role_claim: String::new(),
-            scopes,
-        },
-    ))
+    Some(iolake_auth::OidcProvider::new(iolake_auth::OidcConfig {
+        issuer_url,
+        client_id,
+        client_secret,
+        audience,
+        jwks_uri: None,
+        token_endpoint: None,
+        groups_claim,
+        role_claim: String::new(),
+        scopes,
+    }))
 }
 
 /// Default storage quota given to a tenant that registers itself through a
@@ -84,7 +82,7 @@ pub const DEFAULT_SELF_REGISTERED_QUOTA_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 pub struct ProviderTenancy {
     /// True when the provider federates many upstream tenants (Entra
     /// `common` / `organizations`). Each upstream tenant then gets its own
-    /// ObjectIO tenant, created on first login.
+    /// IOLake tenant, created on first login.
     pub multi_tenant: bool,
     /// Role/group claim value that makes a user an admin of their tenant.
     /// Empty means nobody is promoted and only the system admin can manage it.
@@ -170,7 +168,7 @@ pub fn derive_tenant_name(upstream_user: &str, tid: &str) -> String {
     }
 }
 
-/// Find, or self-register, the ObjectIO tenant for an upstream tenant id.
+/// Find, or self-register, the IOLake tenant for an upstream tenant id.
 ///
 /// Returns the tenant name, or an error string suitable for showing the user.
 /// A tenant is created only when the provider is multi-tenant and the upstream
@@ -178,7 +176,7 @@ pub fn derive_tenant_name(upstream_user: &str, tid: &str) -> String {
 /// carries the upstream id in [`OIDC_TID_LABEL`] so later logins find it again
 /// even if it is renamed.
 pub async fn resolve_or_register_tenant(
-    meta: &mut objectio_proto::metadata::metadata_service_client::MetadataServiceClient<
+    meta: &mut iolake_proto::metadata::metadata_service_client::MetadataServiceClient<
         tonic::transport::Channel,
     >,
     tenancy: &ProviderTenancy,
@@ -193,7 +191,7 @@ pub async fn resolve_or_register_tenant(
     }
 
     let existing = meta
-        .list_tenants(objectio_proto::metadata::ListTenantsRequest {})
+        .list_tenants(iolake_proto::metadata::ListTenantsRequest {})
         .await
         .map_err(|e| format!("tenant lookup failed: {e}"))?
         .into_inner()
@@ -225,7 +223,7 @@ pub async fn resolve_or_register_tenant(
     labels.insert(OIDC_TID_LABEL.to_string(), tid.to_string());
     labels.insert("oidc_provider".to_string(), provider_name.to_string());
 
-    let tenant = objectio_proto::metadata::TenantConfig {
+    let tenant = iolake_proto::metadata::TenantConfig {
         name: name.clone(),
         display_name: base,
         oidc_provider: provider_name.to_string(),
@@ -235,7 +233,7 @@ pub async fn resolve_or_register_tenant(
         ..Default::default()
     };
 
-    meta.create_tenant(objectio_proto::metadata::CreateTenantRequest {
+    meta.create_tenant(iolake_proto::metadata::CreateTenantRequest {
         tenant: Some(tenant),
     })
     .await
@@ -253,10 +251,10 @@ pub async fn resolve_or_register_tenant(
 /// provider's configured admin role.
 ///
 /// Control therefore sits in the customer's own identity provider: their
-/// administrators decide who administers their ObjectIO tenant, and we do not
+/// administrators decide who administers their IOLake tenant, and we do not
 /// have to guess from login order.
 pub async fn apply_tenant_admin_role(
-    meta: &mut objectio_proto::metadata::metadata_service_client::MetadataServiceClient<
+    meta: &mut iolake_proto::metadata::metadata_service_client::MetadataServiceClient<
         tonic::transport::Channel,
     >,
     tenancy: &ProviderTenancy,
@@ -270,7 +268,7 @@ pub async fn apply_tenant_admin_role(
         return;
     }
     let Ok(resp) = meta
-        .get_tenant(objectio_proto::metadata::GetTenantRequest {
+        .get_tenant(iolake_proto::metadata::GetTenantRequest {
             name: tenant_name.to_string(),
         })
         .await
@@ -286,7 +284,7 @@ pub async fn apply_tenant_admin_role(
     }
     tenant.admin_users.push(user_arn.to_string());
     if let Err(e) = meta
-        .update_tenant(objectio_proto::metadata::UpdateTenantRequest {
+        .update_tenant(iolake_proto::metadata::UpdateTenantRequest {
             tenant: Some(tenant),
         })
         .await
@@ -648,7 +646,7 @@ pub async fn console_login(
     };
     let (tenant, display_name, email, arn) = (user.tenant, user.display_name, user.email, user.arn);
     // Known by its ARN, as over SigV4: not by having no tenant.
-    let system_admin = arn == objectio_auth::SYSTEM_ADMIN_USER_ARN;
+    let system_admin = arn == iolake_auth::SYSTEM_ADMIN_USER_ARN;
     if !tenant.is_empty() {
         match tenant_open(&mut client, &tenant).await {
             Ok(true) => {}
@@ -721,7 +719,7 @@ pub async fn console_login(
 
     let (token, expires) = mint_session(&user_id, &body.access_key, &tenant, &arn, system_admin);
     let cookie = format!(
-        "objectio-session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={SESSION_TTL_SECS}"
+        "iolake-session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={SESSION_TTL_SECS}"
     );
 
     let session = SessionInfo {
@@ -757,7 +755,7 @@ pub async fn console_session(State(state): State<Arc<AppState>>, headers: Header
         && let Ok(resp) = state
             .meta_client
             .clone()
-            .get_user(objectio_proto::metadata::GetUserRequest {
+            .get_user(iolake_proto::metadata::GetUserRequest {
                 user_id: info.user.clone(),
             })
             .await
@@ -771,7 +769,7 @@ pub async fn console_session(State(state): State<Arc<AppState>>, headers: Header
 
 /// POST /_console/api/logout
 pub async fn console_logout() -> Response {
-    let cookie = "objectio-session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0";
+    let cookie = "iolake-session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0";
     Response::builder()
         .status(StatusCode::OK)
         .header(header::SET_COOKIE, cookie)
@@ -789,7 +787,7 @@ pub fn validate_session_from_headers(headers: &HeaderMap) -> Option<SessionInfo>
         .and_then(|cookies| {
             cookies.split(';').find_map(|c| {
                 let c = c.trim();
-                c.strip_prefix("objectio-session=")
+                c.strip_prefix("iolake-session=")
             })
         })
         // Fallback: Authorization: Bearer <token>
@@ -821,8 +819,8 @@ pub async fn session_tenant_gate(
     let signs_in_or_out = path == "/_console/api/login" || path == "/_console/api/logout";
     let signed = request
         .extensions()
-        .get::<objectio_auth::AuthResult>()
-        .is_some_and(|a| a.auth_mode != objectio_auth::AuthMode::Anonymous);
+        .get::<iolake_auth::AuthResult>()
+        .is_some_and(|a| a.auth_mode != iolake_auth::AuthMode::Anonymous);
     if !signs_in_or_out
         && !signed
         && let Some(session) = validate_session_from_headers(request.headers())
@@ -857,7 +855,7 @@ pub async fn my_list_keys(State(state): State<Arc<AppState>>, headers: HeaderMap
     // The session user is a user_id (UUID). Look up their access keys.
     let mut client = state.meta_client.clone();
     match client
-        .list_access_keys(objectio_proto::metadata::ListAccessKeysRequest {
+        .list_access_keys(iolake_proto::metadata::ListAccessKeysRequest {
             user_id: session.user.clone(),
         })
         .await
@@ -890,7 +888,7 @@ pub async fn my_create_key(State(state): State<Arc<AppState>>, headers: HeaderMa
 
     let mut client = state.meta_client.clone();
     match client
-        .create_access_key(objectio_proto::metadata::CreateAccessKeyRequest {
+        .create_access_key(iolake_proto::metadata::CreateAccessKeyRequest {
             user_id: session.user.clone(),
             // Self-service console keys inherit the user's full access.
             scope: String::new(),
@@ -926,7 +924,7 @@ pub async fn my_delete_key(
     // nothing.
     let mut client = state.meta_client.clone();
     let owned = match client
-        .list_access_keys(objectio_proto::metadata::ListAccessKeysRequest {
+        .list_access_keys(iolake_proto::metadata::ListAccessKeysRequest {
             user_id: session.user.clone(),
         })
         .await
@@ -939,7 +937,7 @@ pub async fn my_delete_key(
     }
 
     match client
-        .delete_access_key(objectio_proto::metadata::DeleteAccessKeyRequest {
+        .delete_access_key(iolake_proto::metadata::DeleteAccessKeyRequest {
             access_key_id: key_id,
         })
         .await
@@ -995,7 +993,7 @@ pub async fn oidc_enabled(
 
     let mut client = state.meta_client.clone();
     if let Ok(resp) = client
-        .list_config(objectio_proto::metadata::ListConfigRequest {
+        .list_config(iolake_proto::metadata::ListConfigRequest {
             prefix: "identity/openid/".to_string(),
         })
         .await
@@ -1099,7 +1097,7 @@ pub async fn tenant_sso_info(
 ) -> Response {
     let mut client = state.meta_client.clone();
     let tenant = match client
-        .get_tenant(objectio_proto::metadata::GetTenantRequest { name: name.clone() })
+        .get_tenant(iolake_proto::metadata::GetTenantRequest { name: name.clone() })
         .await
     {
         Ok(resp) => {
@@ -1139,7 +1137,7 @@ pub async fn tenant_sso_info(
 #[must_use]
 pub fn provider_binds_tenant(
     provider: &str,
-    tenant: &objectio_proto::metadata::TenantConfig,
+    tenant: &iolake_proto::metadata::TenantConfig,
 ) -> bool {
     provider == format!("t-{}", tenant.name.to_lowercase())
         || (!tenant.oidc_provider.is_empty() && tenant.oidc_provider == provider)
@@ -1190,7 +1188,7 @@ pub struct FederatedIdentity {
 impl FederatedIdentity {
     /// The identity in `claims`, if they carry an issuer and a subject.
     #[must_use]
-    pub fn from_claims(claims: &objectio_auth::Claims) -> Option<Self> {
+    pub fn from_claims(claims: &iolake_auth::Claims) -> Option<Self> {
         let issuer = claims
             .extra
             .get("iss")
@@ -1218,7 +1216,7 @@ impl FederatedIdentity {
 
     /// Whether `user` is the user of this identity in `tenant`.
     #[must_use]
-    pub fn is(&self, user: &objectio_proto::metadata::UserMeta, tenant: &str) -> bool {
+    pub fn is(&self, user: &iolake_proto::metadata::UserMeta, tenant: &str) -> bool {
         !user.user_id.is_empty()
             && user.federated_issuer == self.issuer
             && user.federated_subject == self.subject
@@ -1231,7 +1229,7 @@ struct LoginProvider {
     /// As stored (`identity/openid/<name>`); `system` for the gateway's
     /// `--oidc-*` provider.
     name: String,
-    oidc: objectio_auth::OidcProvider,
+    oidc: iolake_auth::OidcProvider,
     /// The gateway's own `--oidc-*` provider.
     global: bool,
     /// Signs in system administrators: the gateway's own provider, or a
@@ -1263,7 +1261,7 @@ async fn load_login_provider(
     let resp = state
         .meta_client
         .clone()
-        .get_config(objectio_proto::metadata::GetConfigRequest {
+        .get_config(iolake_proto::metadata::GetConfigRequest {
             key: format!("identity/openid/{name}"),
         })
         .await
@@ -1315,7 +1313,7 @@ async fn resolve_login_tenant(
     }
     let mut meta = state.meta_client.clone();
     if provider.tenancy.multi_tenant {
-        // The ObjectIO tenant follows the *upstream* tenant the user signed
+        // The IOLake tenant follows the *upstream* tenant the user signed
         // in from, and is created on first contact. Without a `tid` there is
         // nothing to key on, so the login is refused rather than landing
         // everyone in one shared tenant.
@@ -1340,7 +1338,7 @@ async fn resolve_login_tenant(
         return Ok(name);
     }
     let tenants = meta
-        .list_tenants(objectio_proto::metadata::ListTenantsRequest {})
+        .list_tenants(iolake_proto::metadata::ListTenantsRequest {})
         .await
         .map_err(|_| "Tenant lookup failed".to_string())?
         .into_inner()
@@ -1362,14 +1360,14 @@ async fn resolve_login_tenant(
 /// The user `identity` signs in as in `tenant`: the one created for it,
 /// created now on its first sign-in.
 async fn provision_federated_user(
-    meta: &mut objectio_proto::metadata::metadata_service_client::MetadataServiceClient<
+    meta: &mut iolake_proto::metadata::metadata_service_client::MetadataServiceClient<
         tonic::transport::Channel,
     >,
     identity: &FederatedIdentity,
     tenant: &str,
-) -> Result<objectio_proto::metadata::UserMeta, String> {
+) -> Result<iolake_proto::metadata::UserMeta, String> {
     let user = match meta
-        .create_user(objectio_proto::metadata::CreateUserRequest {
+        .create_user(iolake_proto::metadata::CreateUserRequest {
             display_name: identity.name.clone(),
             tenant: tenant.to_string(),
             federated_issuer: identity.issuer.clone(),
@@ -1405,7 +1403,7 @@ async fn provision_federated_user(
         );
         return Err("Could not create the user".to_string());
     }
-    if user.status != objectio_proto::metadata::UserStatus::UserActive as i32 {
+    if user.status != iolake_proto::metadata::UserStatus::UserActive as i32 {
         return Err("This user is not active".to_string());
     }
     Ok(user)
@@ -1418,13 +1416,13 @@ async fn provision_federated_user(
 ///
 /// Meta could not say.
 pub(crate) async fn tenant_open(
-    meta: &mut objectio_proto::metadata::metadata_service_client::MetadataServiceClient<
+    meta: &mut iolake_proto::metadata::metadata_service_client::MetadataServiceClient<
         tonic::transport::Channel,
     >,
     tenant: &str,
 ) -> Result<bool, tonic::Status> {
     let r = meta
-        .get_tenant(objectio_proto::metadata::GetTenantRequest {
+        .get_tenant(iolake_proto::metadata::GetTenantRequest {
             name: tenant.to_string(),
         })
         .await?
@@ -1456,7 +1454,7 @@ pub async fn oidc_authorize(
         let tenant = match state
             .meta_client
             .clone()
-            .get_tenant(objectio_proto::metadata::GetTenantRequest {
+            .get_tenant(iolake_proto::metadata::GetTenantRequest {
                 name: params.tenant.clone(),
             })
             .await
@@ -1643,7 +1641,7 @@ pub async fn oidc_callback(
                 let groups = provider.oidc.extract_groups(&claims);
                 // Present on Entra tokens; absent elsewhere, in which case there
                 // is no upstream tenant to key self-registration on.
-                let tid = objectio_auth::OidcProvider::tenant_id(&claims);
+                let tid = iolake_auth::OidcProvider::tenant_id(&claims);
                 (identity, groups, tid)
             }
             Err(e) => {
@@ -1725,7 +1723,7 @@ pub async fn oidc_callback(
     let system_admin = tenant.is_empty() && provider.system_admin;
     let (token, _) = mint_session(&user.user_id, "oidc", &tenant, &user.arn, system_admin);
     let session_cookie = format!(
-        "objectio-session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_TTL_SECS}"
+        "iolake-session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_TTL_SECS}"
     );
 
     // Clear state cookie + set session cookie + redirect to console
@@ -2001,7 +1999,7 @@ mod identity_tests {
         assert!(open_session(&tampered(&token, |v| v["a"] = SYSTEM_ADMIN_ARN.into())).is_none());
     }
 
-    const SYSTEM_ADMIN_ARN: &str = objectio_auth::SYSTEM_ADMIN_USER_ARN;
+    const SYSTEM_ADMIN_ARN: &str = iolake_auth::SYSTEM_ADMIN_USER_ARN;
 
     /// A system-scope user is not the system admin for being in the system
     /// scope; the system admin's ARN or a system sign-in is.
@@ -2032,8 +2030,8 @@ mod identity_tests {
         assert!(!crate::admin::is_system_admin(&nobody));
     }
 
-    fn tenant(name: &str, provider: &str) -> objectio_proto::metadata::TenantConfig {
-        objectio_proto::metadata::TenantConfig {
+    fn tenant(name: &str, provider: &str) -> iolake_proto::metadata::TenantConfig {
+        iolake_proto::metadata::TenantConfig {
             name: name.into(),
             oidc_provider: provider.into(),
             ..Default::default()
@@ -2068,8 +2066,8 @@ mod identity_tests {
         assert_eq!(choose_tenant(&two, "b", false).unwrap(), "b");
     }
 
-    fn claims(extra: serde_json::Value, email: Option<&str>) -> objectio_auth::Claims {
-        objectio_auth::Claims {
+    fn claims(extra: serde_json::Value, email: Option<&str>) -> iolake_auth::Claims {
+        iolake_auth::Claims {
             sub: "sub-1".into(),
             email: email.map(Into::into),
             name: None,
@@ -2112,7 +2110,7 @@ mod identity_tests {
 
         // The user for it is the one bound to it, in that tenant; a user of
         // the same name is not.
-        let user = |iss: &str, sub: &str, tenant: &str| objectio_proto::metadata::UserMeta {
+        let user = |iss: &str, sub: &str, tenant: &str| iolake_proto::metadata::UserMeta {
             user_id: "id".into(),
             display_name: "admin".into(),
             tenant: tenant.into(),
@@ -2132,7 +2130,7 @@ mod identity_tests {
 mod session_gate_tests {
     use super::*;
     use crate::auth_middleware::{AuthState, CachedTenant};
-    use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
+    use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
     use tower::ServiceExt as _;
 
     /// A router answering 200 behind the gate, whose meta is never reached:
@@ -2153,10 +2151,10 @@ mod session_gate_tests {
         match signed_as {
             Some(tenant) => router.layer(axum::middleware::from_fn(
                 move |mut r: axum::extract::Request, next: axum::middleware::Next| async move {
-                    r.extensions_mut().insert(objectio_auth::AuthResult {
+                    r.extensions_mut().insert(iolake_auth::AuthResult {
                         user_id: "u".into(),
                         tenant: tenant.into(),
-                        auth_mode: objectio_auth::AuthMode::Permanent,
+                        auth_mode: iolake_auth::AuthMode::Permanent,
                         ..Default::default()
                     });
                     next.run(r).await
@@ -2167,7 +2165,7 @@ mod session_gate_tests {
     }
 
     fn auth_state() -> Arc<AuthState> {
-        let channel = objectio_proto::transport::connect_lazy(
+        let channel = iolake_proto::transport::connect_lazy(
             &tonic::transport::Endpoint::from_static("http://127.0.0.1:1"),
         );
         Arc::new(AuthState::new(
@@ -2191,7 +2189,7 @@ mod session_gate_tests {
         let request = axum::http::Request::builder()
             .method(method)
             .uri(path)
-            .header(header::COOKIE, format!("objectio-session={session}"))
+            .header(header::COOKIE, format!("iolake-session={session}"))
             .body(axum::body::Body::empty())
             .unwrap();
         router.oneshot(request).await.unwrap().status()

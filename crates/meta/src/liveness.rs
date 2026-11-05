@@ -25,8 +25,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use objectio_common::{NodeId, NodeStatus, OsdAdminState};
-use objectio_proto::storage::{GetStatusRequest, storage_service_client::StorageServiceClient};
+use iolake_common::{NodeId, NodeStatus, OsdAdminState};
+use iolake_proto::storage::{GetStatusRequest, storage_service_client::StorageServiceClient};
 use tracing::{debug, info, warn};
 
 use crate::service::MetaService;
@@ -183,11 +183,11 @@ fn decide(reachable: bool, consecutive_misses: u32, admin: OsdAdminState) -> Opt
 /// One status call. Any error — connect, timeout, or an error response — is a
 /// miss; this only asks "would a write to you have worked".
 async fn probe(address: &str) -> bool {
-    let endpoint = match objectio_proto::transport::endpoint(address) {
+    let endpoint = match iolake_proto::transport::endpoint(address) {
         Ok(e) => e.connect_timeout(PROBE_TIMEOUT).timeout(PROBE_TIMEOUT),
         Err(_) => return false,
     };
-    let Ok(channel) = objectio_proto::transport::connect(&endpoint).await else {
+    let Ok(channel) = iolake_proto::transport::connect(&endpoint).await else {
         return false;
     };
     let mut client = StorageServiceClient::new(channel);

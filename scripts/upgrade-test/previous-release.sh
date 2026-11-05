@@ -5,8 +5,8 @@
 #
 # Prints the directory holding the binaries; point the test at it:
 #
-#   OBJECTIO_PREVIOUS_RELEASE_BIN=$(scripts/upgrade-test/previous-release.sh) \
-#     cargo test -p objectio-e2e --test rolling_upgrade
+#   IOLAKE_PREVIOUS_RELEASE_BIN=$(scripts/upgrade-test/previous-release.sh) \
+#     cargo test -p iolake-e2e --test rolling_upgrade
 #
 # The release is checked out in a git worktree and built with its own target
 # directory under target/previous/<tag>, so it never touches the current
@@ -35,16 +35,21 @@ fi
 # x86_64 release had and its arm64 one didn't; this release codes with
 # ISA-L everywhere. Built without it on x86_64, the old nodes would write
 # parity no release ever shipped there.
+#
+# The releases before the rename to IOLake (0.1.0-rc.3 and earlier) name
+# their packages and binaries objectio-*; the test finds either.
+prefix=iolake
+grep -q '^name = "iolake-meta"' "$src/crates/meta/Cargo.toml" || prefix=objectio
 features=()
 if [ "$(uname -m)" = x86_64 ] && grep -q '^isal = ' "$src/crates/erasure/Cargo.toml"; then
-    features=(--features objectio-erasure/isal)
+    features=(--features "$prefix-erasure/isal")
 fi
 (
     cd "$src"
     cargo build -q --target-dir "$base/target" "${features[@]}" \
-        --bin objectio-meta --bin objectio-osd --bin objectio-gateway >&2
+        --bin "$prefix-meta" --bin "$prefix-osd" --bin "$prefix-gateway" >&2
 )
-for b in objectio-meta objectio-osd objectio-gateway; do
+for b in "$prefix-meta" "$prefix-osd" "$prefix-gateway"; do
     [ -x "$bins/$b" ] || { echo "missing $bins/$b" >&2; exit 1; }
     got=$("$bins/$b" --version)
     [ "$got" = "$b ${tag#v}" ] || { echo "$bins/$b is '$got', not $tag" >&2; exit 1; }

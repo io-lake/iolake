@@ -13,11 +13,11 @@
 //!    (AES-GCM associated data), so a blob wrapped with one context cannot
 //!    be unwrapped with a different context.
 
-use objectio_kms::{
+use iolake_kms::{
     DEK_LEN, GeneratedDataKey, KmsError, KmsProvider, MASTER_KEY_LEN, MasterKey,
     unwrap_dek_with_context, wrap_dek_with_context,
 };
-use objectio_proto::metadata::{GetKmsKeyRequest, metadata_service_client::MetadataServiceClient};
+use iolake_proto::metadata::{GetKmsKeyRequest, metadata_service_client::MetadataServiceClient};
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -110,7 +110,7 @@ impl KmsProvider for LocalKmsProvider {
         encryption_context: &HashMap<String, String>,
     ) -> Result<GeneratedDataKey, KmsError> {
         let kek = self.load_kek(key_id).await?;
-        let dek = objectio_kms::generate_dek();
+        let dek = iolake_kms::generate_dek();
         let wrapped = wrap_dek_with_context(&kek, &dek, encryption_context);
         Ok(GeneratedDataKey {
             plaintext_dek: dek,
@@ -194,18 +194,18 @@ impl VaultKmsProvider {
 
     fn encode_context(context: &std::collections::HashMap<String, String>) -> String {
         use base64::Engine;
-        let aad = objectio_kms::canonical_context_aad(context);
+        let aad = iolake_kms::canonical_context_aad(context);
         base64::engine::general_purpose::STANDARD.encode(aad)
     }
 }
 
 #[async_trait::async_trait]
-impl objectio_kms::KmsProvider for VaultKmsProvider {
+impl iolake_kms::KmsProvider for VaultKmsProvider {
     async fn generate_data_key(
         &self,
         key_id: &str,
         encryption_context: &std::collections::HashMap<String, String>,
-    ) -> Result<objectio_kms::GeneratedDataKey, objectio_kms::KmsError> {
+    ) -> Result<iolake_kms::GeneratedDataKey, iolake_kms::KmsError> {
         use base64::Engine;
         let url = self.url(&format!("datakey/plaintext/{key_id}"));
         let mut body = serde_json::json!({});
@@ -219,43 +219,43 @@ impl objectio_kms::KmsProvider for VaultKmsProvider {
             .json(&body)
             .send()
             .await
-            .map_err(|e| objectio_kms::KmsError::ProviderError(format!("vault: {e}")))?;
+            .map_err(|e| iolake_kms::KmsError::ProviderError(format!("vault: {e}")))?;
         let status = resp.status();
         let text = resp
             .text()
             .await
-            .map_err(|e| objectio_kms::KmsError::ProviderError(format!("vault body: {e}")))?;
+            .map_err(|e| iolake_kms::KmsError::ProviderError(format!("vault body: {e}")))?;
         if !status.is_success() {
             if status == reqwest::StatusCode::NOT_FOUND
                 || status == reqwest::StatusCode::BAD_REQUEST
             {
-                return Err(objectio_kms::KmsError::KeyNotFound(key_id.to_string()));
+                return Err(iolake_kms::KmsError::KeyNotFound(key_id.to_string()));
             }
-            return Err(objectio_kms::KmsError::ProviderError(format!(
+            return Err(iolake_kms::KmsError::ProviderError(format!(
                 "vault {status}: {text}"
             )));
         }
         let json: serde_json::Value = serde_json::from_str(&text)
-            .map_err(|e| objectio_kms::KmsError::ProviderError(format!("vault json: {e}")))?;
+            .map_err(|e| iolake_kms::KmsError::ProviderError(format!("vault json: {e}")))?;
         let plaintext_b64 = json["data"]["plaintext"]
             .as_str()
-            .ok_or_else(|| objectio_kms::KmsError::ProviderError("vault: no plaintext".into()))?;
+            .ok_or_else(|| iolake_kms::KmsError::ProviderError("vault: no plaintext".into()))?;
         let ciphertext = json["data"]["ciphertext"]
             .as_str()
-            .ok_or_else(|| objectio_kms::KmsError::ProviderError("vault: no ciphertext".into()))?;
+            .ok_or_else(|| iolake_kms::KmsError::ProviderError("vault: no ciphertext".into()))?;
         let pt_bytes = base64::engine::general_purpose::STANDARD
             .decode(plaintext_b64)
-            .map_err(|e| objectio_kms::KmsError::ProviderError(format!("vault b64: {e}")))?;
-        if pt_bytes.len() != objectio_kms::DEK_LEN {
-            return Err(objectio_kms::KmsError::ProviderError(format!(
+            .map_err(|e| iolake_kms::KmsError::ProviderError(format!("vault b64: {e}")))?;
+        if pt_bytes.len() != iolake_kms::DEK_LEN {
+            return Err(iolake_kms::KmsError::ProviderError(format!(
                 "vault returned {}-byte DEK, expected {}",
                 pt_bytes.len(),
-                objectio_kms::DEK_LEN
+                iolake_kms::DEK_LEN
             )));
         }
-        let mut plaintext_dek = [0u8; objectio_kms::DEK_LEN];
+        let mut plaintext_dek = [0u8; iolake_kms::DEK_LEN];
         plaintext_dek.copy_from_slice(&pt_bytes);
-        Ok(objectio_kms::GeneratedDataKey {
+        Ok(iolake_kms::GeneratedDataKey {
             plaintext_dek,
             wrapped_dek: ciphertext.as_bytes().to_vec(),
         })
@@ -266,10 +266,10 @@ impl objectio_kms::KmsProvider for VaultKmsProvider {
         key_id: &str,
         wrapped_dek: &[u8],
         encryption_context: &std::collections::HashMap<String, String>,
-    ) -> Result<[u8; objectio_kms::DEK_LEN], objectio_kms::KmsError> {
+    ) -> Result<[u8; iolake_kms::DEK_LEN], iolake_kms::KmsError> {
         use base64::Engine;
         let ciphertext = std::str::from_utf8(wrapped_dek).map_err(|_| {
-            objectio_kms::KmsError::InvalidWrap("vault ciphertext must be UTF-8 string".into())
+            iolake_kms::KmsError::InvalidWrap("vault ciphertext must be UTF-8 string".into())
         })?;
         let url = self.url(&format!("decrypt/{key_id}"));
         let mut body = serde_json::json!({ "ciphertext": ciphertext });
@@ -283,41 +283,41 @@ impl objectio_kms::KmsProvider for VaultKmsProvider {
             .json(&body)
             .send()
             .await
-            .map_err(|e| objectio_kms::KmsError::ProviderError(format!("vault: {e}")))?;
+            .map_err(|e| iolake_kms::KmsError::ProviderError(format!("vault: {e}")))?;
         let status = resp.status();
         let text = resp
             .text()
             .await
-            .map_err(|e| objectio_kms::KmsError::ProviderError(format!("vault body: {e}")))?;
+            .map_err(|e| iolake_kms::KmsError::ProviderError(format!("vault body: {e}")))?;
         if !status.is_success() {
             if status == reqwest::StatusCode::NOT_FOUND {
-                return Err(objectio_kms::KmsError::KeyNotFound(key_id.to_string()));
+                return Err(iolake_kms::KmsError::KeyNotFound(key_id.to_string()));
             }
-            return Err(objectio_kms::KmsError::InvalidWrap(format!(
+            return Err(iolake_kms::KmsError::InvalidWrap(format!(
                 "vault {status}: {text}"
             )));
         }
         let json: serde_json::Value = serde_json::from_str(&text)
-            .map_err(|e| objectio_kms::KmsError::ProviderError(format!("vault json: {e}")))?;
+            .map_err(|e| iolake_kms::KmsError::ProviderError(format!("vault json: {e}")))?;
         let plaintext_b64 = json["data"]["plaintext"]
             .as_str()
-            .ok_or_else(|| objectio_kms::KmsError::ProviderError("vault: no plaintext".into()))?;
+            .ok_or_else(|| iolake_kms::KmsError::ProviderError("vault: no plaintext".into()))?;
         let pt_bytes = base64::engine::general_purpose::STANDARD
             .decode(plaintext_b64)
-            .map_err(|e| objectio_kms::KmsError::ProviderError(format!("vault b64: {e}")))?;
-        if pt_bytes.len() != objectio_kms::DEK_LEN {
-            return Err(objectio_kms::KmsError::InvalidWrap(format!(
+            .map_err(|e| iolake_kms::KmsError::ProviderError(format!("vault b64: {e}")))?;
+        if pt_bytes.len() != iolake_kms::DEK_LEN {
+            return Err(iolake_kms::KmsError::InvalidWrap(format!(
                 "vault returned {}-byte DEK, expected {}",
                 pt_bytes.len(),
-                objectio_kms::DEK_LEN
+                iolake_kms::DEK_LEN
             )));
         }
-        let mut dek = [0u8; objectio_kms::DEK_LEN];
+        let mut dek = [0u8; iolake_kms::DEK_LEN];
         dek.copy_from_slice(&pt_bytes);
         Ok(dek)
     }
 
-    async fn key_exists(&self, key_id: &str) -> Result<bool, objectio_kms::KmsError> {
+    async fn key_exists(&self, key_id: &str) -> Result<bool, iolake_kms::KmsError> {
         let url = self.url(&format!("keys/{key_id}"));
         let resp = self
             .client
@@ -325,12 +325,12 @@ impl objectio_kms::KmsProvider for VaultKmsProvider {
             .header("X-Vault-Token", &self.token)
             .send()
             .await
-            .map_err(|e| objectio_kms::KmsError::ProviderError(format!("vault: {e}")))?;
+            .map_err(|e| iolake_kms::KmsError::ProviderError(format!("vault: {e}")))?;
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(false);
         }
         if !resp.status().is_success() {
-            return Err(objectio_kms::KmsError::ProviderError(format!(
+            return Err(iolake_kms::KmsError::ProviderError(format!(
                 "vault key-exists {}",
                 resp.status()
             )));
@@ -415,11 +415,11 @@ pub const KMS_CONFIG_KEY: &str = "kms/config";
 /// entry is missing, empty, or fails to decode — callers should fall back
 /// to CLI/env defaults in that case.
 pub async fn load_backend_config_from_meta(
-    meta_client: objectio_proto::metadata::metadata_service_client::MetadataServiceClient<
+    meta_client: iolake_proto::metadata::metadata_service_client::MetadataServiceClient<
         tonic::transport::Channel,
     >,
 ) -> Option<KmsBackendConfig> {
-    use objectio_proto::metadata::GetConfigRequest;
+    use iolake_proto::metadata::GetConfigRequest;
     let mut client = meta_client;
     let resp = client
         .get_config(GetConfigRequest {
@@ -452,14 +452,14 @@ pub async fn load_backend_config_from_meta(
 /// handle used by SSE PUT/GET.
 #[must_use]
 pub fn build_kms_provider(
-    meta_client: objectio_proto::metadata::metadata_service_client::MetadataServiceClient<
+    meta_client: iolake_proto::metadata::metadata_service_client::MetadataServiceClient<
         tonic::transport::Channel,
     >,
-    master_key: Option<&objectio_kms::MasterKey>,
+    master_key: Option<&iolake_kms::MasterKey>,
     config: &KmsBackendConfig,
 ) -> (
     Option<std::sync::Arc<LocalKmsProvider>>,
-    Option<std::sync::Arc<dyn objectio_kms::KmsProvider>>,
+    Option<std::sync::Arc<dyn iolake_kms::KmsProvider>>,
 ) {
     use std::sync::Arc;
     match config {
@@ -474,7 +474,7 @@ pub fn build_kms_provider(
             let local = Arc::new(LocalKmsProvider::new(meta_client, mk.clone()));
             (
                 Some(Arc::clone(&local)),
-                Some(local as Arc<dyn objectio_kms::KmsProvider>),
+                Some(local as Arc<dyn iolake_kms::KmsProvider>),
             )
         }
         KmsBackendConfig::Vault {
@@ -504,7 +504,7 @@ pub fn build_kms_provider(
             );
             (
                 None,
-                Some(Arc::new(provider) as Arc<dyn objectio_kms::KmsProvider>),
+                Some(Arc::new(provider) as Arc<dyn iolake_kms::KmsProvider>),
             )
         }
     }
@@ -526,9 +526,9 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
-use objectio_auth::AuthResult;
-use objectio_auth::policy::{BucketPolicy, PolicyDecision, RequestContext};
-use objectio_proto::metadata::{
+use iolake_auth::AuthResult;
+use iolake_auth::policy::{BucketPolicy, PolicyDecision, RequestContext};
+use iolake_proto::metadata::{
     CreateKmsKeyRequest, DeleteKmsKeyRequest, GetKmsKeyRequest as MetaGetKmsKeyRequest,
     GetPolicyRequest, ListAttachedPoliciesRequest, ListKmsKeysRequest,
 };
@@ -704,7 +704,7 @@ pub async fn admin_kms_version(
     }
     let body = json!({
         "version": env!("CARGO_PKG_VERSION"),
-        "protocol": "objectio-kms/v1",
+        "protocol": "iolake-kms/v1",
     });
     Response::builder()
         .status(StatusCode::OK)
@@ -771,7 +771,7 @@ fn status_name(code: i32) -> &'static str {
     }
 }
 
-fn to_view(k: &objectio_proto::metadata::KmsKey) -> KmsKeyView {
+fn to_view(k: &iolake_proto::metadata::KmsKey) -> KmsKeyView {
     KmsKeyView {
         key_id: k.key_id.clone(),
         arn: k.arn.clone(),
@@ -1083,7 +1083,7 @@ pub async fn admin_kms_put_config(
         .unwrap_or_else(|| "console".to_string());
     let mut client = state.meta_client.clone();
     if let Err(e) = client
-        .set_config(objectio_proto::metadata::SetConfigRequest {
+        .set_config(iolake_proto::metadata::SetConfigRequest {
             key: KMS_CONFIG_KEY.to_string(),
             value: bytes,
             updated_by: actor,
@@ -1126,7 +1126,7 @@ pub async fn admin_kms_delete_config(
     }
     let mut client = state.meta_client.clone();
     let _ = client
-        .delete_config(objectio_proto::metadata::DeleteConfigRequest {
+        .delete_config(iolake_proto::metadata::DeleteConfigRequest {
             key: KMS_CONFIG_KEY.to_string(),
         })
         .await;

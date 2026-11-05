@@ -280,7 +280,7 @@ fn provisioner(ctx: &Ctx<'_, '_>, user: Option<String>) -> Result<String> {
     user.or_else(|| ctx.provisioner.clone())
         .filter(|u| !u.is_empty())
         .ok_or_else(|| {
-            anyhow!("give --user (the provisioner's user_id) or set OBJECTIO_PROVISIONER_USER_ID")
+            anyhow!("give --user (the provisioner's user_id) or set IOLAKE_PROVISIONER_USER_ID")
         })
 }
 

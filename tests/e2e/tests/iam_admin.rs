@@ -3,7 +3,7 @@
 //! policies, and can neither see nor touch another tenant's. Suspending a
 //! user or deactivating a key cuts it off without deleting anything.
 
-use objectio_e2e::{Cluster, Response};
+use iolake_e2e::{Cluster, Response};
 use serde_json::{Value, json};
 
 /// Create a tenant with an admin user and return

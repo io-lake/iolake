@@ -1,7 +1,7 @@
 //! Conditional requests: a write with If-None-Match / If-Match happens only
 //! if the key is in the state it names, decided once for all replicas.
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 fn bucket(c: &Cluster, name: &str) {

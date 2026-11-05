@@ -1,4 +1,4 @@
-//! ObjectIO OSD — standalone binary entrypoint.
+//! IOLake OSD — standalone binary entrypoint.
 //!
 //! Parses CLI, installs tracing, delegates to the library crate's
 //! `run()` so `bin/aio` can share the implementation.
@@ -12,8 +12,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let args = objectio_osd::Args::parse();
-    let level = objectio_osd::log_level(&args)?;
+    let args = iolake_osd::Args::parse();
+    let level = iolake_osd::log_level(&args)?;
 
     tracing_subscriber::registry()
         .with(
@@ -22,5 +22,5 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    objectio_osd::run(args, objectio_common::shutdown_signal()?).await
+    iolake_osd::run(args, iolake_common::shutdown_signal()?).await
 }

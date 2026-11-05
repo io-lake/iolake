@@ -1,18 +1,18 @@
-# ObjectIO Multi-Stage Dockerfile
+# IOLake Multi-Stage Dockerfile
 # Builds all services with automatic platform detection
 #
 # Multi-Architecture Support: linux/amd64 and linux/arm64, both erasure-
 # coding with ISA-L (one code on every build, so nodes of either mix).
 #
 # Build targets:
-#   docker build --target gateway -t objectio-gateway .
-#   docker build --target meta -t objectio-meta .
-#   docker build --target osd -t objectio-osd .
-#   docker build --target cli -t objectio-cli .
-#   docker build --target all -t objectio .
+#   docker build --target gateway -t iolake-gateway .
+#   docker build --target meta -t iolake-meta .
+#   docker build --target osd -t iolake-osd .
+#   docker build --target cli -t iolake-cli .
+#   docker build --target all -t iolake .
 #
 # Multi-platform build (requires docker buildx):
-#   docker buildx build --platform linux/amd64,linux/arm64 --target gateway -t objectio-gateway .
+#   docker buildx build --platform linux/amd64,linux/arm64 --target gateway -t iolake-gateway .
 #
 # Build args:
 #   RUST_VERSION - Rust version (default: 1.92)
@@ -132,20 +132,20 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY bin ./bin
 COPY tests ./tests
-# obioctl carries the agent skills (`include_str!`).
+# iolakectl carries the agent skills (`include_str!`).
 COPY skills ./skills
 
-# objectio-aio embeds the console SPA at compile time via
+# iolake-aio embeds the console SPA at compile time via
 # `include_dir!("$CARGO_MANIFEST_DIR/../../console/dist")`, so the
 # built console must exist on disk before cargo runs. Pull it from the
 # console-builder stage.
 COPY --from=console-builder /build/console/dist /build/console/dist
 
-# Baked into objectio_build_info. The release workflow passes the tag and
+# Baked into iolake_build_info. The release workflow passes the tag and
 # the commit; a local build reports the crate version and "unknown".
-ARG OBJECTIO_VERSION
-ARG OBJECTIO_GIT_COMMIT
-ENV OBJECTIO_VERSION=${OBJECTIO_VERSION} OBJECTIO_GIT_COMMIT=${OBJECTIO_GIT_COMMIT}
+ARG IOLAKE_VERSION
+ARG IOLAKE_GIT_COMMIT
+ENV IOLAKE_VERSION=${IOLAKE_VERSION} IOLAKE_GIT_COMMIT=${IOLAKE_GIT_COMMIT}
 
 RUN F="$(cat /build/.features)"; \
     cargo build --release ${F:+--features "$F"}
@@ -187,11 +187,11 @@ FROM runtime-base AS gateway
 ARG TARGETARCH
 ARG TARGETPLATFORM
 
-LABEL org.opencontainers.image.title="ObjectIO Gateway"
-LABEL org.opencontainers.image.description="S3-compatible API gateway for ObjectIO"
+LABEL org.opencontainers.image.title="IOLake Gateway"
+LABEL org.opencontainers.image.description="S3-compatible API gateway for IOLake"
 LABEL org.opencontainers.image.architecture="${TARGETARCH}"
 
-COPY --from=builder /build/target/release/objectio-gateway /usr/local/bin/
+COPY --from=builder /build/target/release/iolake-gateway /usr/local/bin/
 
 # Console web UI — gateway serves it as a static SPA at /_console.
 # Built in the console-builder stage above, not from the host.
@@ -203,7 +203,7 @@ EXPOSE 9000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["/usr/local/bin/healthcheck.sh", "9000"]
 
-ENTRYPOINT ["objectio-gateway"]
+ENTRYPOINT ["iolake-gateway"]
 CMD ["--listen", "0.0.0.0:9000"]
 
 # =============================================================================
@@ -213,11 +213,11 @@ FROM runtime-base AS meta
 
 ARG TARGETARCH
 
-LABEL org.opencontainers.image.title="ObjectIO Metadata Service"
-LABEL org.opencontainers.image.description="Raft-based metadata service for ObjectIO"
+LABEL org.opencontainers.image.title="IOLake Metadata Service"
+LABEL org.opencontainers.image.description="Raft-based metadata service for IOLake"
 LABEL org.opencontainers.image.architecture="${TARGETARCH}"
 
-COPY --from=builder /build/target/release/objectio-meta /usr/local/bin/
+COPY --from=builder /build/target/release/iolake-meta /usr/local/bin/
 
 USER objectio
 
@@ -231,7 +231,7 @@ VOLUME ["/var/lib/objectio"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD ["/usr/local/bin/healthcheck.sh", "9101"]
 
-ENTRYPOINT ["objectio-meta"]
+ENTRYPOINT ["iolake-meta"]
 CMD ["--listen", "0.0.0.0:9100", "--data-dir", "/var/lib/objectio/meta"]
 
 # =============================================================================
@@ -241,11 +241,11 @@ FROM runtime-base AS osd
 
 ARG TARGETARCH
 
-LABEL org.opencontainers.image.title="ObjectIO OSD"
+LABEL org.opencontainers.image.title="IOLake OSD"
 LABEL org.opencontainers.image.description="Object Storage Daemon with erasure coding"
 LABEL org.opencontainers.image.architecture="${TARGETARCH}"
 
-COPY --from=builder /build/target/release/objectio-osd /usr/local/bin/
+COPY --from=builder /build/target/release/iolake-osd /usr/local/bin/
 
 USER objectio
 
@@ -258,7 +258,7 @@ VOLUME ["/var/lib/objectio"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["/usr/local/bin/healthcheck.sh", "9201"]
 
-ENTRYPOINT ["objectio-osd"]
+ENTRYPOINT ["iolake-osd"]
 CMD ["--listen", "0.0.0.0:9200", "--data-dir", "/var/lib/objectio/osd"]
 
 # =============================================================================
@@ -268,15 +268,15 @@ FROM runtime-base AS cli
 
 ARG TARGETARCH
 
-LABEL org.opencontainers.image.title="ObjectIO CLI"
-LABEL org.opencontainers.image.description="Admin CLI for ObjectIO cluster management"
+LABEL org.opencontainers.image.title="IOLake CLI"
+LABEL org.opencontainers.image.description="Admin CLI for IOLake cluster management"
 LABEL org.opencontainers.image.architecture="${TARGETARCH}"
 
-COPY --from=builder /build/target/release/obioctl /usr/local/bin/
+COPY --from=builder /build/target/release/iolakectl /usr/local/bin/
 
 USER objectio
 
-ENTRYPOINT ["obioctl"]
+ENTRYPOINT ["iolakectl"]
 CMD ["--help"]
 
 # =============================================================================
@@ -286,11 +286,11 @@ FROM runtime-base AS block-gateway
 
 ARG TARGETARCH
 
-LABEL org.opencontainers.image.title="ObjectIO Block Gateway"
-LABEL org.opencontainers.image.description="NBD + gRPC block storage gateway for ObjectIO"
+LABEL org.opencontainers.image.title="IOLake Block Gateway"
+LABEL org.opencontainers.image.description="NBD + gRPC block storage gateway for IOLake"
 LABEL org.opencontainers.image.architecture="${TARGETARCH}"
 
-COPY --from=builder /build/target/release/objectio-block-gateway /usr/local/bin/
+COPY --from=builder /build/target/release/iolake-block-gateway /usr/local/bin/
 
 USER objectio
 
@@ -304,7 +304,7 @@ VOLUME ["/var/lib/objectio"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["/usr/local/bin/healthcheck.sh", "9301"]
 
-ENTRYPOINT ["objectio-block-gateway"]
+ENTRYPOINT ["iolake-block-gateway"]
 CMD ["--listen", "0.0.0.0:9300", "--nbd-listen", "0.0.0.0:10809", "--data-dir", "/var/lib/objectio/block-gw"]
 
 # =============================================================================
@@ -314,16 +314,16 @@ FROM runtime-base AS all
 
 ARG TARGETARCH
 
-LABEL org.opencontainers.image.title="ObjectIO"
-LABEL org.opencontainers.image.description="ObjectIO distributed object storage (all components)"
+LABEL org.opencontainers.image.title="IOLake"
+LABEL org.opencontainers.image.description="IOLake distributed object storage (all components)"
 LABEL org.opencontainers.image.architecture="${TARGETARCH}"
 
-COPY --from=builder /build/target/release/objectio-gateway /usr/local/bin/
-COPY --from=builder /build/target/release/objectio-meta /usr/local/bin/
-COPY --from=builder /build/target/release/objectio-osd /usr/local/bin/
-COPY --from=builder /build/target/release/obioctl /usr/local/bin/
-COPY --from=builder /build/target/release/objectio-install /usr/local/bin/
-COPY --from=builder /build/target/release/objectio-block-gateway /usr/local/bin/
+COPY --from=builder /build/target/release/iolake-gateway /usr/local/bin/
+COPY --from=builder /build/target/release/iolake-meta /usr/local/bin/
+COPY --from=builder /build/target/release/iolake-osd /usr/local/bin/
+COPY --from=builder /build/target/release/iolakectl /usr/local/bin/
+COPY --from=builder /build/target/release/iolake-install /usr/local/bin/
+COPY --from=builder /build/target/release/iolake-block-gateway /usr/local/bin/
 
 # Console web UI (built in the console-builder stage)
 COPY --from=console-builder /build/console/dist /usr/share/objectio/console
@@ -335,4 +335,4 @@ EXPOSE 9000 9100 9101 9200 9201 9300 10809
 VOLUME ["/var/lib/objectio"]
 
 # Default shows available commands
-CMD ["sh", "-c", "echo 'ObjectIO - Available commands:' && echo '  objectio-gateway  - S3 API gateway' && echo '  objectio-meta     - Metadata service' && echo '  objectio-osd      - Storage daemon' && echo '  obioctl           - Admin CLI' && echo '  objectio-install  - Installation tool'"]
+CMD ["sh", "-c", "echo 'IOLake - Available commands:' && echo '  iolake-gateway  - S3 API gateway' && echo '  iolake-meta     - Metadata service' && echo '  iolake-osd      - Storage daemon' && echo '  iolakectl           - Admin CLI' && echo '  iolake-install  - Installation tool'"]

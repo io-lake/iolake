@@ -32,7 +32,7 @@ pub(crate) async fn resolve_sse_decision_with(
     meta_client: &mut MetadataServiceClient<Channel>,
     bucket: &str,
     headers: Option<&HeaderMap>,
-    pre: Option<Result<objectio_proto::metadata::GetBucketEncryptionResponse, tonic::Status>>,
+    pre: Option<Result<iolake_proto::metadata::GetBucketEncryptionResponse, tonic::Status>>,
 ) -> Result<Option<SseDecision>, Response> {
     // 1. Request headers.
     if let Some(h) = headers
@@ -128,7 +128,7 @@ pub(crate) async fn resolve_sse_decision_with(
 /// The raw `key` never touches persistent storage — it lives in memory
 /// only for the duration of the request.
 pub(crate) struct SseCKey {
-    pub(crate) key: [u8; objectio_kms::DEK_LEN],
+    pub(crate) key: [u8; iolake_kms::DEK_LEN],
     /// Base64-encoded MD5 of the raw key, echoed back in response headers.
     pub(crate) md5_b64: String,
 }
@@ -282,12 +282,12 @@ pub(crate) fn parse_sse_c_headers(headers: &HeaderMap) -> Result<Option<SseCKey>
                         StatusCode::BAD_REQUEST,
                     )
                 })?;
-            if key_bytes.len() != objectio_kms::DEK_LEN {
+            if key_bytes.len() != iolake_kms::DEK_LEN {
                 return Err(S3Error::xml_response(
                     "InvalidArgument",
                     &format!(
                         "customer key must decode to {} bytes, got {}",
-                        objectio_kms::DEK_LEN,
+                        iolake_kms::DEK_LEN,
                         key_bytes.len()
                     ),
                     StatusCode::BAD_REQUEST,
@@ -304,7 +304,7 @@ pub(crate) fn parse_sse_c_headers(headers: &HeaderMap) -> Result<Option<SseCKey>
                     StatusCode::BAD_REQUEST,
                 ));
             }
-            let mut arr = [0u8; objectio_kms::DEK_LEN];
+            let mut arr = [0u8; iolake_kms::DEK_LEN];
             arr.copy_from_slice(&key_bytes);
             Ok(Some(SseCKey {
                 key: arr,
@@ -382,13 +382,13 @@ pub(crate) enum StripeCipher {
     /// AES-256-CTR is seekable, so the object reads back as if encrypted
     /// in one pass.
     Object {
-        key: [u8; objectio_kms::DEK_LEN],
-        iv: [u8; objectio_kms::IV_LEN],
+        key: [u8; iolake_kms::DEK_LEN],
+        iv: [u8; iolake_kms::IV_LEN],
     },
     /// Each stripe with a fresh IV of its own, kept in its `StripeMeta`
     /// (a multipart upload's parts, which share the upload's key).
     PerStripe {
-        key: [u8; objectio_kms::DEK_LEN],
+        key: [u8; iolake_kms::DEK_LEN],
     },
 }
 
@@ -401,12 +401,12 @@ impl StripeCipher {
             Self::Object { key, iv } => {
                 // CTR's keystream is XORed either way: decrypting at an
                 // offset is encrypting there.
-                objectio_kms::decrypt_in_place(key, iv, offset, buf);
+                iolake_kms::decrypt_in_place(key, iv, offset, buf);
                 Vec::new()
             }
             Self::PerStripe { key } => {
-                let iv = objectio_kms::generate_iv();
-                objectio_kms::encrypt_in_place(key, &iv, buf);
+                let iv = iolake_kms::generate_iv();
+                iolake_kms::encrypt_in_place(key, &iv, buf);
                 iv.to_vec()
             }
         }
@@ -431,8 +431,8 @@ impl PutSse {
         }
     }
 
-    fn keyed(algorithm: SseAlgorithm, key: [u8; objectio_kms::DEK_LEN]) -> Self {
-        let iv = objectio_kms::generate_iv();
+    fn keyed(algorithm: SseAlgorithm, key: [u8; iolake_kms::DEK_LEN]) -> Self {
+        let iv = iolake_kms::generate_iv();
         Self {
             algorithm,
             iv: iv.to_vec(),
@@ -466,7 +466,7 @@ pub(crate) async fn put_sse(
     meta_client: &mut MetadataServiceClient<Channel>,
     bucket: &str,
     headers: &HeaderMap,
-    pre: Option<Result<objectio_proto::metadata::GetBucketEncryptionResponse, tonic::Status>>,
+    pre: Option<Result<iolake_proto::metadata::GetBucketEncryptionResponse, tonic::Status>>,
 ) -> Result<PutSse, Response> {
     if let Some(refused) = sse_header_conflict(headers) {
         return Err(refused);
@@ -510,7 +510,7 @@ pub(crate) async fn put_sse(
                     StatusCode::SERVICE_UNAVAILABLE,
                 ));
             };
-            let dek = objectio_kms::generate_dek();
+            let dek = iolake_kms::generate_dek();
             Ok(PutSse {
                 encrypted_dek: mk.wrap_dek(&dek),
                 response_header: Some("AES256"),
@@ -530,14 +530,14 @@ pub(crate) async fn put_sse(
                 .await
             {
                 Ok(g) => g,
-                Err(objectio_kms::KmsError::KeyNotFound(id)) => {
+                Err(iolake_kms::KmsError::KeyNotFound(id)) => {
                     return Err(S3Error::xml_response(
                         "KMS.NotFoundException",
                         &format!("KMS key '{id}' does not exist"),
                         StatusCode::BAD_REQUEST,
                     ));
                 }
-                Err(objectio_kms::KmsError::KeyDisabled(id)) => {
+                Err(iolake_kms::KmsError::KeyDisabled(id)) => {
                     return Err(S3Error::xml_response(
                         "KMS.DisabledException",
                         &format!("KMS key '{id}' is disabled"),
@@ -722,7 +722,7 @@ pub(crate) async fn check_copy_sse(
 /// IV per stripe).
 #[allow(clippy::result_large_err)]
 pub(crate) fn decrypt_stripe_slice(
-    dek: &[u8; objectio_kms::DEK_LEN],
+    dek: &[u8; iolake_kms::DEK_LEN],
     stripe: &StripeMeta,
     object: &ObjectMeta,
     stripe_byte_offset_in_object: u64,
@@ -740,13 +740,13 @@ pub(crate) fn decrypt_stripe_slice(
             stripe_byte_offset_in_object + slice_start_in_stripe,
         )
     };
-    if iv_bytes.len() != objectio_kms::IV_LEN {
+    if iv_bytes.len() != iolake_kms::IV_LEN {
         error!(
             "Bad IV length on {}/{}: got {}, want {}",
             object.bucket,
             object.key,
             iv_bytes.len(),
-            objectio_kms::IV_LEN
+            iolake_kms::IV_LEN
         );
         return Err(S3Error::xml_response(
             "InternalError",
@@ -754,9 +754,9 @@ pub(crate) fn decrypt_stripe_slice(
             StatusCode::INTERNAL_SERVER_ERROR,
         ));
     }
-    let mut iv = [0u8; objectio_kms::IV_LEN];
+    let mut iv = [0u8; iolake_kms::IV_LEN];
     iv.copy_from_slice(iv_bytes);
-    objectio_kms::decrypt_in_place(dek, &iv, effective_offset, buf);
+    iolake_kms::decrypt_in_place(dek, &iv, effective_offset, buf);
     Ok(())
 }
 
@@ -1007,11 +1007,11 @@ mod tests {
     /// object encrypted in one pass: what a GET decrypts.
     #[test]
     fn an_object_encrypted_by_stripes_is_the_object_encrypted_whole() {
-        let key = objectio_kms::generate_dek();
-        let iv = objectio_kms::generate_iv();
+        let key = iolake_kms::generate_dek();
+        let iv = iolake_kms::generate_iv();
         let plain: Vec<u8> = (0..100_003u32).map(|i| (i % 251) as u8).collect();
         let mut whole = plain.clone();
-        objectio_kms::encrypt_in_place(&key, &iv, &mut whole);
+        iolake_kms::encrypt_in_place(&key, &iv, &mut whole);
 
         let cipher = StripeCipher::Object { key, iv };
         let mut offset = 0u64;
@@ -1028,7 +1028,7 @@ mod tests {
         let per = StripeCipher::PerStripe { key };
         let mut a = plain[..100].to_vec();
         let iv_a = per.apply(0, &mut a);
-        objectio_kms::decrypt_in_place(&key, &iv_a.clone().try_into().unwrap(), 0, &mut a);
+        iolake_kms::decrypt_in_place(&key, &iv_a.clone().try_into().unwrap(), 0, &mut a);
         assert_eq!(a, plain[..100]);
         assert!(!StripeCipher::Plain.encrypts());
     }

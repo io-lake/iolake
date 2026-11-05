@@ -4,7 +4,7 @@
 //! have been caught by a unit test, because each one is about two components
 //! disagreeing rather than one component being wrong.
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 /// Round-trip an object and get the same bytes back.

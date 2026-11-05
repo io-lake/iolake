@@ -9,7 +9,7 @@
 //! - a family the gateway already exports is the gateway's; the same name
 //!   from another source is dropped rather than mixed with a different
 //!   label set — except [`is_shared`] families (`process_*`,
-//!   `objectio_build_info`), which every service exports with the same
+//!   `iolake_build_info`), which every service exports with the same
 //!   labels and which are appended;
 //! - families matched by `skip` are dropped;
 //! - `inject` (e.g. `osd_id="…"`) is added to every sample that does not
@@ -146,7 +146,7 @@ fn parse_into(
 /// source are kept side by side, told apart by the injected label.
 #[must_use]
 pub fn is_shared(name: &str) -> bool {
-    name.starts_with("process_") || name == "objectio_build_info"
+    name.starts_with("process_") || name == "iolake_build_info"
 }
 
 /// Merge `sources` into `base` (the gateway's own exposition).
@@ -196,25 +196,25 @@ pub fn merge(base: &str, sources: &[Source<'_>], skip: &dyn Fn(&str) -> bool) ->
 mod tests {
     use super::*;
 
-    const OSD: &str = "# HELP objectio_disk_reads_total Shard reads\n\
-        # TYPE objectio_disk_reads_total counter\n\
-        objectio_disk_reads_total{osd_id=\"X\",disk=\"/d\"} 5\n\
-        # HELP objectio_block_volumes_total Volumes\n\
-        # TYPE objectio_block_volumes_total gauge\n\
-        objectio_block_volumes_total 0\n\
-        # HELP objectio_osd_capacity_bytes Cap\n\
-        # TYPE objectio_osd_capacity_bytes gauge\n\
-        objectio_osd_capacity_bytes{osd_id=\"X\"} 9\n\
-        # TYPE objectio_osd_wal_fsync_seconds histogram\n\
-        objectio_osd_wal_fsync_seconds_bucket{le=\"+Inf\"} 3\n\
-        objectio_osd_wal_fsync_seconds_sum 0.1\n\
-        objectio_osd_wal_fsync_seconds_count 3\n\
+    const OSD: &str = "# HELP iolake_disk_reads_total Shard reads\n\
+        # TYPE iolake_disk_reads_total counter\n\
+        iolake_disk_reads_total{osd_id=\"X\",disk=\"/d\"} 5\n\
+        # HELP iolake_block_volumes_total Volumes\n\
+        # TYPE iolake_block_volumes_total gauge\n\
+        iolake_block_volumes_total 0\n\
+        # HELP iolake_osd_capacity_bytes Cap\n\
+        # TYPE iolake_osd_capacity_bytes gauge\n\
+        iolake_osd_capacity_bytes{osd_id=\"X\"} 9\n\
+        # TYPE iolake_osd_wal_fsync_seconds histogram\n\
+        iolake_osd_wal_fsync_seconds_bucket{le=\"+Inf\"} 3\n\
+        iolake_osd_wal_fsync_seconds_sum 0.1\n\
+        iolake_osd_wal_fsync_seconds_count 3\n\
         # TYPE process_cpu_seconds_total counter\n\
         process_cpu_seconds_total 1.5\n";
 
-    const GATEWAY: &str = "# HELP objectio_osd_capacity_bytes Raw capacity of one OSD\n\
-        # TYPE objectio_osd_capacity_bytes gauge\n\
-        objectio_osd_capacity_bytes{node_id=\"a\",address=\"x\"} 100\n";
+    const GATEWAY: &str = "# HELP iolake_osd_capacity_bytes Raw capacity of one OSD\n\
+        # TYPE iolake_osd_capacity_bytes gauge\n\
+        iolake_osd_capacity_bytes{node_id=\"a\",address=\"x\"} 100\n";
 
     fn two_osds(drop_process: bool) -> String {
         merge(
@@ -241,12 +241,12 @@ mod tests {
     fn each_family_is_declared_once() {
         let out = two_osds(false);
         assert_eq!(
-            out.matches("# TYPE objectio_disk_reads_total").count(),
+            out.matches("# TYPE iolake_disk_reads_total").count(),
             1,
             "{out}"
         );
         assert_eq!(
-            out.matches("# TYPE objectio_osd_wal_fsync_seconds").count(),
+            out.matches("# TYPE iolake_osd_wal_fsync_seconds").count(),
             1,
             "{out}"
         );
@@ -256,22 +256,21 @@ mod tests {
     fn samples_without_the_label_get_it_and_existing_ones_are_kept() {
         let out = two_osds(false);
         assert!(
-            out.contains("objectio_block_volumes_total{osd_id=\"A\"} 0"),
+            out.contains("iolake_block_volumes_total{osd_id=\"A\"} 0"),
             "{out}"
         );
         assert!(
-            out.contains("objectio_block_volumes_total{osd_id=\"B\"} 0"),
+            out.contains("iolake_block_volumes_total{osd_id=\"B\"} 0"),
             "{out}"
         );
         assert!(
-            out.contains("objectio_osd_wal_fsync_seconds_bucket{osd_id=\"B\",le=\"+Inf\"} 3"),
+            out.contains("iolake_osd_wal_fsync_seconds_bucket{osd_id=\"B\",le=\"+Inf\"} 3"),
             "{out}"
         );
         // Already had osd_id="X": left alone, and the second copy is a
         // duplicate series.
         assert_eq!(
-            out.matches("objectio_disk_reads_total{osd_id=\"X\"")
-                .count(),
+            out.matches("iolake_disk_reads_total{osd_id=\"X\"").count(),
             1,
             "{out}"
         );
@@ -283,7 +282,7 @@ mod tests {
     fn gateway_families_are_not_mixed_with_remote_ones() {
         let out = two_osds(false);
         assert!(out.contains("address=\"x\"} 100"), "{out}");
-        assert!(!out.contains("objectio_osd_capacity_bytes{osd_id"), "{out}");
+        assert!(!out.contains("iolake_osd_capacity_bytes{osd_id"), "{out}");
     }
 
     #[test]
@@ -325,9 +324,9 @@ mod tests {
                 inject: None,
                 drop_process: false,
             }],
-            &|n| n.starts_with("objectio_block_"),
+            &|n| n.starts_with("iolake_block_"),
         );
-        assert!(!out.contains("objectio_block_volumes_total"), "{out}");
-        assert!(out.contains("objectio_disk_reads_total"), "{out}");
+        assert!(!out.contains("iolake_block_volumes_total"), "{out}");
+        assert!(out.contains("iolake_disk_reads_total"), "{out}");
     }
 }

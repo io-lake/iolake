@@ -1,5 +1,5 @@
 //! B25: a meta node killed under load is back in seconds, however large its
-//! database (objectio-docs `core/meta-log.md`).
+//! database (iolake-docs `core/meta-log.md`).
 //!
 //! redb used to rebuild its allocator state after any unclean stop by
 //! walking the whole file: minutes for a few GB, growing with the object
@@ -8,7 +8,7 @@
 //! last checkpoint didn't cover, not a walk.
 //!
 //! The database is grown before the kill by writing rows into a table of
-//! its own while the node is stopped (`OBJECTIO_E2E_META_DB_GB`, default
+//! its own while the node is stopped (`IOLAKE_E2E_META_DB_GB`, default
 //! 1): filling it through S3 would take hours. Nothing reads the table; it
 //! is there for its size, which is what the walk was proportional to.
 
@@ -18,8 +18,8 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use objectio_e2e::Cluster;
-use objectio_e2e::ha::HaCluster;
+use iolake_e2e::Cluster;
+use iolake_e2e::ha::HaCluster;
 use serde_json::json;
 
 /// Started again, the node listens within this...
@@ -42,7 +42,7 @@ fn payload(len: usize, seed: u64) -> Vec<u8> {
 
 /// The database size asked for, in bytes.
 fn wanted_bytes() -> u64 {
-    let gb: f64 = std::env::var("OBJECTIO_E2E_META_DB_GB")
+    let gb: f64 = std::env::var("IOLAKE_E2E_META_DB_GB")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(1.0);

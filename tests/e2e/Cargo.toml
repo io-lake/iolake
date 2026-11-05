@@ -1,11 +1,11 @@
 [package]
-name = "objectio-e2e"
+name = "iolake-e2e"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
 
-# The harness boots `objectio-aio` as a child process and drives it over
+# The harness boots `iolake-aio` as a child process and drives it over
 # HTTP, so it deliberately does not depend on any workspace crate — it tests
 # the system the way a client sees it, not the way the code is arranged.
 [dependencies]
@@ -19,8 +19,8 @@ md-5 = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
-objectio-proto = { workspace = true }
-objectio-common = { workspace = true }
+iolake-proto = { workspace = true }
+iolake-common = { workspace = true }
 ring = { workspace = true }
 # A CA and a node certificate for mTLS between the services (src/tls.rs).
 rcgen = "0.13"

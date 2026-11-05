@@ -8,7 +8,7 @@ use crate::tables;
 use crate::types::{
     MultipartUploadState, OsdNode, StoredAccessKey, StoredDataFilter, StoredGroup, StoredUser,
 };
-use objectio_proto::metadata::BucketMeta;
+use iolake_proto::metadata::BucketMeta;
 use prost::Message;
 use redb::{Database, ReadableTable};
 use std::path::Path;

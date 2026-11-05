@@ -21,7 +21,7 @@ pub use crate::sigv4::{escape_path, escape_segment as seg};
 pub struct Ctx<'a, 'w> {
     pub api: &'a ApiClient,
     pub out: Out<'w>,
-    /// For `provision`: `OBJECTIO_PROVISIONER_USER_ID`.
+    /// For `provision`: `IOLAKE_PROVISIONER_USER_ID`.
     pub provisioner: Option<String>,
 }
 

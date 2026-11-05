@@ -9,8 +9,8 @@ use std::time::Duration;
 
 use axum::http::StatusCode;
 use axum::response::Response;
-use objectio_auth::policy::{PolicyDecision, RequestContext};
-use objectio_auth::{AuthMode, BucketPolicy, Operation};
+use iolake_auth::policy::{PolicyDecision, RequestContext};
+use iolake_auth::{AuthMode, BucketPolicy, Operation};
 
 use super::{
     Actor, Call, IamError, IamResult, STS_NS, Xml, aws_account, aws_arn, iso, max_session, role_id,
@@ -46,7 +46,7 @@ async fn get_caller_identity(call: &Call<'_>) -> IamResult<Response> {
                 .app
                 .meta_client
                 .clone()
-                .get_role(objectio_proto::metadata::GetRoleRequest { name: key })
+                .get_role(iolake_proto::metadata::GetRoleRequest { name: key })
                 .await
                 .ok()
                 .and_then(|r| r.into_inner().role);
@@ -95,7 +95,7 @@ fn duration(call: &Call<'_>, min: u64, max: u64, default: u64) -> IamResult<u64>
     }
 }
 
-fn credentials_xml(x: &mut Xml, c: &objectio_auth::sts::TemporaryCredentials) {
+fn credentials_xml(x: &mut Xml, c: &iolake_auth::sts::TemporaryCredentials) {
     x.open("Credentials")
         .el("AccessKeyId", &c.access_key_id)
         .el("SecretAccessKey", &c.secret_access_key)
@@ -164,7 +164,7 @@ fn evaluate_trust(
     external_id: Option<&str>,
 ) -> Trust {
     let auth = call.auth;
-    let evaluator = objectio_auth::PolicyEvaluator::new();
+    let evaluator = iolake_auth::PolicyEvaluator::new();
     let decide = |principal: &str| {
         let mut ctx = RequestContext::new(principal, "sts:AssumeRole", role_arn)
             .with_variable("aws:PrincipalArn", principal.to_string())
@@ -249,7 +249,7 @@ async fn assume_role(call: &Call<'_>) -> IamResult<Response> {
     } else {
         trust
     };
-    let role_resource = objectio_auth::policy::canonical_arn(&role.arn).into_owned();
+    let role_resource = iolake_auth::policy::canonical_arn(&role.arn).into_owned();
     let verdict = evaluate_trust(call, &trust, &role_resource, call.opt("ExternalId"));
     if verdict.denied || !(verdict.direct || verdict.via_account) {
         return Err(denied());

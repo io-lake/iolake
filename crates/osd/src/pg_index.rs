@@ -1,5 +1,5 @@
 //! An OSD's metadata, indexed by placement group (B31 phase 2,
-//! objectio-docs `core/pg-recovery.md`).
+//! iolake-docs `core/pg-recovery.md`).
 //!
 //! Peering asks each member of a placement group what it holds of it. The
 //! OSD's ObjectMeta copies are keyed by bucket and key (`m…`), the order
@@ -30,10 +30,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-use objectio_common::Result;
-use objectio_proto::metadata::{ObjectMeta, StripeMeta};
-use objectio_proto::storage::{PgEntry, PgSummary};
-use objectio_storage::metadata::{MetaIndex, MetaSnapshot, MetadataKey, MetadataOp};
+use iolake_common::Result;
+use iolake_proto::metadata::{ObjectMeta, StripeMeta};
+use iolake_proto::storage::{PgEntry, PgSummary};
+use iolake_storage::metadata::{MetaIndex, MetaSnapshot, MetadataKey, MetadataOp};
 use parking_lot::Mutex;
 use prost::Message;
 use tracing::info;
@@ -843,15 +843,15 @@ impl MetaIndex for PgIndexed {
         self.inner.render_metrics(out, labels);
         let _ = writeln!(
             out,
-            "# HELP objectio_osd_pgs_held Placement groups this OSD holds entries of\n\
-             # TYPE objectio_osd_pgs_held gauge\nobjectio_osd_pgs_held{{{labels}}} {}",
+            "# HELP iolake_osd_pgs_held Placement groups this OSD holds entries of\n\
+             # TYPE iolake_osd_pgs_held gauge\niolake_osd_pgs_held{{{labels}}} {}",
             self.pg_count()
         );
         let _ = writeln!(
             out,
-            "# HELP objectio_osd_pg_unindexed_writes_total Writes of an object whose placement \
-             group isn't known (not indexed)\n# TYPE objectio_osd_pg_unindexed_writes_total \
-             counter\nobjectio_osd_pg_unindexed_writes_total{{{labels}}} {}",
+            "# HELP iolake_osd_pg_unindexed_writes_total Writes of an object whose placement \
+             group isn't known (not indexed)\n# TYPE iolake_osd_pg_unindexed_writes_total \
+             counter\niolake_osd_pg_unindexed_writes_total{{{labels}}} {}",
             self.unindexed()
         );
     }
@@ -860,14 +860,14 @@ impl MetaIndex for PgIndexed {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use objectio_proto::metadata::{ShardLocation, StripeMeta};
-    use objectio_storage::metadata::MetadataStoreConfig;
+    use iolake_proto::metadata::{ShardLocation, StripeMeta};
+    use iolake_storage::metadata::MetadataStoreConfig;
 
     const ME: [u8; 16] = [1; 16];
 
     fn open(dir: &std::path::Path) -> PgIndexed {
         let inner =
-            objectio_storage::metadata::open(MetadataStoreConfig::with_data_dir(dir)).unwrap();
+            iolake_storage::metadata::open(MetadataStoreConfig::with_data_dir(dir)).unwrap();
         PgIndexed::open(inner, ME).unwrap()
     }
 
@@ -990,13 +990,13 @@ mod tests {
 
     #[test]
     fn summaries_counted_beside_writes_equal_a_full_count() {
-        // objectio-docs `core/osd-start.md`: the start's count walks the
+        // iolake-docs `core/osd-start.md`: the start's count walks the
         // index a chunk at a time while writes go on; with the writes made
         // meanwhile folded in, each PG's summary must be what counting
         // everything gives.
         let d = tempfile::tempdir().unwrap();
         let inner =
-            objectio_storage::metadata::open(MetadataStoreConfig::with_data_dir(d.path())).unwrap();
+            iolake_storage::metadata::open(MetadataStoreConfig::with_data_dir(d.path())).unwrap();
         {
             let ix = PgIndexed::open(Arc::clone(&inner), ME).unwrap();
             for i in 0..400 {
@@ -1072,7 +1072,7 @@ mod tests {
         let pg = ("p".to_string(), 4);
         {
             let inner =
-                objectio_storage::metadata::open(MetadataStoreConfig::with_data_dir(d.path()))
+                iolake_storage::metadata::open(MetadataStoreConfig::with_data_dir(d.path()))
                     .unwrap();
             for i in 0..10 {
                 let o = object(&format!("k{i}"), 10 + i, 4, true);
@@ -1173,7 +1173,7 @@ mod tests {
         let pg = ("p".to_string(), 6);
         {
             let inner =
-                objectio_storage::metadata::open(MetadataStoreConfig::with_data_dir(d.path()))
+                iolake_storage::metadata::open(MetadataStoreConfig::with_data_dir(d.path()))
                     .unwrap();
             let v1 = ObjectMeta {
                 version_id: "v1".into(),
@@ -1234,7 +1234,7 @@ mod tests {
     }
 
     /// What indexing costs a write, and what listing one PG costs: run with
-    /// `cargo test --release -p objectio-osd pg_index::tests::cost -- --ignored --nocapture`.
+    /// `cargo test --release -p iolake-osd pg_index::tests::cost -- --ignored --nocapture`.
     #[test]
     #[ignore = "a measurement, not a check"]
     fn cost() {
@@ -1265,7 +1265,7 @@ mod tests {
             let d = tempfile::tempdir().unwrap();
             let mut config = MetadataStoreConfig::with_data_dir(d.path());
             config.wal.sync_on_write = false;
-            let inner = objectio_storage::metadata::open(config).unwrap();
+            let inner = iolake_storage::metadata::open(config).unwrap();
             let store: Arc<dyn MetaIndex> = if indexed {
                 Arc::new(PgIndexed::open(inner, ME).unwrap())
             } else {
@@ -1292,7 +1292,7 @@ mod tests {
         drop(store);
         let d = tempfile::tempdir().unwrap();
         let inner =
-            objectio_storage::metadata::open(MetadataStoreConfig::with_data_dir(d.path())).unwrap();
+            iolake_storage::metadata::open(MetadataStoreConfig::with_data_dir(d.path())).unwrap();
         let ix = PgIndexed::open(inner, ME).unwrap();
         for o in objects.iter().take(800) {
             let mut o = o.clone();

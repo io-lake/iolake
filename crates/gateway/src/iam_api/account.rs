@@ -2,14 +2,14 @@
 //! trusts.
 
 use axum::response::Response;
-use objectio_proto::metadata::{GetTenantRequest, ListConfigRequest, ListPoliciesRequest};
+use iolake_proto::metadata::{GetTenantRequest, ListConfigRequest, ListPoliciesRequest};
 
 use super::{
     Actor, Call, IAM_NS, IamError, IamResult, Xml, all_groups, all_users, aws_account, tenant_roles,
 };
 
 /// AWS's default IAM quotas, which `GetAccountSummary` reports for the
-/// clients that read them. ObjectIO enforces none of them.
+/// clients that read them. IOLake enforces none of them.
 const QUOTAS: &[(&str, u64)] = &[
     ("UsersQuota", 5000),
     ("GroupsQuota", 300),

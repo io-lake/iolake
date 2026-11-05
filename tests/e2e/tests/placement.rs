@@ -2,7 +2,7 @@
 //! cluster since: placement computed from today's topology is not where an
 //! object written yesterday lives.
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 fn body(i: usize) -> Vec<u8> {

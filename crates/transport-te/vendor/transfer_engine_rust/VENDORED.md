@@ -18,10 +18,10 @@ Vendored because the crate is not published on crates.io, and a git
 dependency would make every workspace build fetch the whole Mooncake
 repository to resolve the lockfile — even builds that never enable RDMA.
 
-Being an in-tree path dependency, it is a member of ObjectIO's workspace
+Being an in-tree path dependency, it is a member of IOLake's workspace
 (Cargo makes it one; `exclude` does not apply to path dependencies of
 members), so every `--workspace` command builds it. Hence the `link` gate:
-plain builds get an empty crate and need no Mooncake; `objectio-transport-te`'s
+plain builds get an empty crate and need no Mooncake; `iolake-transport-te`'s
 `te` feature turns `link` on. Its `build.rs`
 needs a Mooncake CMake build: set `MOONCAKE_BUILD_DIR` and
 `MOONCAKE_TE_INCLUDE_DIR` (see its README upstream), and have libclang

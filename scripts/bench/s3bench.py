@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Small S3 throughput/latency benchmark for ObjectIO.
+"""Small S3 throughput/latency benchmark for IOLake.
 
 Standard library only — no boto3, no warp. The point is to be droppable onto
 any host that can reach the gateway, and to keep the client cheap enough that
@@ -47,7 +47,7 @@ from http.client import HTTPConnection, HTTPSConnection
 from urllib.parse import urlparse
 
 # --------------------------------------------------------------------------
-# SigV4 — same algorithm as sdk/python/objectio/_sigv4.py, inlined so this
+# SigV4 — same algorithm as sdk/python/iolake/_sigv4.py, inlined so this
 # file stays a single droppable script.
 # --------------------------------------------------------------------------
 
@@ -344,15 +344,15 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__.split("Exit status")[0].split("What it reports")[1],
     )
-    p.add_argument("--endpoint", default=os.environ.get("OBJECTIO_URL")
-                   or os.environ.get("OBJECTIO_ENDPOINT"),
-                   help="gateway base URL (env: OBJECTIO_URL)")
-    p.add_argument("--access-key", default=os.environ.get("OBJECTIO_ACCESS_KEY")
+    p.add_argument("--endpoint", default=os.environ.get("IOLAKE_URL")
+                   or os.environ.get("IOLAKE_ENDPOINT"),
+                   help="gateway base URL (env: IOLAKE_URL)")
+    p.add_argument("--access-key", default=os.environ.get("IOLAKE_ACCESS_KEY")
                    or os.environ.get("AWS_ACCESS_KEY_ID"))
-    p.add_argument("--secret-key", default=os.environ.get("OBJECTIO_SECRET_KEY")
+    p.add_argument("--secret-key", default=os.environ.get("IOLAKE_SECRET_KEY")
                    or os.environ.get("AWS_SECRET_ACCESS_KEY"))
-    p.add_argument("--region", default=os.environ.get("OBJECTIO_REGION", "us-east-1"))
-    p.add_argument("--bucket", default="objectio-bench",
+    p.add_argument("--region", default=os.environ.get("IOLAKE_REGION", "us-east-1"))
+    p.add_argument("--bucket", default="iolake-bench",
                    help="bucket to use; must already exist")
     p.add_argument("--sizes", default="4KB,64KB,1MB,8MB",
                    help="comma-separated object sizes (default: 4KB,64KB,1MB,8MB)")

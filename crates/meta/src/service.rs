@@ -21,18 +21,18 @@ mod tenants;
 mod unity;
 mod upgrade;
 
-use objectio_common::{NodeId, NodeStatus};
-use objectio_meta_store::{
+use iolake_common::{NodeId, NodeStatus};
+use iolake_meta_store::{
     CasTable, EcConfig, MetaStore, MultipartUploadState, OsdNode, PartState, StoredAccessKey,
     StoredDataFilter, StoredGroup, StoredUser,
 };
-use objectio_placement::{
+use iolake_placement::{
     Crush2,
     topology::{ClusterTopology, DiskInfo, FailureDomainInfo, NodeInfo},
 };
 use sha2::{Digest, Sha256};
 
-use objectio_proto::metadata::{
+use iolake_proto::metadata::{
     AbortMultipartUploadRequest,
     AbortMultipartUploadResponse,
     // IAM types
@@ -433,7 +433,7 @@ use uuid::Uuid;
 /// Map a meta write's error to a tonic status the gateway / CLI can
 /// interpret. A refused command (it can never apply) is
 /// `InvalidArgument`; one the leader has no room for is
-/// `ResourceExhausted`, marked as such (`objectio_proto::no_room`), which
+/// `ResourceExhausted`, marked as such (`iolake_proto::no_room`), which
 /// the gateway answers 507; ForwardToLeader becomes `FailedPrecondition` with a
 /// message the caller can parse for the leader id; all other errors become
 /// `Internal`.
@@ -442,7 +442,7 @@ fn raft_write_to_status(err: &crate::raft_batch::WriteError) -> tonic::Status {
     use openraft::error::{ClientWriteError, RaftError};
     match err {
         WriteError::Refused(reason) => tonic::Status::invalid_argument(reason.clone()),
-        WriteError::NoRoom(why) => objectio_proto::no_room(why.clone()),
+        WriteError::NoRoom(why) => iolake_proto::no_room(why.clone()),
         WriteError::Raft(RaftError::APIError(ClientWriteError::ForwardToLeader(f))) => {
             let leader = f
                 .leader_id
@@ -468,7 +468,7 @@ fn raft_write_to_status(err: &crate::raft_batch::WriteError) -> tonic::Status {
 /// underlying store directly.
 async fn cas_single_put(
     svc: &MetaService,
-    table: objectio_meta_store::CasTable,
+    table: iolake_meta_store::CasTable,
     key: &str,
     expected: Option<Vec<u8>>,
     new_value: Vec<u8>,
@@ -477,7 +477,7 @@ async fn cas_single_put(
     let Some(raft) = svc.raft_handle() else {
         return Ok(());
     };
-    use objectio_meta_store::{CasOp, MetaCommand, MetaResponse};
+    use iolake_meta_store::{CasOp, MetaCommand, MetaResponse};
     let cmd = MetaCommand::MultiCas {
         ops: vec![CasOp {
             table,
@@ -506,7 +506,7 @@ async fn cas_single_put(
 /// optimistic concurrency on its previous bytes.
 async fn cas_single_delete(
     svc: &MetaService,
-    table: objectio_meta_store::CasTable,
+    table: iolake_meta_store::CasTable,
     key: &str,
     expected: Vec<u8>,
     requested_by: &str,
@@ -514,7 +514,7 @@ async fn cas_single_delete(
     let Some(raft) = svc.raft_handle() else {
         return Ok(());
     };
-    use objectio_meta_store::{CasOp, MetaCommand, MetaResponse};
+    use iolake_meta_store::{CasOp, MetaCommand, MetaResponse};
     let cmd = MetaCommand::MultiCas {
         ops: vec![CasOp {
             table,
@@ -608,14 +608,14 @@ fn pg_position_local_group(
 ///
 /// `known` is the status it already carries, if it is already in the topology.
 fn topology_status(
-    admin: objectio_common::OsdAdminState,
+    admin: iolake_common::OsdAdminState,
     evidence: NodeEvidence,
     known: Option<NodeStatus>,
 ) -> NodeStatus {
     match admin {
-        objectio_common::OsdAdminState::Draining => NodeStatus::Draining,
-        objectio_common::OsdAdminState::Out => NodeStatus::Decommissioning,
-        objectio_common::OsdAdminState::In => match evidence {
+        iolake_common::OsdAdminState::Draining => NodeStatus::Draining,
+        iolake_common::OsdAdminState::Out => NodeStatus::Decommissioning,
+        iolake_common::OsdAdminState::In => match evidence {
             NodeEvidence::Observed => NodeStatus::Active,
             // Keep a node the prober has confirmed; otherwise make it earn its
             // place. `Down` costs a live OSD one probe — the prober sweeps
@@ -725,7 +725,7 @@ pub struct MetaService {
     object_lock_configs: RwLock<HashMap<String, ObjectLockConfiguration>>,
     /// Shared stripes and who references them, by stripe id in hex. See
     /// `share_stripes`.
-    stripe_refs: RwLock<HashMap<String, objectio_proto::metadata::StripeRefs>>,
+    stripe_refs: RwLock<HashMap<String, iolake_proto::metadata::StripeRefs>>,
     /// Block volumes, chunk maps and snapshots, as stored. See `block_meta`.
     block: RwLock<block_meta::BlockTables>,
     /// Serializes block metadata changes on this node, so a multi-step
@@ -979,11 +979,11 @@ impl MetaService {
     /// since startup.
     pub fn spawn_apply_listener(
         self: &Arc<Self>,
-        mut rx: tokio::sync::mpsc::UnboundedReceiver<objectio_meta_store::ApplyEvent>,
+        mut rx: tokio::sync::mpsc::UnboundedReceiver<iolake_meta_store::ApplyEvent>,
     ) {
         let svc = Arc::clone(self);
         tokio::spawn(async move {
-            use objectio_meta_store::{ApplyEvent, CasTable};
+            use iolake_meta_store::{ApplyEvent, CasTable};
             while let Some(ev) = rx.recv().await {
                 match ev {
                     // Every table was replaced: rebuild every cache.
@@ -1075,10 +1075,10 @@ impl MetaService {
     /// a conflict, for the caller to re-read and retry.
     async fn cas_many(
         &self,
-        ops: Vec<objectio_meta_store::CasOp>,
+        ops: Vec<iolake_meta_store::CasOp>,
         what: &str,
     ) -> Result<bool, Status> {
-        use objectio_meta_store::{MetaCommand, MetaResponse};
+        use iolake_meta_store::{MetaCommand, MetaResponse};
         if ops.is_empty() {
             return Ok(true);
         }
@@ -1101,7 +1101,7 @@ impl MetaService {
         } else if let Some(store) = &self.store {
             for op in ops {
                 store.write_named(
-                    objectio_meta_store::cas_table_name(&op.table),
+                    iolake_meta_store::cas_table_name(&op.table),
                     &op.key,
                     op.new_value.as_deref(),
                 );
@@ -1113,7 +1113,7 @@ impl MetaService {
     }
 
     /// Commit `ops` as compare-and-set writes: in one command when they
-    /// fit ([`objectio_meta_store::MAX_OPS`]), so they land together; else
+    /// fit ([`iolake_meta_store::MAX_OPS`]), so they land together; else
     /// in order, that many at a time, each command landing whole. A caller
     /// that may have more puts what must land last at the end (the record
     /// the others hang off): a failure part way leaves the first ones
@@ -1123,10 +1123,10 @@ impl MetaService {
     /// `Ok(false)` on a conflict, for the caller to re-read and retry.
     pub(crate) async fn cas_in_order(
         &self,
-        ops: Vec<objectio_meta_store::CasOp>,
+        ops: Vec<iolake_meta_store::CasOp>,
         what: &str,
     ) -> Result<bool, Status> {
-        for chunk in ops.chunks(objectio_meta_store::MAX_OPS) {
+        for chunk in ops.chunks(iolake_meta_store::MAX_OPS) {
             if !self.cas_many(chunk.to_vec(), what).await? {
                 return Ok(false);
             }
@@ -1140,14 +1140,14 @@ impl MetaService {
     /// attachments, Delta shares): what a write split over several
     /// commands ([`Self::cas_in_order`]) has landed when a later one fails,
     /// so a retry starts from what is stored.
-    fn mirror_landed(&self, ops: &[objectio_meta_store::CasOp]) {
-        use objectio_meta_store::CasTable;
+    fn mirror_landed(&self, ops: &[iolake_meta_store::CasOp]) {
+        use iolake_meta_store::CasTable;
         for op in ops {
             let value = op.new_value.as_deref();
             match &op.table {
                 CasTable::Groups => {
                     let mut groups = self.groups.write();
-                    match value.map(objectio_meta_store::record::deserialize::<StoredGroup>) {
+                    match value.map(iolake_meta_store::record::deserialize::<StoredGroup>) {
                         Some(Ok(g)) => {
                             groups.insert(op.key.clone(), g);
                         }
@@ -1217,7 +1217,7 @@ impl MetaService {
     /// Write `writes` — `(table, key, value)`, `None` to delete — through
     /// Raft, so every meta node holds them, not just this one. Each is
     /// set over whatever the store holds now (last writer wins), as one
-    /// compare-and-set retried on conflict ([`objectio_meta_store::MAX_OPS`]
+    /// compare-and-set retried on conflict ([`iolake_meta_store::MAX_OPS`]
     /// writes at most in each: more go in several, each landing whole).
     /// Without Raft (in-memory tests, store-only mode) they go to the store
     /// directly.
@@ -1235,14 +1235,14 @@ impl MetaService {
             }
             return Ok(());
         }
-        'chunks: for writes in writes.chunks(objectio_meta_store::MAX_OPS) {
+        'chunks: for writes in writes.chunks(iolake_meta_store::MAX_OPS) {
             for attempt in 0..CAS_ATTEMPTS {
                 if attempt > 0 {
                     contention_backoff(attempt).await;
                 }
                 let ops = writes
                     .iter()
-                    .map(|(table, key, value)| objectio_meta_store::CasOp {
+                    .map(|(table, key, value)| iolake_meta_store::CasOp {
                         table: CasTable::Named((*table).into()),
                         key: key.clone(),
                         expected: store.read_named(table, key),
@@ -1352,13 +1352,13 @@ impl MetaService {
             version,
         };
 
-        use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+        use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
         // A cluster gets its id when its first OSD registers: it is new,
         // so nothing older than this binary is in it, and it starts at
         // this binary's format level.
         let level = ConfigEntry {
-            key: objectio_common::version::ACTIVE_LEVEL_KEY.to_string(),
-            value: objectio_common::version::FORMAT_LEVEL
+            key: iolake_common::version::ACTIVE_LEVEL_KEY.to_string(),
+            value: iolake_common::version::FORMAT_LEVEL
                 .to_string()
                 .into_bytes(),
             updated_at: Self::current_timestamp(),
@@ -1375,7 +1375,7 @@ impl MetaService {
                 },
                 CasOp {
                     table: CasTable::Config,
-                    key: objectio_common::version::ACTIVE_LEVEL_KEY.to_string(),
+                    key: iolake_common::version::ACTIVE_LEVEL_KEY.to_string(),
                     expected: None,
                     new_value: Some(level.encode_to_vec()),
                 },
@@ -1854,7 +1854,7 @@ impl MetaService {
             let mut map = self.stripe_refs.write();
             map.clear();
             for (key, bytes) in store.load_all_stripe_refs() {
-                match objectio_proto::metadata::StripeRefs::decode(bytes.as_slice()) {
+                match iolake_proto::metadata::StripeRefs::decode(bytes.as_slice()) {
                     Ok(refs) => {
                         map.insert(key, refs);
                     }
@@ -2269,13 +2269,13 @@ impl MetaService {
     /// is ABORTED, for the caller to retry.
     async fn cas_one(
         &self,
-        table: objectio_meta_store::CasTable,
+        table: iolake_meta_store::CasTable,
         key: &str,
         expected: Option<Vec<u8>>,
         new_value: Option<Vec<u8>>,
         what: &str,
     ) -> Result<(), Status> {
-        use objectio_meta_store::{CasOp, MetaCommand, MetaResponse};
+        use iolake_meta_store::{CasOp, MetaCommand, MetaResponse};
         if let Some(raft) = self.raft_handle() {
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
@@ -2301,7 +2301,7 @@ impl MetaService {
             }
         } else if let Some(store) = &self.store {
             store.write_named(
-                objectio_meta_store::cas_table_name(&table),
+                iolake_meta_store::cas_table_name(&table),
                 key,
                 new_value.as_deref(),
             );
@@ -2324,7 +2324,7 @@ const MAX_OBJECT_SIZE: u64 = 5 << 40;
 fn complete_upload(
     upload: &MultipartUploadState,
     req: &CompleteMultipartUploadRequest,
-) -> Result<(ObjectMeta, Vec<objectio_proto::metadata::StripeMeta>), Status> {
+) -> Result<(ObjectMeta, Vec<iolake_proto::metadata::StripeMeta>), Status> {
     // Verify bucket/key match
     if upload.bucket != req.bucket || upload.key != req.key {
         return Err(Status::invalid_argument(
@@ -2449,7 +2449,7 @@ fn complete_upload(
 #[cfg(test)]
 mod topology_status_tests {
     use super::{NodeEvidence, topology_status};
-    use objectio_common::{NodeStatus, OsdAdminState};
+    use iolake_common::{NodeStatus, OsdAdminState};
 
     /// A node that just registered is there — it opened a connection to say so.
     #[test]
@@ -2716,8 +2716,8 @@ mod te_segment_tests {
     //! gateways that will move shards to it.
 
     use super::MetaService;
-    use objectio_proto::metadata::metadata_service_server::MetadataService;
-    use objectio_proto::metadata::{GetListingNodesRequest, RegisterOsdRequest};
+    use iolake_proto::metadata::metadata_service_server::MetadataService;
+    use iolake_proto::metadata::{GetListingNodesRequest, RegisterOsdRequest};
     use tonic::Request;
 
     fn registration(id: u8, te_segment: &str) -> RegisterOsdRequest {
@@ -2783,7 +2783,7 @@ mod stripe_refs_tests {
     //! when the last object referencing it lets go.
 
     use super::MetaService;
-    use objectio_proto::metadata::{ReleaseStripesRequest, ShareStripesRequest};
+    use iolake_proto::metadata::{ReleaseStripesRequest, ShareStripesRequest};
     use tonic::Request;
 
     const X: [u8; 16] = [7; 16];
@@ -2875,8 +2875,8 @@ mod stripe_refs_tests {
 #[cfg(test)]
 mod complete_upload_tests {
     use super::{MAX_OBJECT_SIZE, complete_upload};
-    use objectio_meta_store::{MultipartUploadState, PartState};
-    use objectio_proto::metadata::{CompleteMultipartUploadRequest, PartInfo};
+    use iolake_meta_store::{MultipartUploadState, PartState};
+    use iolake_proto::metadata::{CompleteMultipartUploadRequest, PartInfo};
 
     /// An upload of `parts` parts of `size` bytes each, and the completion
     /// naming them all.
@@ -2938,7 +2938,7 @@ mod multipart_reclaim_tests {
     //! being referenced — the gateway frees exactly these.
 
     use super::MetaService;
-    use objectio_proto::metadata::{
+    use iolake_proto::metadata::{
         AbortMultipartUploadRequest, CompleteMultipartUploadRequest, CreateBucketRequest,
         CreateMultipartUploadRequest, PartInfo, RegisterPartRequest, SettleMultipartUploadRequest,
         StripeMeta,
@@ -3195,7 +3195,7 @@ mod pack_tests {
     //! record with it.
 
     use super::*;
-    use objectio_proto::metadata::{
+    use iolake_proto::metadata::{
         AbortPackRequest, IntendPackRequest, PackRecord, ReleaseStripesRequest, SealPackRequest,
         ShardLocation, ShareStripesRequest, StripeMeta,
     };
@@ -3348,7 +3348,7 @@ mod pack_tests {
 
     #[tokio::test]
     async fn settled_members_leave_the_record_and_others_stay() {
-        use objectio_proto::metadata::{PackMember, PackSettleRequest};
+        use iolake_proto::metadata::{PackMember, PackSettleRequest};
         let (_dir, svc) = service();
         let pack = [11u8; 16];
         svc.intend_pack(Request::new(IntendPackRequest {
@@ -3395,7 +3395,7 @@ mod pack_tests {
         );
         let listed = svc
             .list_packs(Request::new(
-                objectio_proto::metadata::ListPacksRequest::default(),
+                iolake_proto::metadata::ListPacksRequest::default(),
             ))
             .await
             .unwrap()

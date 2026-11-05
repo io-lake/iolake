@@ -7,7 +7,7 @@ impl MetaService {
     pub(super) fn apply_kms_key_event(&self, key: &str, new_value: Option<&[u8]>) {
         use prost::Message;
         match new_value {
-            Some(bytes) => match objectio_proto::metadata::KmsKey::decode(bytes) {
+            Some(bytes) => match iolake_proto::metadata::KmsKey::decode(bytes) {
                 Ok(k) => {
                     self.kms_keys.write().insert(key.to_string(), k);
                 }
@@ -62,7 +62,7 @@ impl MetaService {
         if self.raft_handle().is_some() {
             let created = self
                 .cas_many(
-                    vec![objectio_meta_store::CasOp {
+                    vec![iolake_meta_store::CasOp {
                         table: CasTable::Named(KMS_KEYS_TABLE.into()),
                         key: key_id.clone(),
                         expected: None,

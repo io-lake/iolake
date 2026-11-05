@@ -9,8 +9,8 @@ use std::fmt::Write as _;
 use std::time::Duration;
 
 use base64::Engine as _;
-use objectio_e2e::Cluster;
-use objectio_e2e::ha::HaCluster;
+use iolake_e2e::Cluster;
+use iolake_e2e::ha::HaCluster;
 use serde_json::json;
 
 fn bucket(c: &Cluster, name: &str) {
@@ -18,7 +18,7 @@ fn bucket(c: &Cluster, name: &str) {
         .expect_ok();
 }
 
-fn code(r: &objectio_e2e::Response) -> String {
+fn code(r: &iolake_e2e::Response) -> String {
     let xml = r.text();
     xml.split("<Code>")
         .nth(1)
@@ -384,7 +384,7 @@ fn lifecycle_expiry_is_announced_on_the_object() {
           </LifecycleConfiguration>",
     )
     .expect(200);
-    let announced = |r: &objectio_e2e::Response, rule: &str| {
+    let announced = |r: &iolake_e2e::Response, rule: &str| {
         let h = r
             .header("x-amz-expiration")
             .unwrap_or_else(|| panic!("no x-amz-expiration: {:?}", r.headers));

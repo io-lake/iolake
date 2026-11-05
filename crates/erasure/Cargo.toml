@@ -1,12 +1,12 @@
 [package]
-name = "objectio-erasure"
-description = "Erasure coding for ObjectIO: MDS on ISA-L, LRC"
+name = "iolake-erasure"
+description = "Erasure coding for IOLake: MDS on ISA-L, LRC"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-objectio-common = { workspace = true }
+iolake-common = { workspace = true }
 bytes = { workspace = true }
 # A data shard a decode rebuilds is checked against the crc32c its stripe
 # records for it before it is returned.

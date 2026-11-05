@@ -40,7 +40,7 @@
 //! # Ok::<(), transfer_engine_rust::EngineError>(())
 //! ```
 
-// ObjectIO: the bindings exist only when Mooncake is linked (feature `link`);
+// IOLake: the bindings exist only when Mooncake is linked (feature `link`);
 // otherwise this crate is empty. See VENDORED.md.
 #![cfg(te_linked)]
 

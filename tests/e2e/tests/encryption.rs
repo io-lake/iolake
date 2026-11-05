@@ -3,8 +3,8 @@
 //! 200; now 400, as S3 answers, and HEAD answered without any key.
 
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
+use iolake_e2e::Cluster;
 use md5::{Digest, Md5};
-use objectio_e2e::Cluster;
 use serde_json::json;
 
 fn key_headers(key: &[u8; 32]) -> [(&'static str, String); 3] {

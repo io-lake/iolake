@@ -1,6 +1,6 @@
-# Contributing to ObjectIO
+# Contributing to IOLake
 
-Thank you for helping. ObjectIO is storage: people trust it with data they
+Thank you for helping. IOLake is storage: people trust it with data they
 can't get back. Most of what follows comes from that.
 
 - [Ways to help](#ways-to-help)
@@ -18,19 +18,19 @@ Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 ## Ways to help
 
 - **Report a bug.** Use the bug form under
-  [Issues](https://github.com/object-io/objectio/issues/new/choose). The
+  [Issues](https://github.com/io-lake/iolake/issues/new/choose). The
   most useful report says what you ran (the release, how it is deployed,
   the client and the request), what you expected, what happened, and the
   logs around it. A failing test case is better still.
-- **Try it and tell us.** Run `objectio-aio` or the Helm chart against
+- **Try it and tell us.** Run `iolake-aio` or the Helm chart against
   your own clients and workloads. What breaks or confuses you is exactly
   what we can't see from inside.
 - **Improve the documentation.** The guides at
-  [object-io.github.io](https://object-io.github.io): a wrong command, a
+  [iolake.dev](https://iolake.dev): a wrong command, a
   missing step or an unclear page is worth an issue.
 - **Pick up an issue.** Issues labelled
-  [`good first issue`](https://github.com/object-io/objectio/labels/good%20first%20issue)
-  are small and self-contained; [`help wanted`](https://github.com/object-io/objectio/labels/help%20wanted)
+  [`good first issue`](https://github.com/io-lake/iolake/labels/good%20first%20issue)
+  are small and self-contained; [`help wanted`](https://github.com/io-lake/iolake/labels/help%20wanted)
   ones are larger. Say in the issue that you're taking it, so two people
   don't do the same work.
 
@@ -43,9 +43,9 @@ agree on the approach before writing much code. A pull request with no
 issue behind it may be a good change we still can't take, because it
 doesn't fit the plan.
 
-What's planned is on the [roadmap](https://object-io.github.io/latest/ROADMAP/),
+What's planned is on the [roadmap](https://iolake.dev/latest/ROADMAP/),
 by release; each item links its issue, and the
-[project board](https://github.com/orgs/object-io/projects/1) shows what's
+[project board](https://github.com/orgs/io-lake/projects/1) shows what's
 in progress. Issues carry an `area:` label for their domain (`s3`, `core`,
 `datalake`, `security`, `block`, `file`, `platform`, `ci`, `docs`) and a
 milestone for their release.
@@ -59,7 +59,7 @@ Some things we won't take, however well done:
   "written before X", decoders for old layouts, defaults that exist only so
   old records parse. The one exception is compatibility between two
   adjacent releases, which a rolling upgrade needs.
-- **Features S3 deprecated or ObjectIO left out on purpose**: ACL grants
+- **Features S3 deprecated or IOLake left out on purpose**: ACL grants
   (buckets are BucketOwnerEnforced; use bucket policies), SigV2, access
   across tenants. The S3 compatibility page lists them, with reasons.
 - **Licence tiers, feature flags that gate paid features, or telemetry.**
@@ -67,7 +67,7 @@ Some things we won't take, however well done:
 
 ## Setting up
 
-ObjectIO targets Linux, on x86_64 and arm64. On a Mac, build and test
+IOLake targets Linux, on x86_64 and arm64. On a Mac, build and test
 inside a Linux VM or container: macOS is fine for editing, but its fsync
 behaviour and timings make test results misleading.
 
@@ -82,7 +82,7 @@ You need:
 ```sh
 sudo apt-get install build-essential protobuf-compiler \
   nasm autoconf automake libtool libclang-dev       # Ubuntu / Debian
-git clone https://github.com/object-io/objectio && cd objectio
+git clone https://github.com/io-lake/iolake && cd iolake
 make build        # debug build
 make test
 ```
@@ -90,7 +90,7 @@ make test
 No Rust installed? `docker compose run --rm build` (and `test`, `lint`,
 `fmt`) runs the same in a container.
 
-To run what you built: `target/debug/objectio-aio` runs meta, the OSDs and
+To run what you built: `target/debug/iolake-aio` runs meta, the OSDs and
 the gateway in one process (the [README](README.md#quickstart) has a
 quickstart). The repo's layout and every crate's job are in
 [CLAUDE.md](CLAUDE.md#map): it was written for coding agents, and it's as
@@ -104,7 +104,7 @@ good a map for people.
 - **Rust 2024; `cargo fmt`; `cargo clippy -- -D warnings`.** CI runs both
   on every pull request. Locally: `make lint`, and `make fmt` (check) or
   `make fmt-fix`.
-- **Errors**: `objectio_common::Error` everywhere except `objectio-block`,
+- **Errors**: `iolake_common::Error` everywhere except `iolake-block`,
   which has its own; don't mix them. No `unwrap()` on anything a client,
   a disk or the network can make fail.
 - **Meta writes go through Raft** (`replicate`, `cas_many`); a handler
@@ -125,10 +125,10 @@ Every change is tested, at the level where its behaviour shows:
 | Change | Test | Run it with |
 |---|---|---|
 | Logic inside one crate | A unit test in the same file (`#[cfg(test)] mod tests`; `#[tokio::test]` for async) | `cargo test -p <crate>` |
-| Behaviour across processes: the S3 API, failover, repair, upgrades | An end-to-end test in `tests/e2e`, against real processes | `cargo test -p objectio-e2e --test <file>` (build the binaries first, below) |
+| Behaviour across processes: the S3 API, failover, repair, upgrades | An end-to-end test in `tests/e2e`, against real processes | `cargo test -p iolake-e2e --test <file>` (build the binaries first, below) |
 | S3 compatibility | ceph s3-tests | `scripts/s3-tests/run.sh` ([README](scripts/s3-tests/README.md)) |
 | A rolling upgrade | The upgrade test, from the last release | `scripts/upgrade-test/previous-release.sh` (see its header) |
-| What the OSD keeps through a power cut | The crash-consistency test, on `dm-log-writes` devices | `cargo test -p objectio-osd --test crash_consistency -- --ignored` (needs `sudo -n`) |
+| What the OSD keeps through a power cut | The crash-consistency test, on `dm-log-writes` devices | `cargo test -p iolake-osd --test crash_consistency -- --ignored` (needs `sudo -n`) |
 
 Tests that need something a plain machine lacks (root, a kernel module,
 the previous release, a Mooncake build) are marked
@@ -140,19 +140,19 @@ provides it:
 | Test | Needs | CI job |
 |---|---|---|
 | `crates/osd/tests/crash_consistency.rs` | root through `sudo -n`, loop devices, the `dm-log-writes` module | crash consistency |
-| `tests/e2e/tests/rolling_upgrade.rs` | `OBJECTIO_PREVIOUS_RELEASE_BIN`, the previous release's binaries | rolling upgrade |
-| `tests/e2e/tests/rdma.rs` | an aio built with `--features rdma`, `OBJECTIO_E2E_RDMA` | rdma (`crates/transport-te/ci-test.sh`) |
+| `tests/e2e/tests/rolling_upgrade.rs` | `IOLAKE_PREVIOUS_RELEASE_BIN`, the previous release's binaries | rolling upgrade |
+| `tests/e2e/tests/rdma.rs` | an aio built with `--features rdma`, `IOLAKE_E2E_RDMA` | rdma (`crates/transport-te/ci-test.sh`) |
 
-`cargo test -p objectio-storage --features io-uring` needs a host that
+`cargo test -p iolake-storage --features io-uring` needs a host that
 allows io_uring (a container under docker's default seccomp profile
 doesn't): with the feature on, the I/O must go through it.
 
 End-to-end tests run the binaries in `target/debug`, so build them first:
 
 ```sh
-cargo build --bin objectio-aio --bin obioctl --bin objectio-meta \
-  --bin objectio-osd --bin objectio-gateway --bin objectio-block-gateway \
-  --bin objectio-install
+cargo build --bin iolake-aio --bin iolakectl --bin iolake-meta \
+  --bin iolake-osd --bin iolake-gateway --bin iolake-block-gateway \
+  --bin iolake-install
 ```
 
 Don't rebuild while an end-to-end run is going in the same checkout: the
@@ -202,7 +202,7 @@ that isn't public yet, so for now:
 
 ## Licensing
 
-ObjectIO is licensed under the [Apache License 2.0](LICENSE). By opening a
+IOLake is licensed under the [Apache License 2.0](LICENSE). By opening a
 pull request, you agree that your contribution is licensed under it too
 (section 5 of the licence: inbound = outbound), and that you have the right
 to contribute it. Don't submit code you didn't write unless its licence is

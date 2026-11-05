@@ -1,4 +1,4 @@
-"""End-to-end Unity Catalog model lifecycle, exercised against ObjectIO.
+"""End-to-end Unity Catalog model lifecycle, exercised against IOLake.
 
 Real workflow: register a model → mint short-lived STS creds scoped to the
 model's storage prefix → upload a real pickled sklearn classifier → register
@@ -10,7 +10,7 @@ that ML/registry users care about. No Spark, no Databricks, just the
 Databricks SDK + boto3 against our local aio binary.
 
 Usage:
-    OBJECTIO_HOST=http://127.0.0.1:9000 \
+    IOLAKE_HOST=http://127.0.0.1:9000 \
       .venv-dbx/bin/python demo_model_lifecycle.py
 """
 
@@ -30,8 +30,8 @@ from databricks.sdk import WorkspaceClient
 from sklearn.linear_model import LogisticRegression
 
 
-HOST = os.environ.get("OBJECTIO_HOST", "http://127.0.0.1:9000")
-TOKEN = os.environ.get("OBJECTIO_TOKEN", "dummy")
+HOST = os.environ.get("IOLAKE_HOST", "http://127.0.0.1:9000")
+TOKEN = os.environ.get("IOLAKE_TOKEN", "dummy")
 RUN = str(int(time.time()))
 CATALOG = f"ml_demo_{RUN}"
 SCHEMA = "registry"

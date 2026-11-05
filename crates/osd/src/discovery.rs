@@ -5,11 +5,11 @@
 //! glob filters (`--disk-filter "/dev/disk/by-id/wwn-*"`). The
 //! discovery pass expands the filters, excludes anything that looks
 //! like an operating-system or boot disk, reads each candidate's
-//! ObjectIO superblock, and classifies it:
+//! IOLake superblock, and classifies it:
 //!
-//! - **Claimed** — already has an ObjectIO superblock + matching
+//! - **Claimed** — already has an IOLake superblock + matching
 //!   cluster_uuid; attach unchanged.
-//! - **Foreign** — ObjectIO superblock but different cluster_uuid;
+//! - **Foreign** — IOLake superblock but different cluster_uuid;
 //!   refuse to mount (cross-cluster guard).
 //! - **Blank** — no recognisable superblock; format only if the
 //!   operator passed `--init-blank-disks=true`. Default `false`
@@ -25,22 +25,22 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use objectio_storage::layout::{MAGIC, SUPERBLOCK_SIZE};
-use objectio_storage::raw_io::{AlignedBuffer, RawFile};
+use iolake_storage::layout::{MAGIC, SUPERBLOCK_SIZE};
+use iolake_storage::raw_io::{AlignedBuffer, RawFile};
 use tracing::{debug, info, warn};
 
 /// What discovery found for a single candidate path.
 #[derive(Clone, Debug)]
 pub enum DiskState {
-    /// Already carries an ObjectIO superblock. `cluster_uuid` may be
+    /// Already carries an IOLake superblock. `cluster_uuid` may be
     /// nil for pre-identity disks.
     Claimed {
         cluster_uuid: uuid::Uuid,
         node_id: [u8; 16],
     },
-    /// No ObjectIO magic. Formatting is operator-gated.
+    /// No IOLake magic. Formatting is operator-gated.
     Blank,
-    /// Something other than ObjectIO sits here (LUKS header, ext4,
+    /// Something other than IOLake sits here (LUKS header, ext4,
     /// MBR/GPT). Never auto-formatted.
     Foreign { reason: String },
 }
@@ -391,7 +391,7 @@ fn classify(path: &Path) -> DiskState {
     // Either copy of the superblock will do: a disk whose primary is torn
     // (a power cut mid-write) is still this OSD's, and mounting it repairs
     // the primary from the backup.
-    let probe = match objectio_storage::probe_superblock(path) {
+    let probe = match iolake_storage::probe_superblock(path) {
         Ok(sb) => {
             return DiskState::Claimed {
                 cluster_uuid: sb.cluster_uuid,
@@ -409,10 +409,10 @@ fn classify(path: &Path) -> DiskState {
     let head = &buf.as_slice()[..8];
     if head == MAGIC {
         return DiskState::Foreign {
-            reason: format!("corrupt ObjectIO superblock, backup too: {probe}"),
+            reason: format!("corrupt IOLake superblock, backup too: {probe}"),
         };
     }
-    // Unformatted or non-ObjectIO device. Peek at a few common headers so
+    // Unformatted or non-IOLake device. Peek at a few common headers so
     // the operator log is useful.
     if head.starts_with(b"LUKS") {
         return DiskState::Foreign {
@@ -421,7 +421,7 @@ fn classify(path: &Path) -> DiskState {
     }
     // Blank only if the backup copy is empty too: a disk whose primary
     // superblock was zeroed still holds shards.
-    if objectio_storage::is_blank(path).unwrap_or(false) {
+    if iolake_storage::is_blank(path).unwrap_or(false) {
         return DiskState::Blank;
     }
     DiskState::Foreign {
@@ -465,7 +465,7 @@ mod tests {
         use std::io::{Seek, SeekFrom, Write};
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("disk.raw");
-        drop(objectio_storage::DiskManager::init(&path, 1 << 30, None).unwrap());
+        drop(iolake_storage::DiskManager::init(&path, 1 << 30, None).unwrap());
         let tear = |offset: u64| {
             let mut f = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
             f.seek(SeekFrom::Start(offset + 100)).unwrap();
@@ -473,7 +473,7 @@ mod tests {
         };
         tear(0);
         assert!(matches!(classify(&path), DiskState::Claimed { .. }));
-        tear(objectio_storage::layout::BACKUP_SUPERBLOCK_OFFSET);
+        tear(iolake_storage::layout::BACKUP_SUPERBLOCK_OFFSET);
         assert!(matches!(classify(&path), DiskState::Foreign { .. }));
     }
 

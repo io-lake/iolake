@@ -7,8 +7,8 @@
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use objectio_e2e::ha::{HaCluster, Node};
-use objectio_e2e::{Cluster, await_exit, binary, free_port, sigterm, tls};
+use iolake_e2e::ha::{HaCluster, Node};
+use iolake_e2e::{Cluster, await_exit, binary, free_port, sigterm, tls};
 
 /// Ample for a clean stop: the services take well under a second here.
 const STOP_WITHIN: Duration = Duration::from_secs(20);
@@ -73,7 +73,7 @@ fn every_service_stops_cleanly_on_sigterm() {
     // The block gateway, on the same meta.
     let dir = tempfile::tempdir().unwrap();
     let grpc = free_port();
-    let mut cmd = Command::new(binary("objectio-block-gateway"));
+    let mut cmd = Command::new(binary("iolake-block-gateway"));
     tls::apply(&mut cmd, tls::BLOCK_GATEWAY);
     let mut block = cmd
         .args([
@@ -91,7 +91,7 @@ fn every_service_stops_cleanly_on_sigterm() {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .expect("spawn objectio-block-gateway");
+        .expect("spawn iolake-block-gateway");
     let deadline = Instant::now() + Duration::from_secs(60);
     while std::net::TcpStream::connect(("127.0.0.1", grpc)).is_err() {
         assert!(
@@ -135,7 +135,7 @@ fn aio_stops_cleanly_on_sigterm() {
     c.request("PUT", "/stopping/k", b"x").expect(200);
     let status = c.terminate(STOP_WITHIN);
     assert!(status.is_some_and(|s| s.success()), "aio: {status:?}");
-    if std::env::var_os("OBJECTIO_E2E_LOGS").is_none() {
+    if std::env::var_os("IOLAKE_E2E_LOGS").is_none() {
         let log = c.log();
         for line in [
             "SIGTERM received",

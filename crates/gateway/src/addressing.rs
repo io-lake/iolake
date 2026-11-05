@@ -140,7 +140,7 @@ impl S3Domains {
                 .strip_suffix(domain.as_str())
                 .and_then(|rest| rest.strip_suffix('.'))
             {
-                return if objectio_common::BucketName::new(label).is_ok() {
+                return if iolake_common::BucketName::new(label).is_ok() {
                     Addressing::Virtual(label.to_string())
                 } else {
                     Addressing::BadBucket(label.to_string())
@@ -355,7 +355,7 @@ mod tests {
             "10.1.2.3",
             "[::1]:9000",
             "localhost:9000",
-            "objectio-gateway",
+            "iolake-gateway",
             "photos.other.example.com",
             // Only a whole label in front of the domain counts.
             "photoss3.example.com",

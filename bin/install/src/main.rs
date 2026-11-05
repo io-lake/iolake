@@ -1,17 +1,19 @@
-//! Sets a Linux host up to run ObjectIO's services under systemd.
+//! Sets a Linux host up to run IOLake's services under systemd.
 //!
 //! Usage:
-//!   objectio-install init --role all --disks /dev/sdb,/dev/sdc --systemd
-//!   objectio-install cluster init meta1:9102 meta2:9102 meta3:9102
-//!   objectio-install cluster init --tls-cert admin.pem --tls-key admin.key \
+//!   iolake-install init --role all --disks /dev/sdb,/dev/sdc --systemd
+//!   iolake-install cluster init meta1:9102 meta2:9102 meta3:9102
+//!   iolake-install cluster init --tls-cert admin.pem --tls-key admin.key \
 //!     --tls-ca ca.pem meta1 meta2 meta3                  # under mTLS
-//!   objectio-install disk list
-//!   objectio-install disk prepare /dev/sdb
+//!   iolake-install disk list
+//!   iolake-install disk prepare /dev/sdb
+//!   iolake-install upgrade                          # a host set up by 0.1.0-rc.3
 
 mod cluster;
 mod config;
 mod disk;
 mod systemd;
+mod upgrade;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -24,8 +26,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use config::{HostSpec, Kind, Layout, Ports, Protection, Role};
 
 #[derive(Parser, Debug)]
-#[command(name = "objectio-install")]
-#[command(about = "Sets a host up to run ObjectIO's services under systemd")]
+#[command(name = "iolake-install")]
+#[command(about = "Sets a host up to run IOLake's services under systemd")]
 #[command(version)]
 struct Args {
     /// Log level
@@ -59,6 +61,19 @@ enum Commands {
         #[arg(long, default_value = "/")]
         root: PathBuf,
     },
+
+    /// On a host set up by 0.1.0-rc.3 (`objectio-*` units), write the
+    /// units of this release beside them, and the gateway's settings under
+    /// their new names. Nothing is stopped or started
+    Upgrade {
+        /// The root the host was set up under
+        #[arg(long, default_value = "/")]
+        root: PathBuf,
+
+        /// Where the IOLake binaries are. Default: where the old ones were
+        #[arg(long)]
+        bin_dir: Option<PathBuf>,
+    },
 }
 
 #[derive(clap::Args, Debug)]
@@ -69,7 +84,7 @@ struct InitArgs {
 
     /// The disks of this host's OSDs, one OSD each (comma-separated). Each
     /// must be blank, which the OSD formats when it first starts, or an
-    /// ObjectIO disk.
+    /// IOLake disk.
     #[arg(long, value_delimiter = ',')]
     disks: Vec<String>,
 
@@ -144,7 +159,7 @@ struct InitArgs {
     #[arg(long, default_value = "/")]
     root: PathBuf,
 
-    /// Where the ObjectIO binaries are
+    /// Where the IOLake binaries are
     #[arg(long, default_value = "/usr/local/bin")]
     bin_dir: PathBuf,
 
@@ -195,7 +210,7 @@ enum DiskCommands {
         all: bool,
     },
 
-    /// Format a disk for ObjectIO. Not needed for a blank disk, which its
+    /// Format a disk for IOLake. Not needed for a blank disk, which its
     /// OSD formats when it first starts.
     Prepare {
         /// Path to the disk device
@@ -256,6 +271,7 @@ async fn main() -> Result<()> {
         }
         Commands::Disk { command } => handle_disk_command(command)?,
         Commands::Status { root } => show_status(&Layout::new(&root)?)?,
+        Commands::Upgrade { root, bin_dir } => upgrade_host(&root, bin_dir.as_deref())?,
     }
     Ok(())
 }
@@ -337,16 +353,16 @@ fn init_host(a: InitArgs) -> Result<()> {
         println!();
         println!("Next:");
         if spec.runs(Role::Meta) {
-            println!("  systemctl enable --now objectio-meta    # on every meta node");
+            println!("  systemctl enable --now iolake-meta    # on every meta node");
             println!(
-                "  objectio-install cluster init <every meta node's address>:{}    # once, from any host",
+                "  iolake-install cluster init <every meta node's address>:{}    # once, from any host",
                 spec.ports.meta_admin
             );
         }
         let rest: Vec<&str> = units
             .iter()
             .copied()
-            .filter(|u| *u != "objectio-meta")
+            .filter(|u| *u != "iolake-meta")
             .collect();
         if !rest.is_empty() {
             println!("  systemctl enable --now {}", rest.join(" "));
@@ -455,8 +471,57 @@ fn show_status(layout: &Layout) -> Result<()> {
         println!("  {name}");
     }
     println!("Units in {}:", layout.unit_dir().display());
-    for name in list(&layout.unit_dir(), "objectio-", ".service") {
+    for name in list(&layout.unit_dir(), "iolake-", ".service") {
         println!("  {name}");
     }
+    Ok(())
+}
+
+/// `upgrade`: the new units beside the old ones, and what to do next.
+fn upgrade_host(root: &Path, bin_dir: Option<&Path>) -> Result<()> {
+    let layout = Layout::new(root)?;
+    let report = upgrade::upgrade(&layout, bin_dir)?;
+    if report.units.is_empty() {
+        println!(
+            "No units of 0.1.0-rc.3 in {}: nothing to do.",
+            layout.unit_dir().display()
+        );
+        return Ok(());
+    }
+    if layout.is_host_root() {
+        run("systemctl", &["daemon-reload"])?;
+    }
+    for unit in &report.kept {
+        println!("{unit} is there already: left as it is.");
+    }
+    if !report.vars.is_empty() {
+        println!(
+            "Added to {}: {}",
+            layout.gateway_env().display(),
+            report.vars.join(" ")
+        );
+    }
+    // In the upgrade's order: meta, then the OSDs, then the gateway.
+    let rank = |old: &str| match old {
+        "objectio-meta" => 0,
+        "objectio-gateway" => 2,
+        _ => 1,
+    };
+    let mut units = report.units.clone();
+    units.sort_by_key(|(old, _)| rank(old));
+    println!();
+    println!("Next, each at its turn in the upgrade (meta, then OSDs, then the gateway):");
+    for (old, new) in &units {
+        println!("  systemctl disable --now {old} && systemctl enable --now {new}");
+    }
+    println!();
+    println!("Once the upgrade is finalized, remove the old units:");
+    for path in upgrade::leftovers(&layout, &report) {
+        println!("  rm -r {}", path.display());
+    }
+    println!(
+        "and the OBJECTIO_* lines of {}.",
+        layout.gateway_env().display()
+    );
     Ok(())
 }

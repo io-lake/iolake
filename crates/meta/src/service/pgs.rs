@@ -1,4 +1,4 @@
-//! Placement groups as the unit of placement (B31, objectio-docs
+//! Placement groups as the unit of placement (B31, iolake-docs
 //! `core/pg-recovery.md`, phase 1).
 //!
 //! Every key is placed through a placement group: the
@@ -12,11 +12,11 @@
 use super::*;
 use std::time::Duration;
 
-use objectio_common::FailureDomain;
-use objectio_placement::PlacementRule;
-use objectio_placement::copyset::{domain_name, unit_name};
-use objectio_placement::topology::NodeInfo;
-use objectio_proto::storage::{
+use iolake_common::FailureDomain;
+use iolake_placement::PlacementRule;
+use iolake_placement::copyset::{domain_name, unit_name};
+use iolake_placement::topology::NodeInfo;
+use iolake_proto::storage::{
     PgRef, SetPgEpochsRequest, storage_service_client::StorageServiceClient,
 };
 
@@ -92,7 +92,7 @@ static UNDERSIZED_LOGGED: std::sync::LazyLock<
 /// Placement-group metrics as Prometheus families.
 pub fn render_metrics(out: &mut String) {
     use std::fmt::Write as _;
-    let name = "objectio_meta_pgs_undersized";
+    let name = "iolake_meta_pgs_undersized";
     let _ = writeln!(
         out,
         "# HELP {name} Placement groups with a member no OSD can stand in for within the \
@@ -104,8 +104,7 @@ pub fn render_metrics(out: &mut String) {
 /// The placement group `bucket/key` maps to in a pool of `pg_count`.
 pub(crate) fn pg_of_key(bucket: &str, key: &str, pg_count: u32) -> u32 {
     let hash = xxhash_rust::xxh64::xxh64(format!("{bucket}/{key}").as_bytes(), 0);
-    objectio_placement::jump_consistent_hash(hash, i32::try_from(pg_count).unwrap_or(i32::MAX))
-        as u32
+    iolake_placement::jump_consistent_hash(hash, i32::try_from(pg_count).unwrap_or(i32::MAX)) as u32
 }
 
 /// How many copies a pool's PGs have.
@@ -138,16 +137,14 @@ pub(crate) fn normalize_scheme(pool: &mut PoolConfig) {
 pub(crate) fn check_scheme(pool: &PoolConfig) -> Result<(), Status> {
     let wide = |n: u32| usize::try_from(n).unwrap_or(usize::MAX);
     let why = match ErasureType::try_from(pool.ec_type) {
-        Ok(ErasureType::ErasureMds) => {
-            objectio_erasure::check_mds(wide(pool.ec_k), wide(pool.ec_m))
-        }
-        Ok(ErasureType::ErasureLrc) => objectio_erasure::check_lrc(
+        Ok(ErasureType::ErasureMds) => iolake_erasure::check_mds(wide(pool.ec_k), wide(pool.ec_m)),
+        Ok(ErasureType::ErasureLrc) => iolake_erasure::check_lrc(
             wide(pool.ec_k),
             wide(pool.ec_local_parity),
             wide(pool.ec_global_parity),
         ),
         Ok(ErasureType::ErasureReplication) => {
-            objectio_erasure::check_replicas(wide(pool.replication_count))
+            iolake_erasure::check_replicas(wide(pool.replication_count))
         }
         Err(_) => Err(format!(
             "ec_type {} is none of 0 (erasure coding), 1 (LRC) and 2 (replication)",
@@ -403,7 +400,7 @@ impl MetaService {
                     .read()
                     .iter()
                     .filter(|n| {
-                        n.admin_state == objectio_common::OsdAdminState::In && !n.address.is_empty()
+                        n.admin_state == iolake_common::OsdAdminState::In && !n.address.is_empty()
                     })
                     .count();
                 let up = self.topology.read().active_nodes().count();
@@ -451,7 +448,7 @@ impl MetaService {
         };
         let registered = self.osd_nodes.read().iter().any(|n| {
             n.node_id == id
-                && n.admin_state == objectio_common::OsdAdminState::In
+                && n.admin_state == iolake_common::OsdAdminState::In
                 && !n.address.is_empty()
         });
         registered
@@ -764,7 +761,7 @@ impl MetaService {
         changes: &[(PlacementGroup, PlacementGroup)],
         why: &str,
     ) -> anyhow::Result<()> {
-        use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+        use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
         // The last word on it: whatever chose the members, no change puts
         // two of a PG's positions on one OSD.
         if let Some((old, new)) = changes
@@ -943,7 +940,7 @@ mod tests {
     //! by which OSD, and when not.
 
     use super::*;
-    use objectio_proto::metadata::metadata_service_server::MetadataService;
+    use iolake_proto::metadata::metadata_service_server::MetadataService;
 
     fn scheme(ec_type: ErasureType, k: u32, m: u32, l: u32, g: u32, n: u32) -> PoolConfig {
         let mut pool = PoolConfig {
@@ -1015,7 +1012,7 @@ mod tests {
         normalize_scheme(&mut pool);
         assert_eq!(pool.ec_m, 2);
     }
-    use objectio_proto::metadata::{FailureDomainInfo, RegisterOsdRequest};
+    use iolake_proto::metadata::{FailureDomainInfo, RegisterOsdRequest};
 
     fn id(n: u8) -> Vec<u8> {
         vec![n; 16]

@@ -32,11 +32,11 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use objectio_auth::{
+use iolake_auth::{
     AuthResult,
     policy::{BucketPolicy, PolicyDecision, RequestContext},
 };
-use objectio_proto::metadata::{
+use iolake_proto::metadata::{
     GetBucketPolicyRequest, GetBucketRequest, GetPolicyRequest, ListAttachedPoliciesRequest,
 };
 use parking_lot::RwLock;
@@ -439,7 +439,7 @@ fn unavailable() -> Response {
 /// Deny, so it can't be treated as absent).
 fn bucket_policy_from(
     bucket: &str,
-    answer: Result<objectio_proto::metadata::GetBucketPolicyResponse, tonic::Status>,
+    answer: Result<iolake_proto::metadata::GetBucketPolicyResponse, tonic::Status>,
 ) -> Result<Option<Arc<BucketPolicy>>, Unavailable> {
     match answer {
         Ok(resp) if resp.has_policy => match BucketPolicy::from_json(&resp.policy_json) {
@@ -462,8 +462,8 @@ fn bucket_policy_from(
 /// `Unavailable` when it couldn't say.
 fn bucket_meta_from(
     bucket: &str,
-    answer: Result<objectio_proto::metadata::GetBucketResponse, tonic::Status>,
-) -> Result<Option<objectio_proto::metadata::BucketMeta>, Unavailable> {
+    answer: Result<iolake_proto::metadata::GetBucketResponse, tonic::Status>,
+) -> Result<Option<iolake_proto::metadata::BucketMeta>, Unavailable> {
     match answer {
         Ok(resp) => Ok(resp.bucket),
         Err(e) if e.code() == tonic::Code::NotFound => Ok(None),
@@ -600,7 +600,7 @@ pub(crate) async fn load_identity_policies(
 
     let mut documents = Vec::with_capacity(names.len());
     for name in names {
-        if let Some(doc) = objectio_auth::managed::attached(&name) {
+        if let Some(doc) = iolake_auth::managed::attached(&name) {
             documents.push((name, doc.to_string()));
             continue;
         }
@@ -618,7 +618,7 @@ pub(crate) async fn load_identity_policies(
         }
     }
     let inline = client
-        .list_inline_policies(objectio_proto::metadata::ListInlinePoliciesRequest {
+        .list_inline_policies(iolake_proto::metadata::ListInlinePoliciesRequest {
             principal: principal_key(principal_id, is_group),
         })
         .await
@@ -671,7 +671,7 @@ async fn existing_object_tags(
     let placement = match state
         .meta_client
         .clone()
-        .get_placement(objectio_proto::metadata::GetPlacementRequest {
+        .get_placement(iolake_proto::metadata::GetPlacementRequest {
             bucket: bucket.to_string(),
             key: key.to_string(),
             size: 0,
@@ -701,7 +701,7 @@ async fn existing_object_tags(
 fn tags_from(
     bucket: &str,
     key: &str,
-    answer: Result<Option<objectio_proto::metadata::ObjectMeta>, crate::osd_pool::OsdPoolError>,
+    answer: Result<Option<iolake_proto::metadata::ObjectMeta>, crate::osd_pool::OsdPoolError>,
 ) -> Result<std::collections::HashMap<String, String>, Unavailable> {
     match answer {
         Ok(meta) => Ok(meta.map(|o| o.tags).unwrap_or_default()),
@@ -794,7 +794,7 @@ pub async fn authorize(
         ));
     }
 
-    if auth.auth_mode == objectio_auth::AuthMode::Anonymous {
+    if auth.auth_mode == iolake_auth::AuthMode::Anonymous {
         return authorize_anonymous(state, auth, req, &bucket).await;
     }
 
@@ -939,7 +939,7 @@ async fn list_buckets_denied(state: &AppState, auth: &AuthResult) -> bool {
 /// `obio:CredentialType`, and `sts:authentication` ("true") for temporary
 /// credentials.
 fn with_credential_vars(mut context: RequestContext, auth: &AuthResult) -> RequestContext {
-    use objectio_auth::AuthMode;
+    use iolake_auth::AuthMode;
     context = context.with_variable(
         "obio:CredentialType".to_string(),
         auth.auth_mode.as_str().to_string(),
@@ -1118,7 +1118,7 @@ pub async fn authz_layer(
     let classification = classify(request.method(), uri.path(), uri.query().unwrap_or(""));
 
     // An anonymous caller reaches only what a bucket policy grants it.
-    if auth.auth_mode == objectio_auth::AuthMode::Anonymous
+    if auth.auth_mode == iolake_auth::AuthMode::Anonymous
         && !matches!(classification, Authz::Check { .. } | Authz::DeferToHandler)
     {
         return deny("Anonymous access is not allowed");
@@ -1127,7 +1127,7 @@ pub async fn authz_layer(
     // ListAllMyBuckets: nothing to check but the caller's own Denies.
     if uri.path() == "/"
         && request.method() == Method::GET
-        && auth.auth_mode != objectio_auth::AuthMode::Anonymous
+        && auth.auth_mode != iolake_auth::AuthMode::Anonymous
         && list_buckets_denied(&state, &auth).await
     {
         crate::audit::note_action("s3:ListAllMyBuckets");
@@ -1388,9 +1388,9 @@ mod tests {
     fn object_key_is_the_scope_key() {
         let (_, bucket, key) = check_of(Method::PUT, "/reports/2026/q1.csv", "");
         assert_eq!(bucket, "reports");
-        let scope = objectio_auth::CredentialScope {
+        let scope = iolake_auth::CredentialScope {
             scope: "s3://reports/2026/".to_string(),
-            operation: objectio_auth::Operation::ReadWrite,
+            operation: iolake_auth::Operation::ReadWrite,
         };
         assert!(scope.allows(&bucket, key.as_deref().unwrap(), "PUT"));
 
@@ -1402,9 +1402,9 @@ mod tests {
     /// refused on it the same way it is on a simple PUT.
     #[test]
     fn read_only_scope_blocks_the_multipart_verbs() {
-        let ro = objectio_auth::CredentialScope {
+        let ro = iolake_auth::CredentialScope {
             scope: "s3://data/".to_string(),
-            operation: objectio_auth::Operation::Read,
+            operation: iolake_auth::Operation::Read,
         };
         for (method, query) in [
             (Method::POST, "uploads"),
@@ -1518,13 +1518,13 @@ mod tests {
     /// reach it.
     #[test]
     fn a_vended_session_stays_in_its_tenant() {
-        let session = objectio_auth::sts::StsProvider::new(b"k").issue(
+        let session = iolake_auth::sts::StsProvider::new(b"k").issue(
             "arn:u",
             "acme",
             "s3://globex-data/",
-            objectio_auth::Operation::Read,
+            iolake_auth::Operation::Read,
         );
-        let info = objectio_auth::sts::StsProvider::new(b"k")
+        let info = iolake_auth::sts::StsProvider::new(b"k")
             .validate(&session.session_token)
             .unwrap();
         assert!(tenant_violation(&info.tenant, "globex").is_some());
@@ -1551,7 +1551,7 @@ mod tests {
         assert!(matches!(
             bucket_policy_from(
                 "b",
-                Ok(objectio_proto::metadata::GetBucketPolicyResponse {
+                Ok(iolake_proto::metadata::GetBucketPolicyResponse {
                     policy_json: String::new(),
                     has_policy: false,
                 })
@@ -1566,7 +1566,7 @@ mod tests {
         let down = Err(crate::osd_pool::OsdPoolError::NoNodesAvailable);
         assert!(tags_from("b", "k", down).is_err());
         assert!(tags_from("b", "k", Ok(None)).unwrap().is_empty());
-        let tagged = objectio_proto::metadata::ObjectMeta {
+        let tagged = iolake_proto::metadata::ObjectMeta {
             tags: [("class".to_string(), "pii".to_string())].into(),
             ..Default::default()
         };
@@ -1578,7 +1578,7 @@ mod tests {
 
     #[test]
     fn a_stored_policy_that_does_not_parse_is_not_no_policy() {
-        let corrupt = Ok(objectio_proto::metadata::GetBucketPolicyResponse {
+        let corrupt = Ok(iolake_proto::metadata::GetBucketPolicyResponse {
             policy_json: "{not json".to_string(),
             has_policy: true,
         });

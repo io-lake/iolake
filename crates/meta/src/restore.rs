@@ -1,9 +1,9 @@
-//! The offline tools, run with meta stopped (objectio-docs `core/meta.md`,
+//! The offline tools, run with meta stopped (iolake-docs `core/meta.md`,
 //! "Backup, restore and losing a majority"):
 //!
-//! - `objectio-meta restore`: a data directory made from a backup, holding
+//! - `iolake-meta restore`: a data directory made from a backup, holding
 //!   a one-voter group;
-//! - `objectio-meta force-single-voter`: a surviving node made the only
+//! - `iolake-meta force-single-voter`: a surviving node made the only
 //!   voter, when the rest of its group is lost for good.
 //!
 //! Both leave the state machine older than the OSDs (by whatever was
@@ -13,8 +13,8 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, bail};
-use objectio_meta_store::raft_storage::rows;
-use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaRaftStorage, MetaStore, Voter};
+use iolake_meta_store::raft_storage::rows;
+use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaRaftStorage, MetaStore, Voter};
 use openraft::LogId;
 use prost::Message as _;
 
@@ -28,7 +28,7 @@ pub const INCOMPLETE: &str = "restore-incomplete";
 
 #[derive(clap::Subcommand, Debug, Clone)]
 pub enum Tool {
-    /// Restore a backup (`obioctl meta export`) into an empty data
+    /// Restore a backup (`iolakectl meta export`) into an empty data
     /// directory, as a group of one voter. Start meta on it, then add the
     /// other nodes, empty, as when the group was formed.
     Restore {
@@ -155,13 +155,13 @@ fn notes(store: &MetaStore) -> String {
     let mut out = String::new();
     let restored: Option<Restored> = store
         .read_named("config", RESTORED_KEY)
-        .and_then(|b| objectio_proto::metadata::ConfigEntry::decode(b.as_slice()).ok())
+        .and_then(|b| iolake_proto::metadata::ConfigEntry::decode(b.as_slice()).ok())
         .and_then(|e| serde_json::from_slice(&e.value).ok());
     if let Some(r) = restored.filter(|r| !r.osds_to_confirm.is_empty()) {
         out.push_str(&format!(
             "OSDs held as draining or out: {}. They may be back in since, with data meta no \
              longer knows of: nothing drains or purges them until you set each one's state as \
-             it really is (obioctl osd set-state ID in|out|draining).\n",
+             it really is (iolakectl osd set-state ID in|out|draining).\n",
             r.osds_to_confirm.join(", ")
         ));
     }
@@ -205,7 +205,7 @@ async fn restore(from: &Path, data_dir: &Path, node_id: u64, addr: String) -> an
         header.last_applied.map_or(0, |l| l.index),
     );
     // The storage keeps its log where a node at this level does.
-    objectio_common::version::set_active_level(header.active_level);
+    iolake_common::version::set_active_level(header.active_level);
     mark_incomplete(data_dir)?;
     let (store, mut storage) = open(data_dir)?;
     let voter = Voter { node_id, addr };
@@ -248,12 +248,12 @@ async fn force_single_voter(
     // The storage keeps its log where a node at the cluster's level does:
     // decided at its first log call, after this.
     let level = store
-        .read_named("config", objectio_common::version::ACTIVE_LEVEL_KEY)
-        .and_then(|b| objectio_proto::metadata::ConfigEntry::decode(b.as_slice()).ok())
+        .read_named("config", iolake_common::version::ACTIVE_LEVEL_KEY)
+        .and_then(|b| iolake_proto::metadata::ConfigEntry::decode(b.as_slice()).ok())
         .and_then(|e| String::from_utf8(e.value).ok())
         .and_then(|v| v.trim().parse().ok())
         .unwrap_or(0);
-    objectio_common::version::set_active_level(level);
+    iolake_common::version::set_active_level(level);
     let mut storage = storage;
     let forced = storage
         .force_single_voter(
@@ -306,8 +306,8 @@ pub fn edit(
     backup_created_at: u64,
     now_ms: u64,
 ) -> Result<Vec<MetaCommand>, String> {
-    use objectio_meta_store::record::Record as _;
-    use objectio_proto::metadata::PlacementGroup;
+    use iolake_meta_store::record::Record as _;
+    use iolake_proto::metadata::PlacementGroup;
 
     let relisted: std::collections::HashMap<String, Vec<u8>> =
         rows(db, PG_RELIST_TABLE)?.into_iter().collect();
@@ -339,18 +339,18 @@ pub fn edit(
     let earlier: Option<Restored> = rows(db, "config")?
         .into_iter()
         .find(|(k, _)| k == RESTORED_KEY)
-        .and_then(|(_, b)| objectio_proto::metadata::ConfigEntry::decode(b.as_slice()).ok())
+        .and_then(|(_, b)| iolake_proto::metadata::ConfigEntry::decode(b.as_slice()).ok())
         .and_then(|e| serde_json::from_slice(&e.value).ok());
     let mut osds_to_confirm: Vec<String> = earlier.map(|r| r.osds_to_confirm).unwrap_or_default();
     for (key, bytes) in rows(db, "osd_nodes")? {
-        let node = objectio_meta_store::OsdNode::from_bytes(&bytes)
+        let node = iolake_meta_store::OsdNode::from_bytes(&bytes)
             .map_err(|e| format!("OSD {key}: {e}"))?;
         let purged = purges.get(&key).map(Vec::as_slice)
             == Some(crate::drain_observer::PURGE_DONE.as_bytes());
         let unsettled = match node.admin_state {
-            objectio_common::OsdAdminState::Draining => true,
-            objectio_common::OsdAdminState::Out => !purged,
-            objectio_common::OsdAdminState::In => false,
+            iolake_common::OsdAdminState::Draining => true,
+            iolake_common::OsdAdminState::Out => !purged,
+            iolake_common::OsdAdminState::In => false,
         };
         let id = hex::encode(node.node_id);
         if unsettled && !osds_to_confirm.contains(&id) {
@@ -387,8 +387,8 @@ pub fn edit(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use objectio_meta_store::record::Record as _;
-    use objectio_proto::metadata::{PgFill, PlacementGroup};
+    use iolake_meta_store::record::Record as _;
+    use iolake_proto::metadata::{PgFill, PlacementGroup};
     use openraft::CommittedLeaderId;
 
     fn put(db: &redb::Database, table: &str, key: &str, value: &[u8]) {
@@ -402,8 +402,8 @@ mod tests {
         txn.commit().unwrap();
     }
 
-    fn osd(id: u8, state: objectio_common::OsdAdminState) -> (String, Vec<u8>) {
-        let node = objectio_meta_store::OsdNode {
+    fn osd(id: u8, state: iolake_common::OsdAdminState) -> (String, Vec<u8>) {
+        let node = iolake_meta_store::OsdNode {
             node_id: [id; 16],
             address: format!("osd-{id}:9200"),
             disk_ids: Vec::new(),
@@ -433,7 +433,7 @@ mod tests {
 
     #[test]
     fn a_restore_moves_every_pg_to_a_new_era_lists_it_and_holds_unsettled_osds() {
-        use objectio_common::OsdAdminState::{Draining, In, Out};
+        use iolake_common::OsdAdminState::{Draining, In, Out};
         let dir = tempfile::tempdir().unwrap();
         let store = MetaStore::open(dir.path().join("meta.redb")).unwrap();
         let db = store.db();

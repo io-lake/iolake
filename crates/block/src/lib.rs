@@ -1,7 +1,7 @@
 #![allow(clippy::result_large_err)]
-//! ObjectIO Block Storage
+//! IOLake Block Storage
 //!
-//! This crate provides block storage capabilities on top of ObjectIO's
+//! This crate provides block storage capabilities on top of IOLake's
 //! distributed object storage layer. It maps logical block addresses (LBAs)
 //! to erasure-coded chunks stored on OSDs.
 //!
@@ -27,7 +27,7 @@
 //! └────────┬────────┘
 //!          │
 //! ┌────────▼────────┐
-//! │  ObjectIO OSDs  │  (Erasure-coded storage)
+//! │  IOLake OSDs  │  (Erasure-coded storage)
 //! └─────────────────┘
 //! ```
 

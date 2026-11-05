@@ -1,4 +1,4 @@
-//! Placement rules (B31 phase 1b, objectio-docs `core/pg-recovery.md`): a
+//! Placement rules (B31 phase 1b, iolake-docs `core/pg-recovery.md`): a
 //! pool's copies spread over a number of racks with a limit per rack, and
 //! an LRC pool's local groups each kept in a rack of their own; placement
 //! groups made, and members stood in for, only within the rule.
@@ -6,8 +6,8 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use objectio_e2e::Cluster;
-use objectio_e2e::ha::HaCluster;
+use iolake_e2e::Cluster;
+use iolake_e2e::ha::HaCluster;
 use serde_json::{Value, json};
 
 fn payload(len: usize, seed: u8) -> Vec<u8> {
@@ -91,7 +91,7 @@ fn bucket_in(c: &Cluster, bucket: &str, pool: &str) {
         "PUT",
         &format!("/{bucket}"),
         &[],
-        &[("x-objectio-pool", pool)],
+        &[("x-iolake-pool", pool)],
     )
     .expect(200);
 }

@@ -3,14 +3,14 @@
 //! The OSD initiates every transfer: it reads a PUT shard out of the
 //! gateway's buffer, and writes a GET shard into one. Its own staging pool is
 //! registered private, so peers cannot reach it — see
-//! `objectio_transport_te::Engine::register` for how each transport enforces
-//! that. The design is objectio-docs
+//! `iolake_transport_te::Engine::register` for how each transport enforces
+//! that. The design is iolake-docs
 //! `architecture/design/core/rdma-data-plane.md`.
 
 use std::sync::Arc;
 
-use objectio_proto::storage::RdmaBuffer;
-use objectio_transport_te::{
+use iolake_proto::storage::RdmaBuffer;
+use iolake_transport_te::{
     Engine, EngineConfig, Protocol, Registration, RemoteBuffer, Slot, SlotPool,
 };
 use tonic::Status;
@@ -66,7 +66,7 @@ impl RdmaStaging {
         let read = started.elapsed();
         let got = crc32c::crc32c(&slot.as_slice()[..len]);
         tracing::debug!(
-            target: "objectio_osd::rdma",
+            target: "iolake_osd::rdma",
             read_us = read.as_micros(),
             crc_us = (started.elapsed() - read).as_micros(),
             len,

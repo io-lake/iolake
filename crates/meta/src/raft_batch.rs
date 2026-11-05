@@ -1,4 +1,4 @@
-//! Meta's group commit (B21; objectio-docs `core/meta-log.md`).
+//! Meta's group commit (B21; iolake-docs `core/meta-log.md`).
 //!
 //! openraft 0.9 appends each client write to the log, and waits for the
 //! log's sync, before it takes the next: every meta write was a sync of its
@@ -26,12 +26,12 @@
 //! A leader without room refuses a write before proposing it too
 //! ([`WriteError::NoRoom`]): when the filesystem under its data is below
 //! meta's reserve, or a majority of the voters can't take entries
-//! (objectio-docs `core/meta.md`, "A full disk").
+//! (iolake-docs `core/meta.md`, "A full disk").
 
 use std::ops::Deref;
 use std::sync::Arc;
 
-use objectio_meta_store::{DiskSpace, MetaCommand, MetaResponse, MetaTypeConfig, PeersWithoutRoom};
+use iolake_meta_store::{DiskSpace, MetaCommand, MetaResponse, MetaTypeConfig, PeersWithoutRoom};
 use openraft::BasicNode;
 use openraft::error::{ClientWriteError, Fatal, RaftError};
 use openraft::raft::ClientWriteResponse;
@@ -281,8 +281,8 @@ async fn commit(raft: &Raft, mut batch: Vec<Pending>) {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use objectio_meta_store::raft_storage::MetaRaftStorage;
-    use objectio_meta_store::{CasOp, CasTable};
+    use iolake_meta_store::raft_storage::MetaRaftStorage;
+    use iolake_meta_store::{CasOp, CasTable};
     use std::collections::BTreeMap;
 
     /// A single-voter meta Raft in `dir`, leading.
@@ -309,7 +309,7 @@ pub(crate) mod tests {
         let raft = Raft::new(
             1,
             config,
-            objectio_meta_store::MetaRaftNetworkFactory::new(1),
+            iolake_meta_store::MetaRaftNetworkFactory::new(1),
             log,
             sm,
         )
@@ -413,7 +413,7 @@ pub(crate) mod tests {
         let raft = single_node(dir.path()).await;
         let meta = MetaRaft::new(Arc::clone(&raft));
         let before = raft.metrics().borrow().last_log_index;
-        let ops = (0..=objectio_meta_store::raft::MAX_OPS)
+        let ops = (0..=iolake_meta_store::raft::MAX_OPS)
             .map(|i| CasOp {
                 table: CasTable::IcebergTables,
                 key: format!("k{i}"),
@@ -484,7 +484,7 @@ pub(crate) mod tests {
                         },
                         // Refused before it is proposed.
                         9 => MetaCommand::MultiCas {
-                            ops: (0..=objectio_meta_store::raft::MAX_OPS)
+                            ops: (0..=iolake_meta_store::raft::MAX_OPS)
                                 .map(|j| CasOp {
                                     table: CasTable::IcebergTables,
                                     key: format!("big{i}-{j}"),

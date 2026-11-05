@@ -8,7 +8,7 @@
 //! `/_admin/buckets/{name}/{versioning,object-lock,encryption,lifecycle,
 //! replication}` serve them, gated as every per-bucket admin route is.
 
-use objectio_e2e::{Cluster, Response, http_client};
+use iolake_e2e::{Cluster, Response, http_client};
 use serde_json::{Value, json};
 
 /// Console sign-in with a key: the session cookie's value.
@@ -24,7 +24,7 @@ fn key_login(c: &Cluster, ak: &str, sk: &str) -> String {
         .get_all(reqwest::header::SET_COOKIE)
         .iter()
         .filter_map(|v| v.to_str().ok())
-        .find_map(|c| c.split(';').next()?.strip_prefix("objectio-session="))
+        .find_map(|c| c.split(';').next()?.strip_prefix("iolake-session="))
         .expect("a session")
         .to_string()
 }
@@ -33,7 +33,7 @@ fn key_login(c: &Cluster, ak: &str, sk: &str) -> String {
 fn console(c: &Cluster, session: &str, method: &str, path: &str, body: Option<Value>) -> Response {
     let mut req = http_client()
         .request(method.parse().unwrap(), format!("{}{path}", c.endpoint))
-        .header("Cookie", format!("objectio-session={session}"));
+        .header("Cookie", format!("iolake-session={session}"));
     if let Some(body) = body {
         req = req
             .header("Content-Type", "application/json")
@@ -100,7 +100,7 @@ fn the_console_reads_and_changes_a_buckets_settings() {
     // The S3 path refuses the session: why these routes exist.
     let s3 = http_client()
         .get(format!("{}/photos?versioning", c.endpoint))
-        .header("Cookie", format!("objectio-session={session}"))
+        .header("Cookie", format!("iolake-session={session}"))
         .send()
         .unwrap();
     assert_eq!(s3.status().as_u16(), 403);

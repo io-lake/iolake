@@ -5,7 +5,7 @@ use crate::cli::{SnapshotCmd, VolumeCmd};
 use crate::commands::{format_size, parse_size};
 use crate::output::{Out, key_values};
 use anyhow::{Context, Result};
-use objectio_proto::block::{
+use iolake_proto::block::{
     AttachVolumeRequest, Attachment, CloneVolumeRequest, CreateSnapshotRequest,
     CreateVolumeRequest, DeleteSnapshotRequest, DeleteVolumeRequest, DetachVolumeRequest,
     GetSnapshotRequest, GetVolumeRequest, ListAttachmentsRequest, ListSnapshotsRequest,
@@ -91,8 +91,8 @@ const SNAPSHOT_COLUMNS: &[(&str, &str)] = &[
 ];
 
 async fn connect(endpoint: &str) -> Result<BlockServiceClient<tonic::transport::Channel>> {
-    let channel = objectio_proto::transport::connect(
-        &objectio_proto::transport::endpoint(endpoint).map_err(anyhow::Error::msg)?,
+    let channel = iolake_proto::transport::connect(
+        &iolake_proto::transport::endpoint(endpoint).map_err(anyhow::Error::msg)?,
     )
     .await
     .with_context(|| format!("connecting to the block gateway at {endpoint}"))?;

@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use bytes::Bytes;
-use objectio_block::chunk::ChunkId;
+use iolake_block::chunk::ChunkId;
 use tracing::{info, warn};
 
 use crate::ec_io::{free_stripes, write_chunk};

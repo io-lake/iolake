@@ -1,4 +1,4 @@
-// Package objectio is a client for the ObjectIO **management API** — the
+// Package iolake is a client for the IOLake **management API** — the
 // `/_admin/*` surface that creates tenants, users, access keys, buckets and
 // bucket policies.
 //
@@ -8,7 +8,7 @@
 //
 // Requests are signed with SigV4 using the standard library only, so adding
 // this package to a CSI driver or an operator pulls in no dependencies.
-package objectio
+package iolake
 
 import (
 	"bytes"
@@ -40,13 +40,13 @@ type Config struct {
 	AccessKey string
 	SecretKey string
 	// Region defaults to "us-east-1". It only has to match what the gateway
-	// was started with; ObjectIO is not multi-region here.
+	// was started with; IOLake is not multi-region here.
 	Region string
 	// HTTPClient defaults to a client with a 30s timeout.
 	HTTPClient *http.Client
 }
 
-// Client talks to the ObjectIO management API.
+// Client talks to the IOLake management API.
 type Client struct {
 	endpoint   string
 	accessKey  string
@@ -60,15 +60,15 @@ type Client struct {
 // New validates cfg and returns a Client.
 func New(cfg Config) (*Client, error) {
 	if cfg.Endpoint == "" {
-		return nil, fmt.Errorf("objectio: Endpoint is required")
+		return nil, fmt.Errorf("iolake: Endpoint is required")
 	}
 	// Both or neither: one without the other is a misconfiguration, not an
 	// STS-only client.
 	if (cfg.AccessKey == "") != (cfg.SecretKey == "") {
-		return nil, fmt.Errorf("objectio: AccessKey and SecretKey must be set together")
+		return nil, fmt.Errorf("iolake: AccessKey and SecretKey must be set together")
 	}
 	if _, err := url.Parse(cfg.Endpoint); err != nil {
-		return nil, fmt.Errorf("objectio: bad Endpoint %q: %w", cfg.Endpoint, err)
+		return nil, fmt.Errorf("iolake: bad Endpoint %q: %w", cfg.Endpoint, err)
 	}
 	region := cfg.Region
 	if region == "" {
@@ -90,7 +90,7 @@ func New(cfg Config) (*Client, error) {
 
 // ErrNoCredentials is returned by a signed call on a client built without
 // AccessKey and SecretKey.
-var ErrNoCredentials = errors.New("objectio: this client has no AccessKey/SecretKey; only AssumeRoleWithWebIdentity works without them")
+var ErrNoCredentials = errors.New("iolake: this client has no AccessKey/SecretKey; only AssumeRoleWithWebIdentity works without them")
 
 // APIError is returned for any non-2xx response.
 type APIError struct {
@@ -111,9 +111,9 @@ type APIError struct {
 
 func (e *APIError) Error() string {
 	if e.Code != "" {
-		return fmt.Sprintf("objectio: %s %s: %d %s: %s", e.Method, e.Path, e.StatusCode, e.Code, e.Message)
+		return fmt.Sprintf("iolake: %s %s: %d %s: %s", e.Method, e.Path, e.StatusCode, e.Code, e.Message)
 	}
-	return fmt.Sprintf("objectio: %s %s: %d: %s", e.Method, e.Path, e.StatusCode, e.Message)
+	return fmt.Sprintf("iolake: %s %s: %d: %s", e.Method, e.Path, e.StatusCode, e.Message)
 }
 
 // xmlError is the shape both S3 (<Error>) and STS (<ErrorResponse><Error>)
@@ -194,7 +194,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 		if raw, ok := in.(json.RawMessage); ok {
 			body = raw
 		} else if body, err = json.Marshal(in); err != nil {
-			return fmt.Errorf("objectio: encoding request: %w", err)
+			return fmt.Errorf("iolake: encoding request: %w", err)
 		}
 		contentType = "application/json"
 	}
@@ -206,7 +206,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 		return nil
 	}
 	if err := json.Unmarshal(raw, out); err != nil {
-		return fmt.Errorf("objectio: decoding %s %s: %w", method, path, err)
+		return fmt.Errorf("iolake: decoding %s %s: %w", method, path, err)
 	}
 	return nil
 }
@@ -224,7 +224,7 @@ func (c *Client) send(ctx context.Context, method, path string, query url.Values
 	}
 	req, err := http.NewRequestWithContext(ctx, method, u, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("objectio: building request: %w", err)
+		return nil, fmt.Errorf("iolake: building request: %w", err)
 	}
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
@@ -235,7 +235,7 @@ func (c *Client) send(ctx context.Context, method, path string, query url.Values
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("objectio: %s %s: %w", method, path, err)
+		return nil, fmt.Errorf("iolake: %s %s: %w", method, path, err)
 	}
 	defer resp.Body.Close()
 

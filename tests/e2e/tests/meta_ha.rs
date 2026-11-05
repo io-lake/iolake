@@ -14,8 +14,8 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use objectio_e2e::Cluster;
-use objectio_e2e::ha::HaCluster;
+use iolake_e2e::Cluster;
+use iolake_e2e::ha::HaCluster;
 use serde_json::json;
 
 fn payload(len: usize, seed: u64) -> Vec<u8> {
@@ -282,11 +282,11 @@ fn list_buckets_at(
     ha: &HaCluster,
     i: usize,
 ) -> Result<usize, Box<tonic::Status>> {
-    use objectio_proto::metadata::ListBucketsRequest;
-    use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
-    objectio_e2e::tls::client();
+    use iolake_proto::metadata::ListBucketsRequest;
+    use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
+    iolake_e2e::tls::client();
     rt.block_on(async {
-        let channel = objectio_proto::transport::meta_channel(&ha.meta_endpoint(i))
+        let channel = iolake_proto::transport::meta_channel(&ha.meta_endpoint(i))
             .await
             .map_err(|e| Box::new(tonic::Status::unavailable(e)))?;
         MetadataServiceClient::new(channel)
@@ -358,7 +358,7 @@ fn a_leader_cut_off_from_its_followers_stops_serving_reads() {
     }
 }
 
-type MetaClient = objectio_proto::metadata::metadata_service_client::MetadataServiceClient<
+type MetaClient = iolake_proto::metadata::metadata_service_client::MetadataServiceClient<
     tonic::transport::Channel,
 >;
 
@@ -371,19 +371,19 @@ fn direct_clients(
     ha: &HaCluster,
     i: usize,
 ) -> (MetaClient, MetaClient) {
-    objectio_e2e::tls::client();
-    let endpoint = objectio_proto::transport::endpoint(&ha.meta_endpoint(i))
+    iolake_e2e::tls::client();
+    let endpoint = iolake_proto::transport::endpoint(&ha.meta_endpoint(i))
         .unwrap()
-        .user_agent(objectio_common::version::user_agent())
+        .user_agent(iolake_common::version::user_agent())
         .unwrap();
     let channel = rt
-        .block_on(objectio_proto::transport::connect(&endpoint))
+        .block_on(iolake_proto::transport::connect(&endpoint))
         .expect("connect to meta");
     (MetaClient::new(channel.clone()), MetaClient::new(channel))
 }
 
 async fn bucket_names(mut client: MetaClient) -> Result<Vec<String>, tonic::Status> {
-    use objectio_proto::metadata::ListBucketsRequest;
+    use iolake_proto::metadata::ListBucketsRequest;
     let r = client.list_buckets(ListBucketsRequest::default()).await?;
     Ok(r.into_inner().buckets.into_iter().map(|b| b.name).collect())
 }
@@ -391,13 +391,13 @@ async fn bucket_names(mut client: MetaClient) -> Result<Vec<String>, tonic::Stat
 /// Create bucket `name` through meta node `i`, retrying while it answers
 /// UNAVAILABLE (a leader just elected).
 fn create_bucket_at(rt: &tokio::runtime::Runtime, ha: &HaCluster, i: usize, name: &str) {
-    use objectio_proto::metadata::CreateBucketRequest;
-    use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
-    objectio_e2e::tls::client();
+    use iolake_proto::metadata::CreateBucketRequest;
+    use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
+    iolake_e2e::tls::client();
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
         let r = rt.block_on(async {
-            let channel = objectio_proto::transport::meta_channel(&ha.meta_endpoint(i))
+            let channel = iolake_proto::transport::meta_channel(&ha.meta_endpoint(i))
                 .await
                 .map_err(tonic::Status::unavailable)?;
             MetadataServiceClient::new(channel)

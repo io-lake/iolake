@@ -60,11 +60,11 @@ pub(crate) fn delete_refusal(path: &str, query: Option<&str>) -> Option<Response
 /// marker, from the first of `nodes` that answers.
 pub(crate) async fn newest_object(
     pool: &OsdPool,
-    nodes: &[objectio_proto::metadata::NodePlacement],
+    nodes: &[iolake_proto::metadata::NodePlacement],
     bucket: &str,
     key: &str,
 ) -> Option<ObjectMeta> {
-    use objectio_proto::storage::ListObjectVersionsMetaRequest;
+    use iolake_proto::storage::ListObjectVersionsMetaRequest;
     for node in nodes {
         let Ok(mut client) = pool.get_client_for_placement(node).await else {
             continue;
@@ -146,10 +146,10 @@ impl DeleteCondition {
 /// passed over (`Unread::PassOver`): the bucket has never had versioning.
 async fn free_removed(
     state: &Arc<AppState>,
-    nodes: &[objectio_proto::metadata::NodePlacement],
+    nodes: &[iolake_proto::metadata::NodePlacement],
     bucket: &str,
     key: &str,
-    removed: Vec<objectio_proto::metadata::ObjectMeta>,
+    removed: Vec<iolake_proto::metadata::ObjectMeta>,
 ) {
     let mut meta = state.meta_client.clone();
     for gone in unreferenced(
@@ -185,7 +185,7 @@ async fn free_removed(
 /// let go of it: one that hasn't may still have it current.
 pub(crate) async fn delete_version(
     state: &Arc<AppState>,
-    nodes: &[objectio_proto::metadata::NodePlacement],
+    nodes: &[iolake_proto::metadata::NodePlacement],
     bucket: &str,
     key: &str,
     vid: &str,
@@ -262,7 +262,7 @@ pub(crate) async fn delete_version(
 /// left the key listed for good (the B2 soak).
 pub(crate) async fn sync_listing(
     state: &Arc<AppState>,
-    nodes: &[objectio_proto::metadata::NodePlacement],
+    nodes: &[iolake_proto::metadata::NodePlacement],
     bucket: &str,
     key: &str,
 ) -> Option<ObjectMeta> {
@@ -296,11 +296,11 @@ pub(crate) async fn sync_listing(
 /// says the same (re-read after the update, in case a write raced it).
 async fn try_sync_listing(
     state: &Arc<AppState>,
-    nodes: &[objectio_proto::metadata::NodePlacement],
+    nodes: &[iolake_proto::metadata::NodePlacement],
     bucket: &str,
     key: &str,
 ) -> Result<Option<ObjectMeta>, String> {
-    use objectio_proto::metadata::DeleteObjectRequest as MetaDelReq;
+    use iolake_proto::metadata::DeleteObjectRequest as MetaDelReq;
     let mut meta_client = state.meta_client.clone();
     let read = |state: &Arc<AppState>| {
         let state = Arc::clone(state);
@@ -314,7 +314,7 @@ async fn try_sync_listing(
     for _ in 0..3 {
         match &current {
             Some(c) if !c.is_delete_marker => meta_client
-                .create_object(objectio_proto::metadata::CreateObjectRequest {
+                .create_object(iolake_proto::metadata::CreateObjectRequest {
                     bucket: bucket.to_string(),
                     key: key.to_string(),
                     size: c.size,
@@ -597,7 +597,7 @@ pub(crate) async fn delete_object_to_the_end(
         // The key no longer has a current version, so drop it from Meta's
         // listing index; it stays reachable through ListObjectVersions.
         {
-            use objectio_proto::metadata::DeleteObjectRequest as MetaDelReq;
+            use iolake_proto::metadata::DeleteObjectRequest as MetaDelReq;
             let _ = state
                 .meta_client
                 .clone()
@@ -677,7 +677,7 @@ pub(crate) async fn delete_object_to_the_end(
             format!("{bucket}/{key} null version under a delete marker"),
         );
         {
-            use objectio_proto::metadata::DeleteObjectRequest as MetaDelReq;
+            use iolake_proto::metadata::DeleteObjectRequest as MetaDelReq;
             let _ = state
                 .meta_client
                 .clone()
@@ -714,7 +714,7 @@ pub(crate) async fn delete_object_to_the_end(
     // When the replicas removed different objects, a racing write may yet
     // be stamped again and written over the delete: what it removed is
     // freed once that has settled (`MetaDeleted::agreed`).
-    let pg = objectio_proto::stripe::fence(&placement);
+    let pg = iolake_proto::stripe::fence(&placement);
     let deleted = delete_meta_from_all(
         &state.osd_pool,
         &placement.nodes,
@@ -764,7 +764,7 @@ pub(crate) async fn delete_object_to_the_end(
     // election), sync_listing retries and then queues the key for healing:
     // the error was dropped here, and the key stayed listed for good.
     {
-        use objectio_proto::metadata::DeleteObjectRequest as MetaDelReq;
+        use iolake_proto::metadata::DeleteObjectRequest as MetaDelReq;
         let mut meta_client = state.meta_client.clone();
         if let Err(e) = meta_client
             .delete_object(MetaDelReq {

@@ -1,4 +1,4 @@
-//! ObjectIO Metadata Service — library form.
+//! IOLake Metadata Service — library form.
 //!
 //! The thin `src/main.rs` wraps `run()` with CLI parsing + tracing
 //! subscriber setup. The same `run()` is re-used by
@@ -26,8 +26,8 @@ use axum::{
     routing::get,
 };
 use clap::Parser;
-use objectio_meta_store::MetaStore;
-use objectio_proto::metadata::metadata_service_server::MetadataServiceServer;
+use iolake_meta_store::MetaStore;
+use iolake_proto::metadata::metadata_service_server::MetadataServiceServer;
 use service::MetaService;
 use std::fmt::Write;
 use std::net::SocketAddr;
@@ -37,8 +37,8 @@ use tokio::net::TcpListener;
 use tracing::{error, info};
 
 #[derive(Parser, Debug)]
-#[command(name = "objectio-meta")]
-#[command(about = "ObjectIO Metadata Service")]
+#[command(name = "iolake-meta")]
+#[command(about = "IOLake Metadata Service")]
 #[command(version)]
 pub struct Args {
     /// Node ID (for Raft)
@@ -90,7 +90,7 @@ pub struct Args {
     pub admin_port: u16,
 
     /// Address the admin port binds. Default: the host of `--listen`
-    /// (0.0.0.0 there: every interface, so `objectio-install cluster init`
+    /// (0.0.0.0 there: every interface, so `iolake-install cluster init`
     /// and probes reach it from elsewhere; loopback: this host only).
     #[arg(long)]
     pub admin_host: Option<String>,
@@ -167,7 +167,7 @@ pub struct Args {
     /// is room. A snapshot is built only with room for it above it. What
     /// meta still writes below it (entries already proposed, their
     /// applies, checkpoints, votes) is a few MiB.
-    #[arg(long, default_value_t = objectio_meta_store::disk_space::DEFAULT_RESERVE >> 20)]
+    #[arg(long, default_value_t = iolake_meta_store::disk_space::DEFAULT_RESERVE >> 20)]
     pub min_free_mib: u64,
 
     /// Tests only: the data directory's free space, in bytes, is read from
@@ -189,7 +189,7 @@ pub struct Args {
 
     /// mTLS between services (A8a).
     #[command(flatten)]
-    pub tls: objectio_proto::transport::TlsArgs,
+    pub tls: iolake_proto::transport::TlsArgs,
 
     /// An offline tool to run instead of the service.
     #[command(subcommand)]
@@ -258,14 +258,14 @@ pub async fn run(
     // From here to serving is what a node costs after a crash (B25).
     let process_started = std::time::Instant::now();
     restore::refuse_incomplete(&args.data_dir)?;
-    objectio_proto::transport::configure_tls(&args.tls).map_err(anyhow::Error::msg)?;
-    info!("Starting ObjectIO Metadata Service");
+    iolake_proto::transport::configure_tls(&args.tls).map_err(anyhow::Error::msg)?;
+    info!("Starting IOLake Metadata Service");
 
     // Initialize metadata service with EC config
     // Replication mode takes precedence over EC settings
     let ec_config = if let Some(replication_count) = args.replication {
         info!("Storage mode: Replication (count={})", replication_count);
-        objectio_meta_store::EcConfig::Replication {
+        iolake_meta_store::EcConfig::Replication {
             count: replication_count,
         }
     } else {
@@ -273,7 +273,7 @@ pub async fn run(
             "Storage mode: Erasure coding (k={}, m={})",
             args.ec_k, args.ec_m
         );
-        objectio_meta_store::EcConfig::Mds {
+        iolake_meta_store::EcConfig::Mds {
             k: args.ec_k,
             m: args.ec_m,
         }
@@ -305,7 +305,7 @@ pub async fn run(
     let meta_service = MetaService::with_store(ec_config, store.clone());
 
     // Room on the filesystem under the data: what meta keeps free, and
-    // what it may still write (`objectio_meta_store::disk_space`).
+    // what it may still write (`iolake_meta_store::disk_space`).
     let reserve = args.min_free_mib.saturating_mul(1 << 20);
     let space = Arc::new(match &args.test_free_bytes_file {
         Some(file) => {
@@ -313,13 +313,13 @@ pub async fn run(
                 "--test-free-bytes-file: free space is read from {} while it exists",
                 file.display()
             );
-            objectio_meta_store::DiskSpace::with_free_bytes_file(
+            iolake_meta_store::DiskSpace::with_free_bytes_file(
                 &args.data_dir,
                 reserve,
                 &args.data_dir.join(file),
             )
         }
-        None => objectio_meta_store::DiskSpace::new(&args.data_dir, reserve),
+        None => iolake_meta_store::DiskSpace::new(&args.data_dir, reserve),
     });
     match space.free() {
         Some(free) if free < reserve => tracing::warn!(
@@ -404,9 +404,9 @@ pub async fn run(
     // On every follower too — so a just-promoted pod doesn't serve reads
     // off a pre-promote snapshot of buckets/users/iceberg-tables.
     let (apply_tx, apply_rx) =
-        tokio::sync::mpsc::unbounded_channel::<objectio_meta_store::ApplyEvent>();
+        tokio::sync::mpsc::unbounded_channel::<iolake_meta_store::ApplyEvent>();
     meta_service.spawn_apply_listener(apply_rx);
-    let raft_storage = objectio_meta_store::MetaRaftStorage::open(
+    let raft_storage = iolake_meta_store::MetaRaftStorage::open(
         raft_db,
         args.data_dir.join("raft-snapshots"),
         &args.data_dir.join("raft-log"),
@@ -461,9 +461,9 @@ pub async fn run(
         .validate()
         .expect("raft config valid"),
     );
-    let network = objectio_meta_store::MetaRaftNetworkFactory::new(node_id);
+    let network = iolake_meta_store::MetaRaftNetworkFactory::new(node_id);
     let peers_without_room = network.peers_without_room();
-    let raft = openraft::Raft::<objectio_meta_store::MetaTypeConfig>::new(
+    let raft = openraft::Raft::<iolake_meta_store::MetaTypeConfig>::new(
         node_id,
         raft_config,
         network,
@@ -503,7 +503,7 @@ pub async fn run(
 
     // Report this node's release and format level (rolling upgrades),
     // through its own address: a follower forwards it to the leader.
-    objectio_proto::transport::spawn_version_reporter(
+    iolake_proto::transport::spawn_version_reporter(
         self_addr.clone(),
         "meta",
         node_id.to_string(),
@@ -555,26 +555,26 @@ pub async fn run(
     let read_gate = read_gate::ReadGate::for_raft(raft.clone());
     let raft_rpc_svc = raft_rpc::RaftRpcService::new(raft.clone(), node_id, read_gate.clone())
         .with_disk_space(space.clone());
-    objectio_meta_store::commit_metrics::ready(process_started.elapsed());
+    iolake_meta_store::commit_metrics::ready(process_started.elapsed());
     info!(
         "Serving {:.2} s after start (the database opened {})",
         process_started.elapsed().as_secs_f64(),
-        if objectio_meta_store::commit_metrics::open_repaired() {
+        if iolake_meta_store::commit_metrics::open_repaired() {
             "after walking the whole file"
         } else {
             "without a walk"
         }
     );
-    let grpc = objectio_proto::transport::server()
-        .layer(objectio_proto::rpc_metrics::RpcMetricsLayer(
+    let grpc = iolake_proto::transport::server()
+        .layer(iolake_proto::rpc_metrics::RpcMetricsLayer(
             &op_metrics::RPC_METRICS,
         ))
         // Who may call what (mTLS): checked here, on the node the caller
         // reached, before a follower forwards the call under its own
         // certificate.
-        .layer(objectio_proto::peer_auth::PeerAuthLayer::new(&[
-            objectio_proto::peer_auth::METADATA_SERVICE,
-            objectio_proto::peer_auth::RAFT_SERVICE,
+        .layer(iolake_proto::peer_auth::PeerAuthLayer::new(&[
+            iolake_proto::peer_auth::METADATA_SERVICE,
+            iolake_proto::peer_auth::RAFT_SERVICE,
         ]))
         // A follower forwards every client call to the leader, so any meta
         // node serves any client (see `forward`).
@@ -588,14 +588,14 @@ pub async fn run(
         // tonic's default 4 MiB limit a batch of large entries, or a
         // snapshot chunk, would be refused and the follower never caught up.
         .add_service(
-            objectio_proto::raft::raft_rpc_server::RaftRpcServer::new(raft_rpc_svc)
+            iolake_proto::raft::raft_rpc_server::RaftRpcServer::new(raft_rpc_svc)
                 .max_decoding_message_size(RAFT_MESSAGE_LIMIT)
                 .max_encoding_message_size(RAFT_MESSAGE_LIMIT),
         );
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .map_err(|e| anyhow::anyhow!("bind gRPC on {addr}: {e}"))?;
-    objectio_proto::transport::serve(grpc, listener, async move {
+    iolake_proto::transport::serve(grpc, listener, async move {
         shutdown.await;
         info!("Shutting down...");
     })
@@ -638,7 +638,7 @@ fn spawn_admin_bootstrap(
                 // logs are shipped and kept where anyone may read them.
                 let creds_path = data_dir.join("admin-creds.env");
                 let body = format!(
-                    "# Created by objectio-meta on first boot. Safe to delete.\n\
+                    "# Created by iolake-meta on first boot. Safe to delete.\n\
                      export AWS_ACCESS_KEY_ID={access_key_id}\n\
                      export AWS_SECRET_ACCESS_KEY={secret_access_key}\n"
                 );
@@ -684,7 +684,7 @@ fn write_private(path: &std::path::Path, body: &[u8]) -> std::io::Result<()> {
 struct MetaMetricsState {
     meta_service: Arc<MetaService>,
     start_time: std::time::Instant,
-    space: Arc<objectio_meta_store::DiskSpace>,
+    space: Arc<iolake_meta_store::DiskSpace>,
 }
 
 /// Metrics HTTP handler
@@ -710,11 +710,11 @@ fn render_metrics(state: &MetaMetricsState) -> String {
     let uptime = state.start_time.elapsed().as_secs();
     writeln!(
         output,
-        "# HELP objectio_meta_uptime_seconds Metadata service uptime"
+        "# HELP iolake_meta_uptime_seconds Metadata service uptime"
     )
     .unwrap();
-    writeln!(output, "# TYPE objectio_meta_uptime_seconds counter").unwrap();
-    writeln!(output, "objectio_meta_uptime_seconds {}", uptime).unwrap();
+    writeln!(output, "# TYPE iolake_meta_uptime_seconds counter").unwrap();
+    writeln!(output, "iolake_meta_uptime_seconds {}", uptime).unwrap();
 
     // Get stats from meta service
     let stats = state.meta_service.stats();
@@ -722,23 +722,23 @@ fn render_metrics(state: &MetaMetricsState) -> String {
     // Bucket and object counts
     writeln!(
         output,
-        "# HELP objectio_meta_buckets_total Total number of buckets"
+        "# HELP iolake_meta_buckets_total Total number of buckets"
     )
     .unwrap();
-    writeln!(output, "# TYPE objectio_meta_buckets_total gauge").unwrap();
-    writeln!(output, "objectio_meta_buckets_total {}", stats.bucket_count).unwrap();
+    writeln!(output, "# TYPE iolake_meta_buckets_total gauge").unwrap();
+    writeln!(output, "iolake_meta_buckets_total {}", stats.bucket_count).unwrap();
 
     // Object counts live on the OSDs, not here: the gateway sums them and
-    // exports `objectio_cluster_objects` / `objectio_bucket_objects`.
+    // exports `iolake_cluster_objects` / `iolake_bucket_objects`.
 
     // OSD counts
     writeln!(
         output,
-        "# HELP objectio_meta_osds_total Total registered OSDs"
+        "# HELP iolake_meta_osds_total Total registered OSDs"
     )
     .unwrap();
-    writeln!(output, "# TYPE objectio_meta_osds_total gauge").unwrap();
-    writeln!(output, "objectio_meta_osds_total {}", stats.osd_count).unwrap();
+    writeln!(output, "# TYPE iolake_meta_osds_total gauge").unwrap();
+    writeln!(output, "iolake_meta_osds_total {}", stats.osd_count).unwrap();
     repair::render_metrics(&mut output);
     service::pgs::render_metrics(&mut output);
     service::peering::render_metrics(&mut output);
@@ -746,9 +746,9 @@ fn render_metrics(state: &MetaMetricsState) -> String {
     service::scrub::render_metrics(&mut output);
 
     // User counts
-    writeln!(output, "# HELP objectio_meta_users_total Total users").unwrap();
-    writeln!(output, "# TYPE objectio_meta_users_total gauge").unwrap();
-    writeln!(output, "objectio_meta_users_total {}", stats.user_count).unwrap();
+    writeln!(output, "# HELP iolake_meta_users_total Total users").unwrap();
+    writeln!(output, "# TYPE iolake_meta_users_total gauge").unwrap();
+    writeln!(output, "iolake_meta_users_total {}", stats.user_count).unwrap();
 
     // Block volumes and snapshots, and the shared-stripe registry, from
     // the Raft tables.
@@ -756,11 +756,11 @@ fn render_metrics(state: &MetaMetricsState) -> String {
     state.meta_service.render_restore_metrics(&mut output);
     op_metrics::render_raft(&state.meta_service, &mut output);
     state.space.render_metrics(&mut output);
-    objectio_erasure::metrics::render(&mut output);
+    iolake_erasure::metrics::render(&mut output);
 
     output.push_str(&op_metrics::render());
     output.push_str(&state.meta_service.render_multipart_metrics());
-    output.push_str(&objectio_common::process_metrics::render(""));
+    output.push_str(&iolake_common::process_metrics::render(""));
     output
 }
 
@@ -887,7 +887,7 @@ mod raft_config_tests {
     #[test]
     fn the_default_timing_replaces_a_lost_leader_within_seconds() {
         use clap::Parser;
-        let args = super::Args::try_parse_from(["objectio-meta"]).unwrap();
+        let args = super::Args::try_parse_from(["iolake-meta"]).unwrap();
         let c = super::raft_config(1, 1, args.raft_heartbeat_ms, args.raft_election_ms)
             .validate()
             .unwrap();

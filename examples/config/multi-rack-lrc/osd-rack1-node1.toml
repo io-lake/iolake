@@ -1,4 +1,4 @@
-# ObjectIO OSD Configuration - Multi-Rack LRC Deployment
+# IOLake OSD Configuration - Multi-Rack LRC Deployment
 #
 # 6+ node deployment across multiple racks for LRC (Locally Repairable Codes)
 # LRC 6+2+2: 6 data + 2 local parity + 2 global parity
@@ -8,7 +8,7 @@
 [osd]
 node_name = "osd-r1-n1"
 listen = "0.0.0.0:9200"
-meta_endpoint = "http://meta.objectio.local:9100"
+meta_endpoint = "http://meta.iolake.local:9100"
 weight = 1.0
 
 # Rack 1, Node 1

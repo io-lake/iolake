@@ -1,4 +1,4 @@
-# ObjectIO Helm values for Kind (local Kubernetes) testing
+# IOLake Helm values for Kind (local Kubernetes) testing
 #
 # Uses images built and loaded into Kind via:
 #   make kind-load
@@ -8,13 +8,13 @@
 #
 # The chart's defaults are for production (auth on, a random Grafana
 # password); this throwaway cluster sets the convenient ones itself:
-# no auth, Grafana admin/objectio, one gateway, small volumes.
+# no auth, Grafana admin/iolake, one gateway, small volumes.
 
 global:
-  imageRegistry: ghcr.io/object-io
+  imageRegistry: ghcr.io/io-lake
   imagePullPolicy: IfNotPresent
   # kind builds and loads the per-service images by name
-  # (objectio-gateway, objectio-meta, ...), so opt out of the chart's
+  # (iolake-gateway, iolake-meta, ...), so opt out of the chart's
   # single-image default and let each component use its own repository.
   image: null
 
@@ -31,7 +31,7 @@ gateway:
   # Delta Sharing credentials only. The URL base above is shared.
   deltaSharing:
     accessKeyId: admin
-    secretKey: objectio-delta-secret-key
+    secretKey: iolake-delta-secret-key
   service:
     type: ClusterIP
     port: 9000
@@ -104,7 +104,7 @@ ec:
 # of its own.
 networkPolicy:
   adminFrom:
-    - podSelector: {matchLabels: {objectio-test: meta-ha-load}}
+    - podSelector: {matchLabels: {iolake-test: meta-ha-load}}
 
 monitoring:
   enabled: true
@@ -134,7 +134,7 @@ monitoring:
       repository: grafana/grafana
       tag: "10.2.2"
     adminUser: admin
-    adminPassword: objectio                # dev only (default: a random one in a Secret)
+    adminPassword: iolake                # dev only (default: a random one in a Secret)
     service:
       type: ClusterIP
       port: 3000

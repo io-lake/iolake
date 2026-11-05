@@ -4,7 +4,7 @@
 //! - Linux: O_DIRECT flag
 //! - macOS: F_NOCACHE fcntl
 
-use objectio_common::{Error, Result};
+use iolake_common::{Error, Result};
 use std::fs::{File, OpenOptions};
 #[cfg(not(unix))]
 use std::io::{Read, Seek, SeekFrom, Write};

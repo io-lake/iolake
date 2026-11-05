@@ -6,7 +6,7 @@
 //! rewritten every minute filled a disk while the bucket held one object.
 //! With versioning the old object is still a version and must stay.
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 use std::collections::HashSet;
 

@@ -26,9 +26,9 @@ use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
-use objectio_auth::policy::RequestContext;
-use objectio_auth::{BucketPolicy, PolicyDecision, PolicyEvaluator};
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_auth::policy::RequestContext;
+use iolake_auth::{BucketPolicy, PolicyDecision, PolicyEvaluator};
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
 use tonic::transport::Channel;
 use tracing::{info, warn};
 
@@ -36,8 +36,8 @@ use tracing::{info, warn};
 pub struct StsState {
     pub meta_client: MetadataServiceClient<Channel>,
     /// The operator's provider from the gateway's `--oidc-*` flags.
-    pub system_oidc: Option<Arc<objectio_auth::OidcProvider>>,
-    pub sts: objectio_auth::sts::StsProvider,
+    pub system_oidc: Option<Arc<iolake_auth::OidcProvider>>,
+    pub sts: iolake_auth::sts::StsProvider,
 }
 
 const DEFAULT_SESSION_SECS: u64 = 3600;
@@ -107,9 +107,9 @@ fn iam_key(tenant: &str, name: &str) -> String {
 /// A provider that may vouch for a role, and what it requires of a token.
 struct Candidate {
     name: String,
-    provider: Arc<objectio_auth::OidcProvider>,
+    provider: Arc<iolake_auth::OidcProvider>,
     /// For a multi-tenant provider: the upstream tenant id (`tid`) the
-    /// token must carry, the one this ObjectIO tenant was registered for.
+    /// token must carry, the one this IOLake tenant was registered for.
     required_tid: Option<String>,
 }
 
@@ -117,7 +117,7 @@ struct Candidate {
 async fn candidates(state: &StsState, tenant: &str) -> Vec<Candidate> {
     let mut meta = state.meta_client.clone();
     let configs: Vec<(String, serde_json::Value)> = meta
-        .list_config(objectio_proto::metadata::ListConfigRequest {
+        .list_config(iolake_proto::metadata::ListConfigRequest {
             prefix: "identity/openid/".to_string(),
         })
         .await
@@ -167,7 +167,7 @@ async fn candidates(state: &StsState, tenant: &str) -> Vec<Candidate> {
     }
 
     let tenant_config = meta
-        .get_tenant(objectio_proto::metadata::GetTenantRequest {
+        .get_tenant(iolake_proto::metadata::GetTenantRequest {
             name: tenant.to_string(),
         })
         .await
@@ -260,7 +260,7 @@ async fn assume_role_with_web_identity(state: &StsState, p: &HashMap<String, Str
 
     let mut meta = state.meta_client.clone();
     let role = match meta
-        .get_role(objectio_proto::metadata::GetRoleRequest {
+        .get_role(iolake_proto::metadata::GetRoleRequest {
             name: iam_key(&tenant, &role_name),
         })
         .await
@@ -310,14 +310,14 @@ async fn assume_role_with_web_identity(state: &StsState, p: &HashMap<String, Str
         match c.provider.validate_token(token).await {
             Ok(claims) => {
                 if let Some(tid) = &c.required_tid
-                    && objectio_auth::OidcProvider::tenant_id(&claims).as_deref() != Some(tid)
+                    && iolake_auth::OidcProvider::tenant_id(&claims).as_deref() != Some(tid)
                 {
                     continue;
                 }
                 accepted = Some((c, claims));
                 break;
             }
-            Err(objectio_auth::AuthProviderError::TokenExpired) => {
+            Err(iolake_auth::AuthProviderError::TokenExpired) => {
                 return sts_error(
                     StatusCode::BAD_REQUEST,
                     "ExpiredTokenException",
@@ -414,7 +414,7 @@ async fn assume_role_with_web_identity(state: &StsState, p: &HashMap<String, Str
         &session_arn,
         &tenant,
         "",
-        objectio_auth::Operation::ReadWrite,
+        iolake_auth::Operation::ReadWrite,
         Duration::from_secs(duration),
     );
     let expiration = i64::try_from(creds.expires_at)
@@ -422,12 +422,12 @@ async fn assume_role_with_web_identity(state: &StsState, p: &HashMap<String, Str
         .and_then(|s| chrono::DateTime::from_timestamp(s, 0))
         .map(|d| d.format("%Y-%m-%dT%H:%M:%SZ").to_string())
         .unwrap_or_default();
-    crate::audit::note_identity(&objectio_auth::AuthResult {
+    crate::audit::note_identity(&iolake_auth::AuthResult {
         user_id: claims.sub.clone(),
         user_arn: session_arn.clone(),
         access_key_id: creds.access_key_id.clone(),
         tenant: tenant.clone(),
-        auth_mode: objectio_auth::AuthMode::AssumedRole,
+        auth_mode: iolake_auth::AuthMode::AssumedRole,
         ..Default::default()
     });
     info!(

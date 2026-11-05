@@ -1,5 +1,5 @@
 //! The packer: moves small objects into packs in the background, phase 2 of
-//! small-object packing (objectio-docs
+//! small-object packing (iolake-docs
 //! architecture/design/core/small-object-packing.md).
 //!
 //! Off unless `--pack-interval-secs` is set. Every gateway runs the worker;
@@ -30,7 +30,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use objectio_proto::metadata::{
+use iolake_proto::metadata::{
     AcquireLeaseRequest, GetBucketVersioningRequest, ListBucketsRequest, VersioningState,
 };
 use tracing::{debug, info, warn};

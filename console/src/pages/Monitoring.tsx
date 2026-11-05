@@ -105,16 +105,16 @@ export default function Monitoring() {
       const text = await cluster.metrics();
       const now = Date.now();
       const current: Record<string, number> = {
-        GetObject: readCounter(text, "objectio_s3_requests_total", ["operation", "GetObject"]),
-        PutObject: readCounter(text, "objectio_s3_requests_total", ["operation", "PutObject"]),
-        DeleteObject: readCounter(text, "objectio_s3_requests_total", ["operation", "DeleteObject"]),
-        ListObjects: readCounter(text, "objectio_s3_requests_total", ["operation", "ListObjects"]),
-        // The previous build read objectio_http_responses_total, which this
+        GetObject: readCounter(text, "iolake_s3_requests_total", ["operation", "GetObject"]),
+        PutObject: readCounter(text, "iolake_s3_requests_total", ["operation", "PutObject"]),
+        DeleteObject: readCounter(text, "iolake_s3_requests_total", ["operation", "DeleteObject"]),
+        ListObjects: readCounter(text, "iolake_s3_requests_total", ["operation", "ListObjects"]),
+        // The previous build read iolake_http_responses_total, which this
         // server does not export — the error chart was flat zero. Errors are a
         // status on the S3 counter.
-        client_error: readCounter(text, "objectio_s3_requests_total", ["status", "client_error"]),
-        server_error: readCounter(text, "objectio_s3_requests_total", ["status", "server_error"]),
-        iceberg: readCounter(text, "objectio_iceberg_requests_total"),
+        client_error: readCounter(text, "iolake_s3_requests_total", ["status", "client_error"]),
+        server_error: readCounter(text, "iolake_s3_requests_total", ["status", "server_error"]),
+        iceberg: readCounter(text, "iolake_iceberg_requests_total"),
       };
       const point: Point = {
         t: now,
@@ -188,9 +188,9 @@ export default function Monitoring() {
   // Tiles come from the live scrape in both modes: they are a "right now"
   // reading, and a range query would answer a different question.
   const tiles = [
-    { label: "GET / s", value: latest ? latest.GetObject : 0, sub: "objectio_s3_requests_total" },
-    { label: "PUT / s", value: latest ? latest.PutObject : 0, sub: "objectio_s3_requests_total" },
-    { label: "Iceberg ops / s", value: latest ? latest.iceberg : 0, sub: "objectio_iceberg_requests_total" },
+    { label: "GET / s", value: latest ? latest.GetObject : 0, sub: "iolake_s3_requests_total" },
+    { label: "PUT / s", value: latest ? latest.PutObject : 0, sub: "iolake_s3_requests_total" },
+    { label: "Iceberg ops / s", value: latest ? latest.iceberg : 0, sub: "iolake_iceberg_requests_total" },
     { label: "Errors / s", value: latest ? Number(latest.client_error) + Number(latest.server_error) : 0, sub: "4xx + 5xx" },
   ];
 
@@ -383,7 +383,7 @@ export default function Monitoring() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Iceberg catalog operations" subtitle="objectio_iceberg_requests_total">
+        <ChartCard title="Iceberg catalog operations" subtitle="iolake_iceberg_requests_total">
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={usingPrometheus ? (toRows(promData.iceberg ?? [], "__name__").rows) : live}>
               {chartAxes()}

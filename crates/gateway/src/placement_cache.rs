@@ -9,7 +9,7 @@
 //! (`get_object_version`), so staleness costs a retry, never a wrong
 //! answer: reads take the newest copy of a quorum of the copies they ask.
 
-use objectio_proto::metadata::GetPlacementResponse;
+use iolake_proto::metadata::GetPlacementResponse;
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};

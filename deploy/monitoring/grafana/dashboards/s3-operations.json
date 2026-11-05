@@ -10,9 +10,9 @@
       "icon": "external link",
       "includeVars": true,
       "keepTime": true,
-      "tags": ["objectio"],
+      "tags": ["iolake"],
       "targetBlank": false,
-      "title": "ObjectIO Dashboards",
+      "title": "IOLake Dashboards",
       "type": "dashboards"
     }
   ],
@@ -58,7 +58,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(objectio_s3_requests_in_flight)",
+          "expr": "sum(iolake_s3_requests_in_flight)",
           "legendFormat": "In flight",
           "refId": "A"
         }
@@ -93,7 +93,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(objectio_s3_requests_total[5m]))",
+          "expr": "sum(rate(iolake_s3_requests_total[5m]))",
           "legendFormat": "Requests/s",
           "refId": "A"
         }
@@ -128,7 +128,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_gateway_uptime_seconds",
+          "expr": "iolake_gateway_uptime_seconds",
           "legendFormat": "Uptime",
           "refId": "A"
         }
@@ -167,7 +167,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(objectio_s3_requests_total{status=~\"4..|5..\"}[5m])) / sum(rate(objectio_s3_requests_total[5m]))",
+          "expr": "sum(rate(iolake_s3_requests_total{status=~\"4..|5..\"}[5m])) / sum(rate(iolake_s3_requests_total[5m]))",
           "legendFormat": "Error Rate",
           "refId": "A"
         }
@@ -226,7 +226,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "rate(objectio_s3_request_duration_seconds_sum[5m]) / rate(objectio_s3_requests_total[5m])",
+          "expr": "rate(iolake_s3_request_duration_seconds_sum[5m]) / rate(iolake_s3_requests_total[5m])",
           "legendFormat": "{{operation}}",
           "refId": "A"
         }
@@ -300,19 +300,19 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.50, rate(objectio_s3_request_duration_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.50, rate(iolake_s3_request_duration_seconds_bucket[5m]))",
           "legendFormat": "p50",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.90, rate(objectio_s3_request_duration_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.90, rate(iolake_s3_request_duration_seconds_bucket[5m]))",
           "legendFormat": "p90",
           "refId": "B"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.99, rate(objectio_s3_request_duration_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.99, rate(iolake_s3_request_duration_seconds_bucket[5m]))",
           "legendFormat": "p99",
           "refId": "C"
         }
@@ -371,7 +371,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "rate(objectio_s3_requests_total{status=~\"2..\"}[5m])",
+          "expr": "rate(iolake_s3_requests_total{status=~\"2..\"}[5m])",
           "legendFormat": "{{operation}}",
           "refId": "A"
         }
@@ -429,13 +429,13 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "rate(objectio_s3_request_bytes_total[5m])",
+          "expr": "rate(iolake_s3_request_bytes_total[5m])",
           "legendFormat": "Request (upload)",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "rate(objectio_s3_response_bytes_total[5m])",
+          "expr": "rate(iolake_s3_response_bytes_total[5m])",
           "legendFormat": "Response (download)",
           "refId": "B"
         }
@@ -486,7 +486,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "increase(objectio_s3_requests_total[1h])",
+          "expr": "increase(iolake_s3_requests_total[1h])",
           "legendFormat": "{{operation}}",
           "refId": "A"
         }
@@ -537,13 +537,13 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "increase(objectio_s3_request_bytes_total[1h])",
+          "expr": "increase(iolake_s3_request_bytes_total[1h])",
           "legendFormat": "{{operation}} upload",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "increase(objectio_s3_response_bytes_total[1h])",
+          "expr": "increase(iolake_s3_response_bytes_total[1h])",
           "legendFormat": "{{operation}} download",
           "refId": "B"
         }
@@ -586,7 +586,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "increase(objectio_s3_requests_total[1h])",
+          "expr": "increase(iolake_s3_requests_total[1h])",
           "legendFormat": "{{status}}",
           "refId": "A"
         }
@@ -645,7 +645,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "rate(objectio_s3_requests_total{status=~\"4..|5..\"}[5m])",
+          "expr": "rate(iolake_s3_requests_total{status=~\"4..|5..\"}[5m])",
           "legendFormat": "{{operation}} ({{status}})",
           "refId": "A"
         }
@@ -692,7 +692,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "topk(10, increase(objectio_s3_requests_total{status=~\"4..|5..\"}[1h]))",
+          "expr": "topk(10, increase(iolake_s3_requests_total{status=~\"4..|5..\"}[1h]))",
           "format": "table",
           "instant": true,
           "legendFormat": "",
@@ -716,7 +716,7 @@
   "refresh": "10s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["objectio", "s3", "gateway", "performance"],
+  "tags": ["iolake", "s3", "gateway", "performance"],
   "templating": {
     "list": [
       {
@@ -739,8 +739,8 @@
   "time": { "from": "now-1h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "ObjectIO - S3 Operations",
-  "uid": "objectio-s3-operations",
+  "title": "IOLake - S3 Operations",
+  "uid": "iolake-s3-operations",
   "version": 1,
   "weekStart": ""
 }

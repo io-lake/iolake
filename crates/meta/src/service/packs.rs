@@ -3,7 +3,7 @@
 use super::*;
 
 /// Stripe ids one release command takes: each is two writes at most.
-const RELEASE_BATCH: usize = objectio_meta_store::MAX_OPS / 2;
+const RELEASE_BATCH: usize = iolake_meta_store::MAX_OPS / 2;
 
 impl MetaService {
     /// Mirror a committed change to the shared-stripe registry.
@@ -11,7 +11,7 @@ impl MetaService {
         use prost::Message;
         let mut map = self.stripe_refs.write();
         match new_value {
-            Some(bytes) => match objectio_proto::metadata::StripeRefs::decode(bytes) {
+            Some(bytes) => match iolake_proto::metadata::StripeRefs::decode(bytes) {
                 Ok(r) => {
                     map.insert(key.to_string(), r);
                 }
@@ -28,7 +28,7 @@ impl MetaService {
     /// conflict, for the caller to re-read and retry.
     pub(super) async fn write_stripe_refs(
         &self,
-        changes: Vec<(String, Option<objectio_proto::metadata::StripeRefs>)>,
+        changes: Vec<(String, Option<iolake_proto::metadata::StripeRefs>)>,
         requested_by: &str,
     ) -> Result<bool, Status> {
         use prost::Message;
@@ -43,7 +43,7 @@ impl MetaService {
                 .collect()
         };
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let ops = changes
                 .iter()
                 .zip(expected)
@@ -95,23 +95,23 @@ impl MetaService {
     pub(super) fn pack_record(
         &self,
         pack_id: &[u8],
-    ) -> Option<(objectio_proto::metadata::PackRecord, Vec<u8>)> {
+    ) -> Option<(iolake_proto::metadata::PackRecord, Vec<u8>)> {
         let bytes = self
             .store
             .as_ref()?
             .read_named(PACKS_TABLE, &hex::encode(pack_id))?;
-        let record = objectio_proto::metadata::PackRecord::decode(bytes.as_slice()).ok()?;
+        let record = iolake_proto::metadata::PackRecord::decode(bytes.as_slice()).ok()?;
         Some((record, bytes))
     }
 
     /// Every pack, sealed or not, for drain and repair (as block chunks).
-    pub fn packs(&self) -> Vec<objectio_proto::metadata::PackRecord> {
+    pub fn packs(&self) -> Vec<iolake_proto::metadata::PackRecord> {
         self.store
             .as_ref()
             .map(|s| s.list_named(PACKS_TABLE))
             .unwrap_or_default()
             .into_iter()
-            .filter_map(|(_, v)| objectio_proto::metadata::PackRecord::decode(v.as_slice()).ok())
+            .filter_map(|(_, v)| iolake_proto::metadata::PackRecord::decode(v.as_slice()).ok())
             .filter(|p| p.stripe.is_some())
             .collect()
     }
@@ -120,7 +120,7 @@ impl MetaService {
     pub async fn pack_add_shard_locations(
         &self,
         pack_id: &[u8],
-        added: &[objectio_proto::metadata::ShardLocation],
+        added: &[iolake_proto::metadata::ShardLocation],
     ) -> Result<(), Status> {
         for attempt in 0..CAS_ATTEMPTS {
             if attempt > 0 {
@@ -146,8 +146,8 @@ impl MetaService {
             record.version += 1;
             let ok = self
                 .cas_many(
-                    vec![objectio_meta_store::CasOp {
-                        table: objectio_meta_store::CasTable::Named(PACKS_TABLE.into()),
+                    vec![iolake_meta_store::CasOp {
+                        table: iolake_meta_store::CasTable::Named(PACKS_TABLE.into()),
                         key: hex::encode(pack_id),
                         expected: Some(bytes),
                         new_value: Some(record.encode_to_vec()),
@@ -168,7 +168,7 @@ impl MetaService {
         pack_id: &[u8],
         position: u32,
         from: [u8; 16],
-        to: &objectio_proto::metadata::ShardLocation,
+        to: &iolake_proto::metadata::ShardLocation,
     ) -> Result<(), Status> {
         for attempt in 0..CAS_ATTEMPTS {
             if attempt > 0 {
@@ -194,8 +194,8 @@ impl MetaService {
             record.version += 1;
             let ok = self
                 .cas_many(
-                    vec![objectio_meta_store::CasOp {
-                        table: objectio_meta_store::CasTable::Named(PACKS_TABLE.into()),
+                    vec![iolake_meta_store::CasOp {
+                        table: iolake_meta_store::CasTable::Named(PACKS_TABLE.into()),
                         key: hex::encode(pack_id),
                         expected: Some(bytes),
                         new_value: Some(record.encode_to_vec()),
@@ -212,9 +212,9 @@ impl MetaService {
 
     pub(crate) async fn share_stripes(
         &self,
-        request: Request<objectio_proto::metadata::ShareStripesRequest>,
-    ) -> Result<Response<objectio_proto::metadata::ShareStripesResponse>, Status> {
-        use objectio_proto::metadata::StripeRefs;
+        request: Request<iolake_proto::metadata::ShareStripesRequest>,
+    ) -> Result<Response<iolake_proto::metadata::ShareStripesResponse>, Status> {
+        use iolake_proto::metadata::StripeRefs;
         let req = request.into_inner();
         if req.owner.is_empty() || req.sharer.is_empty() {
             return Err(Status::invalid_argument("owner and sharer are required"));
@@ -222,11 +222,11 @@ impl MetaService {
         // All in one command, so the copy holds all of them or none. A
         // gateway shares more in batches of this many; one that doesn't
         // copies the bytes instead, as it does on any FailedPrecondition.
-        if req.stripe_ids.len() > objectio_meta_store::MAX_OPS {
+        if req.stripe_ids.len() > iolake_meta_store::MAX_OPS {
             return Err(Status::failed_precondition(format!(
                 "{} stripes to share at once; at most {}",
                 req.stripe_ids.len(),
-                objectio_meta_store::MAX_OPS
+                iolake_meta_store::MAX_OPS
             )));
         }
         for attempt in 0..CAS_ATTEMPTS {
@@ -266,7 +266,7 @@ impl MetaService {
             }
             if self.write_stripe_refs(changes, "share-stripes").await? {
                 return Ok(Response::new(
-                    objectio_proto::metadata::ShareStripesResponse {},
+                    iolake_proto::metadata::ShareStripesResponse {},
                 ));
             }
         }
@@ -275,8 +275,8 @@ impl MetaService {
 
     pub(crate) async fn release_stripes(
         &self,
-        request: Request<objectio_proto::metadata::ReleaseStripesRequest>,
-    ) -> Result<Response<objectio_proto::metadata::ReleaseStripesResponse>, Status> {
+        request: Request<iolake_proto::metadata::ReleaseStripesRequest>,
+    ) -> Result<Response<iolake_proto::metadata::ReleaseStripesResponse>, Status> {
         let req = request.into_inner();
         // Each id is two writes at most (its entry, and its pack's record
         // when it held the pack's last object), so a command takes half as
@@ -291,7 +291,7 @@ impl MetaService {
             freed_packs.extend(p);
         }
         Ok(Response::new(
-            objectio_proto::metadata::ReleaseStripesResponse {
+            iolake_proto::metadata::ReleaseStripesResponse {
                 freeable,
                 freed_packs,
             },
@@ -305,14 +305,13 @@ impl MetaService {
         &self,
         stripe_ids: &[Vec<u8>],
         referrer: &[u8],
-    ) -> Result<(Vec<Vec<u8>>, Vec<objectio_proto::metadata::StripeMeta>), Status> {
-        use objectio_meta_store::{CasOp, CasTable};
+    ) -> Result<(Vec<Vec<u8>>, Vec<iolake_proto::metadata::StripeMeta>), Status> {
+        use iolake_meta_store::{CasOp, CasTable};
         for attempt in 0..CAS_ATTEMPTS {
             if attempt > 0 {
                 contention_backoff(attempt).await;
             }
-            let mut changes: Vec<(String, Option<objectio_proto::metadata::StripeRefs>)> =
-                Vec::new();
+            let mut changes: Vec<(String, Option<iolake_proto::metadata::StripeRefs>)> = Vec::new();
             let mut freeable = Vec::new();
             let mut pack_ops = Vec::new();
             let mut freed_packs = Vec::new();
@@ -406,8 +405,8 @@ impl MetaService {
 
     pub(crate) async fn intend_pack(
         &self,
-        request: Request<objectio_proto::metadata::IntendPackRequest>,
-    ) -> Result<Response<objectio_proto::metadata::IntendPackResponse>, Status> {
+        request: Request<iolake_proto::metadata::IntendPackRequest>,
+    ) -> Result<Response<iolake_proto::metadata::IntendPackResponse>, Status> {
         let mut pack = request
             .into_inner()
             .pack
@@ -422,8 +421,8 @@ impl MetaService {
         pack.created_at = Self::current_timestamp();
         let ok = self
             .cas_many(
-                vec![objectio_meta_store::CasOp {
-                    table: objectio_meta_store::CasTable::Named(PACKS_TABLE.into()),
+                vec![iolake_meta_store::CasOp {
+                    table: iolake_meta_store::CasTable::Named(PACKS_TABLE.into()),
                     key: hex::encode(&pack.pack_id),
                     expected: None,
                     new_value: Some(pack.encode_to_vec()),
@@ -432,9 +431,7 @@ impl MetaService {
             )
             .await?;
         if ok {
-            Ok(Response::new(
-                objectio_proto::metadata::IntendPackResponse {},
-            ))
+            Ok(Response::new(iolake_proto::metadata::IntendPackResponse {}))
         } else {
             Err(Status::already_exists("pack id is taken"))
         }
@@ -442,9 +439,9 @@ impl MetaService {
 
     pub(crate) async fn seal_pack(
         &self,
-        request: Request<objectio_proto::metadata::SealPackRequest>,
-    ) -> Result<Response<objectio_proto::metadata::SealPackResponse>, Status> {
-        use objectio_meta_store::{CasOp, CasTable};
+        request: Request<iolake_proto::metadata::SealPackRequest>,
+    ) -> Result<Response<iolake_proto::metadata::SealPackResponse>, Status> {
+        use iolake_meta_store::{CasOp, CasTable};
         let req = request.into_inner();
         if req.referrers.is_empty() {
             return Err(Status::invalid_argument("a pack holds at least one object"));
@@ -468,7 +465,7 @@ impl MetaService {
         if self.stripe_refs.read().contains_key(&key) {
             return Err(Status::failed_precondition("pack id is already registered"));
         }
-        let refs = objectio_proto::metadata::StripeRefs {
+        let refs = iolake_proto::metadata::StripeRefs {
             referrers: req.referrers,
         };
         let ok = self
@@ -494,16 +491,16 @@ impl MetaService {
             return Err(Status::aborted("pack changed while sealing; retry"));
         }
         self.stripe_refs.write().insert(key, refs);
-        Ok(Response::new(objectio_proto::metadata::SealPackResponse {}))
+        Ok(Response::new(iolake_proto::metadata::SealPackResponse {}))
     }
 
     pub(crate) async fn abort_pack(
         &self,
-        request: Request<objectio_proto::metadata::AbortPackRequest>,
-    ) -> Result<Response<objectio_proto::metadata::AbortPackResponse>, Status> {
+        request: Request<iolake_proto::metadata::AbortPackRequest>,
+    ) -> Result<Response<iolake_proto::metadata::AbortPackResponse>, Status> {
         let id = request.into_inner().pack_id;
         let Some((record, bytes)) = self.pack_record(&id) else {
-            return Ok(Response::new(objectio_proto::metadata::AbortPackResponse {
+            return Ok(Response::new(iolake_proto::metadata::AbortPackResponse {
                 pack: None,
                 found: false,
             }));
@@ -515,8 +512,8 @@ impl MetaService {
         }
         let ok = self
             .cas_many(
-                vec![objectio_meta_store::CasOp {
-                    table: objectio_meta_store::CasTable::Named(PACKS_TABLE.into()),
+                vec![iolake_meta_store::CasOp {
+                    table: iolake_meta_store::CasTable::Named(PACKS_TABLE.into()),
                     key: hex::encode(&id),
                     expected: Some(bytes),
                     new_value: None,
@@ -527,7 +524,7 @@ impl MetaService {
         if !ok {
             return Err(Status::aborted("pack changed; retry"));
         }
-        Ok(Response::new(objectio_proto::metadata::AbortPackResponse {
+        Ok(Response::new(iolake_proto::metadata::AbortPackResponse {
             pack: Some(record),
             found: true,
         }))
@@ -535,12 +532,12 @@ impl MetaService {
 
     pub(crate) async fn get_pack(
         &self,
-        request: Request<objectio_proto::metadata::GetPackRequest>,
-    ) -> Result<Response<objectio_proto::metadata::GetPackResponse>, Status> {
+        request: Request<iolake_proto::metadata::GetPackRequest>,
+    ) -> Result<Response<iolake_proto::metadata::GetPackResponse>, Status> {
         let pack = self
             .pack_record(&request.into_inner().pack_id)
             .map(|(r, _)| r);
-        Ok(Response::new(objectio_proto::metadata::GetPackResponse {
+        Ok(Response::new(iolake_proto::metadata::GetPackResponse {
             found: pack.is_some(),
             pack,
         }))
@@ -548,8 +545,8 @@ impl MetaService {
 
     pub(crate) async fn list_packs(
         &self,
-        request: Request<objectio_proto::metadata::ListPacksRequest>,
-    ) -> Result<Response<objectio_proto::metadata::ListPacksResponse>, Status> {
+        request: Request<iolake_proto::metadata::ListPacksRequest>,
+    ) -> Result<Response<iolake_proto::metadata::ListPacksResponse>, Status> {
         let req = request.into_inner();
         let after = hex::encode(&req.start_after);
         let limit = if req.limit == 0 {
@@ -567,22 +564,22 @@ impl MetaService {
             .collect();
         all.sort_by(|a, b| a.0.cmp(&b.0));
         let truncated = all.len() > limit;
-        let packs: Vec<objectio_proto::metadata::PackRecord> = all
+        let packs: Vec<iolake_proto::metadata::PackRecord> = all
             .into_iter()
             .take(limit)
-            .filter_map(|(_, v)| objectio_proto::metadata::PackRecord::decode(v.as_slice()).ok())
+            .filter_map(|(_, v)| iolake_proto::metadata::PackRecord::decode(v.as_slice()).ok())
             .collect();
         let refs = self.stripe_refs.read();
         let referrers = packs
             .iter()
-            .map(|p| objectio_proto::metadata::PackReferrers {
+            .map(|p| iolake_proto::metadata::PackReferrers {
                 object_ids: refs
                     .get(&hex::encode(&p.pack_id))
                     .map(|r| r.referrers.clone())
                     .unwrap_or_default(),
             })
             .collect();
-        Ok(Response::new(objectio_proto::metadata::ListPacksResponse {
+        Ok(Response::new(iolake_proto::metadata::ListPacksResponse {
             packs,
             truncated,
             referrers,
@@ -591,8 +588,8 @@ impl MetaService {
 
     pub(crate) async fn pack_move_shard(
         &self,
-        request: Request<objectio_proto::metadata::PackMoveShardRequest>,
-    ) -> Result<Response<objectio_proto::metadata::PackMoveShardResponse>, Status> {
+        request: Request<iolake_proto::metadata::PackMoveShardRequest>,
+    ) -> Result<Response<iolake_proto::metadata::PackMoveShardResponse>, Status> {
         let req = request.into_inner();
         let from: [u8; 16] = req
             .from_node
@@ -604,14 +601,14 @@ impl MetaService {
             .ok_or_else(|| Status::invalid_argument("to is required"))?;
         MetaService::move_pack_shard(self, &req.pack_id, req.position, from, &to).await?;
         Ok(Response::new(
-            objectio_proto::metadata::PackMoveShardResponse {},
+            iolake_proto::metadata::PackMoveShardResponse {},
         ))
     }
 
     pub(crate) async fn pack_settle(
         &self,
-        request: Request<objectio_proto::metadata::PackSettleRequest>,
-    ) -> Result<Response<objectio_proto::metadata::PackSettleResponse>, Status> {
+        request: Request<iolake_proto::metadata::PackSettleRequest>,
+    ) -> Result<Response<iolake_proto::metadata::PackSettleResponse>, Status> {
         let req = request.into_inner();
         for attempt in 0..CAS_ATTEMPTS {
             if attempt > 0 {
@@ -619,9 +616,7 @@ impl MetaService {
             }
             // A pack freed meanwhile has nothing left to settle.
             let Some((mut record, bytes)) = self.pack_record(&req.pack_id) else {
-                return Ok(Response::new(
-                    objectio_proto::metadata::PackSettleResponse {},
-                ));
+                return Ok(Response::new(iolake_proto::metadata::PackSettleResponse {}));
             };
             let mut changed = false;
             for m in &mut record.members {
@@ -632,14 +627,12 @@ impl MetaService {
                 }
             }
             if !changed {
-                return Ok(Response::new(
-                    objectio_proto::metadata::PackSettleResponse {},
-                ));
+                return Ok(Response::new(iolake_proto::metadata::PackSettleResponse {}));
             }
             let ok = self
                 .cas_many(
-                    vec![objectio_meta_store::CasOp {
-                        table: objectio_meta_store::CasTable::Named(PACKS_TABLE.into()),
+                    vec![iolake_meta_store::CasOp {
+                        table: iolake_meta_store::CasTable::Named(PACKS_TABLE.into()),
                         key: hex::encode(&req.pack_id),
                         expected: Some(bytes),
                         new_value: Some(record.encode_to_vec()),
@@ -648,9 +641,7 @@ impl MetaService {
                 )
                 .await?;
             if ok {
-                return Ok(Response::new(
-                    objectio_proto::metadata::PackSettleResponse {},
-                ));
+                return Ok(Response::new(iolake_proto::metadata::PackSettleResponse {}));
             }
         }
         Err(Status::aborted("pack kept changing; retry"))
@@ -658,8 +649,8 @@ impl MetaService {
 
     pub(crate) async fn locate_chunks(
         &self,
-        request: Request<objectio_proto::metadata::LocateChunksRequest>,
-    ) -> Result<Response<objectio_proto::metadata::LocateChunksResponse>, Status> {
+        request: Request<iolake_proto::metadata::LocateChunksRequest>,
+    ) -> Result<Response<iolake_proto::metadata::LocateChunksResponse>, Status> {
         let req = request.into_inner();
         let pool = self
             .buckets
@@ -678,7 +669,7 @@ impl MetaService {
             .osd_nodes
             .read()
             .iter()
-            .filter(|n| n.admin_state == objectio_common::OsdAdminState::In)
+            .filter(|n| n.admin_state == iolake_common::OsdAdminState::In)
             .map(|n| (n.node_id, n.address.clone()))
             .collect();
         in_placement.sort();
@@ -689,7 +680,7 @@ impl MetaService {
             .map(|fp| {
                 let h = xxhash_rust::xxh64::xxh64(fp, 0);
                 if pg_count > 0 {
-                    let pg_id = objectio_placement::jump_consistent_hash(h, pg_count as i32) as u32;
+                    let pg_id = iolake_placement::jump_consistent_hash(h, pg_count as i32) as u32;
                     return self
                         .placement_group(&pool, pg_id)
                         .and_then(|pg| pg.acting.first().cloned())
@@ -700,13 +691,13 @@ impl MetaService {
                 if in_placement.is_empty() {
                     return (String::new(), Vec::new());
                 }
-                let i = objectio_placement::jump_consistent_hash(h, in_placement.len() as i32);
+                let i = iolake_placement::jump_consistent_hash(h, in_placement.len() as i32);
                 let (id, addr) = &in_placement[i as usize];
                 (addr.clone(), id.to_vec())
             })
             .unzip();
         Ok(Response::new(
-            objectio_proto::metadata::LocateChunksResponse {
+            iolake_proto::metadata::LocateChunksResponse {
                 addresses,
                 node_ids,
             },

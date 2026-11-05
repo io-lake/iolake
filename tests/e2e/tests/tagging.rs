@@ -8,7 +8,7 @@
 
 use std::fmt::Write as _;
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 fn bucket(c: &Cluster, name: &str) {

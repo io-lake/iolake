@@ -1,4 +1,4 @@
-//! A cluster of separate processes, for what one `objectio-aio` can't show.
+//! A cluster of separate processes, for what one `iolake-aio` can't show.
 //!
 //! Several meta nodes in one Raft group, OSDs and gateways: losing a meta
 //! node, the leader among them, and the cluster going on.
@@ -54,8 +54,37 @@ struct Gateway {
 }
 
 /// A binary from `bins` (another release's), or from this build.
-fn bin(bins: Option<&Path>, name: &str) -> PathBuf {
-    bins.map_or_else(|| binary(name), |dir| dir.join(name))
+///
+/// The releases before the rename to IOLake (0.1.0-rc.3 and earlier)
+/// named their binaries `objectio-*`: the previous release, which the
+/// rolling-upgrade test starts from, may be one of them.
+#[must_use]
+pub fn bin(bins: Option<&Path>, name: &str) -> PathBuf {
+    bins.map_or_else(
+        || binary(name),
+        |dir| {
+            let named = dir.join(name);
+            match name.strip_prefix("iolake-") {
+                Some(rest) if !named.is_file() => dir.join(format!("objectio-{rest}")),
+                _ => named,
+            }
+        },
+    )
+}
+
+/// The name `program` reads the environment variable `var` (`IOLAKE_*`)
+/// by: a binary of a release before the rename (see [`bin`]) reads
+/// `OBJECTIO_*`.
+#[must_use]
+pub fn env_name(program: &std::ffi::OsStr, var: &str) -> String {
+    let old = Path::new(program)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.starts_with("objectio-"));
+    match var.strip_prefix("IOLAKE_") {
+        Some(rest) if old => format!("OBJECTIO_{rest}"),
+        _ => var.to_string(),
+    }
 }
 
 /// One process of a [`HaCluster`], by index.
@@ -142,11 +171,11 @@ impl Drop for HaCluster {
 }
 
 /// Where a process's output goes: the test's own stdout and stderr with
-/// `OBJECTIO_E2E_LOGS` set, else `<name>.log` in the cluster's `logs/`
+/// `IOLAKE_E2E_LOGS` set, else `<name>.log` in the cluster's `logs/`
 /// (appended to across restarts), which a failing test keeps (see
 /// [`HaCluster`]'s `Drop`).
 fn log_target(dir: &Path, name: &str) -> (Stdio, Stdio) {
-    if std::env::var_os("OBJECTIO_E2E_LOGS").is_some() {
+    if std::env::var_os("IOLAKE_E2E_LOGS").is_some() {
         return (Stdio::inherit(), Stdio::inherit());
     }
     let logs = dir.join("logs");
@@ -404,7 +433,7 @@ impl HaCluster {
             .unwrap_or_default();
         let (out, err) = log_target(self.dir.path(), &format!("osd-{i}"));
         let o = &mut self.osds[i];
-        let mut cmd = Command::new(bin(bins, "objectio-osd"));
+        let mut cmd = Command::new(bin(bins, "iolake-osd"));
         if self.tls {
             crate::tls::apply(&mut cmd, crate::tls::OSD);
         }
@@ -435,7 +464,7 @@ impl HaCluster {
             .stdout(out)
             .stderr(err)
             .spawn()
-            .expect("spawn objectio-osd");
+            .expect("spawn iolake-osd");
         o.child = Some(child);
     }
 
@@ -445,16 +474,14 @@ impl HaCluster {
         let endpoints = self.meta_endpoints();
         let port = self.gateways[i].port;
         let (out, err) = log_target(self.dir.path(), &format!("gateway-{i}"));
-        let mut cmd = Command::new(bin(bins, "objectio-gateway"));
+        let mut cmd = Command::new(bin(bins, "iolake-gateway"));
         if self.tls {
             crate::tls::apply(&mut cmd, crate::tls::GATEWAY);
         }
+        let master_key = env_name(cmd.get_program(), "IOLAKE_MASTER_KEY");
         let child = cmd
             // Every gateway the same SSE master key, as in production.
-            .env(
-                "OBJECTIO_MASTER_KEY",
-                "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
-            )
+            .env(master_key, "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=")
             .args([
                 "--listen",
                 &format!("127.0.0.1:{port}"),
@@ -468,7 +495,7 @@ impl HaCluster {
             .stdout(out)
             .stderr(err)
             .spawn()
-            .expect("spawn objectio-gateway");
+            .expect("spawn iolake-gateway");
         let gateway = &mut self.gateways[i];
         gateway.child = Some(child);
         await_child_listening(gateway.child.as_mut().unwrap(), &[port])
@@ -574,15 +601,12 @@ impl HaCluster {
     pub fn await_seen_short(&self, objects: u32, secs: u64) {
         let deadline = Instant::now() + Duration::from_secs(secs);
         while self
-            .meta_metric("objectio_meta_degraded_objects")
+            .meta_metric("iolake_meta_degraded_objects")
             .unwrap_or(0.0)
             == 0.0
+            && self.meta_metric("iolake_meta_pgs_not_clean").unwrap_or(0.0) == 0.0
             && self
-                .meta_metric("objectio_meta_pgs_not_clean")
-                .unwrap_or(0.0)
-                == 0.0
-            && self
-                .meta_metric("objectio_meta_pg_recovered_objects_total")
+                .meta_metric("iolake_meta_pg_recovered_objects_total")
                 .unwrap_or(0.0)
                 < f64::from(objects)
         {
@@ -713,7 +737,7 @@ impl HaCluster {
         }
         let bins = m.bins.lock().unwrap().clone();
         let (out, err) = log_target(self.dir.path(), &format!("meta-{i}"));
-        let mut cmd = Command::new(bin(bins.as_deref(), "objectio-meta"));
+        let mut cmd = Command::new(bin(bins.as_deref(), "iolake-meta"));
         if self.tls {
             crate::tls::apply(&mut cmd, crate::tls::META);
         }
@@ -748,7 +772,7 @@ impl HaCluster {
             .stdout(out)
             .stderr(err)
             .spawn()
-            .expect("spawn objectio-meta");
+            .expect("spawn iolake-meta");
         let mut slot = m.child.lock().unwrap();
         *slot = Some(child);
         await_child_listening(slot.as_mut().unwrap(), &[m.grpc, m.admin])
@@ -1122,22 +1146,22 @@ impl HaCluster {
         );
     }
 
-    /// Run `obioctl` as the admin against gateway `g`.
+    /// Run `iolakectl` as the admin against gateway `g`.
     #[must_use]
-    pub fn obioctl(&self, g: usize, args: &[&str]) -> std::process::Output {
-        let mut cmd = Command::new(bin(None, "obioctl"));
+    pub fn iolakectl(&self, g: usize, args: &[&str]) -> std::process::Output {
+        let mut cmd = Command::new(bin(None, "iolakectl"));
         cmd.env_clear();
         if self.tls {
             crate::tls::apply(&mut cmd, crate::tls::ADMIN);
         }
         cmd.env("HOME", self.dir.path())
             .env("PATH", std::env::var("PATH").unwrap_or_default())
-            .env("OBJECTIO_ENDPOINT", &self.clients[g].endpoint)
-            .env("OBJECTIO_ACCESS_KEY", &self.access_key)
-            .env("OBJECTIO_SECRET_KEY", &self.secret_key)
+            .env("IOLAKE_ENDPOINT", &self.clients[g].endpoint)
+            .env("IOLAKE_ACCESS_KEY", &self.access_key)
+            .env("IOLAKE_SECRET_KEY", &self.secret_key)
             .args(args)
             .output()
-            .expect("run obioctl")
+            .expect("run iolakectl")
     }
 
     /// Wait until every OSD is known to the cluster (placement works). A
@@ -1182,19 +1206,19 @@ impl HaCluster {
     }
 }
 
-/// Run `objectio-meta` with `args` (an offline tool), and return what it
+/// Run `iolake-meta` with `args` (an offline tool), and return what it
 /// printed.
 ///
 /// # Panics
 /// When it fails.
 fn meta_tool(args: &[&str]) -> String {
-    let out = Command::new(bin(None, "objectio-meta"))
+    let out = Command::new(bin(None, "iolake-meta"))
         .args(args)
         .output()
-        .expect("run objectio-meta");
+        .expect("run iolake-meta");
     assert!(
         out.status.success(),
-        "objectio-meta {args:?} failed ({}):\nstdout: {}\nstderr: {}",
+        "iolake-meta {args:?} failed ({}):\nstdout: {}\nstderr: {}",
         out.status,
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)

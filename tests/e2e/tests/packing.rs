@@ -2,7 +2,7 @@
 //! (`/_admin/test/pack`, mounted by `--test-hooks`) read back byte-identical;
 //! each lets its own stripe go; the pack goes with its last object; and the
 //! pack survives what a stripe survives: copies, overwrites, lost disks,
-//! repair and drain (objectio-docs architecture/design/core/small-object-packing.md).
+//! repair and drain (iolake-docs architecture/design/core/small-object-packing.md).
 //!
 //! With small shards kept in metadata (B21) no object up to `PACK_MAX` takes
 //! a block of its own, so there is nothing to pack: these clusters run with
@@ -10,7 +10,7 @@
 
 use std::time::{Duration, Instant};
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::{Value, json};
 
 /// Bytes that do not repeat, distinct per seed.
@@ -217,7 +217,7 @@ fn a_pack_is_repaired_so_its_objects_survive_two_more_losses() {
             .text()
             .lines()
             .filter(|l| {
-                l.starts_with("objectio_meta_repair_shards_rebuilt_total")
+                l.starts_with("iolake_meta_repair_shards_rebuilt_total")
                     && l.contains("reason=\"missing\"")
             })
             .filter_map(|l| l.rsplit(' ').next()?.parse::<u64>().ok())
@@ -561,7 +561,7 @@ fn the_packer_packs_small_objects_in_the_background() {
     let written = c.total_used_bytes();
 
     let deadline = Instant::now() + Duration::from_secs(60);
-    while metric(&c, "objectio_pack_objects_total") < 20 {
+    while metric(&c, "iolake_pack_objects_total") < 20 {
         assert!(
             Instant::now() < deadline,
             "the packer never packed the objects"
@@ -575,10 +575,10 @@ fn the_packer_packs_small_objects_in_the_background() {
         u < written
     });
     // Settled: nothing left for reconciliation.
-    assert_eq!(metric(&c, "objectio_pack_reconciled_total"), 0);
+    assert_eq!(metric(&c, "iolake_pack_reconciled_total"), 0);
     // Packed once: later passes leave packed objects alone.
     std::thread::sleep(Duration::from_secs(3));
-    assert_eq!(metric(&c, "objectio_pack_objects_total"), 20);
+    assert_eq!(metric(&c, "iolake_pack_objects_total"), 20);
 }
 
 // ── Phase 3: compaction ──────────────────────────────────────────────────
@@ -761,8 +761,8 @@ fn soak_ops(c: &Cluster, secs: u64) -> (Model, u32) {
 fn await_packer_quiet(c: &Cluster) -> u64 {
     let activity = || {
         (
-            metric(c, "objectio_pack_objects_total"),
-            metric(c, "objectio_pack_compactions_total"),
+            metric(c, "iolake_pack_objects_total"),
+            metric(c, "iolake_pack_compactions_total"),
         )
     };
     let mut last = activity();
@@ -845,6 +845,6 @@ fn a_soak_with_packing_and_compaction_loses_nothing() {
     }
     eprintln!(
         "soak: {ops} operations, {packed} objects packed, {} packs compacted",
-        metric(&c, "objectio_pack_compactions_total")
+        metric(&c, "iolake_pack_compactions_total")
     );
 }

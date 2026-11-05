@@ -1,29 +1,29 @@
 {
-  "name": "objectio",
+  "name": "iolake",
   "owner": {
-    "name": "object-io"
+    "name": "io-lake"
   },
-  "description": "Agent skills for ObjectIO: deploying and running a cluster, and building on its APIs",
+  "description": "Agent skills for IOLake: deploying and running a cluster, and building on its APIs",
   "plugins": [
     {
-      "name": "objectio-ops",
+      "name": "iolake-ops",
       "source": "./",
       "strict": false,
-      "description": "For operators: install, size, upgrade, monitor and troubleshoot ObjectIO, and run a cluster with obioctl",
+      "description": "For operators: install, size, upgrade, monitor and troubleshoot IOLake, and run a cluster with iolakectl",
       "category": "deployment",
       "license": "Apache-2.0",
-      "homepage": "https://object-io.github.io",
-      "skills": ["./skills/objectio-deploy/", "./skills/objectio-admin/"]
+      "homepage": "https://iolake.dev",
+      "skills": ["./skills/iolake-deploy/", "./skills/iolake-admin/"]
     },
     {
-      "name": "objectio-dev",
+      "name": "iolake-dev",
       "source": "./",
       "strict": false,
       "description": "For application developers: S3 clients, the Python and Go SDKs, credentials and STS, the data lake APIs",
       "category": "development",
       "license": "Apache-2.0",
-      "homepage": "https://object-io.github.io",
-      "skills": ["./skills/objectio-sdk/"]
+      "homepage": "https://iolake.dev",
+      "skills": ["./skills/iolake-sdk/"]
     }
   ]
 }

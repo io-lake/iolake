@@ -1,11 +1,11 @@
-# ObjectIO OSD Configuration - Three Node Deployment (Node 3)
+# IOLake OSD Configuration - Three Node Deployment (Node 3)
 #
 # Node 3 of 3 in a rack-spread deployment
 
 [osd]
 node_name = "osd-node3"
 listen = "0.0.0.0:9200"
-meta_endpoint = "http://meta.objectio.local:9100"
+meta_endpoint = "http://meta.iolake.local:9100"
 weight = 1.0
 
 # Node 3 is in rack-03

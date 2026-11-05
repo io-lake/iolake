@@ -1,8 +1,8 @@
-# ObjectIO OSD Configuration Examples
+# IOLake OSD Configuration Examples
 
 Example `osd.toml` files for different deployment topologies. Only the OSD
 reads a config file; meta and the gateway are configured by flags (see the
-operations guide's configuration reference). `objectio-install init` writes
+operations guide's configuration reference). `iolake-install init` writes
 these files for a host, one OSD per disk.
 
 ## Topology Overview
@@ -66,7 +66,7 @@ rack = "rack1"
 One OSD with all the drives holds one copy of each object: run meta with
 `--replication 1`. To erasure-code on one server (`4+2` survives two drive
 failures, not the server's), run one OSD per drive, each with its own
-config, port and data directory, as `objectio-install init` sets up.
+config, port and data directory, as `iolake-install init` sets up.
 
 ### Three Nodes (Production Small)
 
@@ -128,7 +128,7 @@ Read, but placement doesn't use it yet: every OSD weighs the same.
 1. Copy the appropriate example to `/etc/objectio/osd.toml`
 2. Edit the failure domain to match your topology
 3. Update the disk paths
-4. Start the OSD: `objectio-osd --config /etc/objectio/osd.toml`
+4. Start the OSD: `iolake-osd --config /etc/objectio/osd.toml`
 
 ```bash
 # Example: Node 2 in a three-node deployment
@@ -138,7 +138,7 @@ cp examples/config/three-nodes/node2-osd.toml /etc/objectio/osd.toml
 vim /etc/objectio/osd.toml
 
 # Start
-objectio-osd --config /etc/objectio/osd.toml
+iolake-osd --config /etc/objectio/osd.toml
 ```
 
 ## Verification
@@ -146,12 +146,12 @@ objectio-osd --config /etc/objectio/osd.toml
 After starting OSDs, verify the topology:
 
 ```bash
-# Check registered OSDs and their failure domains. obioctl talks to
+# Check registered OSDs and their failure domains. iolakectl talks to
 # the gateway's admin API, signed with the admin key:
-export OBJECTIO_ENDPOINT=http://gateway:9000
-export OBJECTIO_ACCESS_KEY=... OBJECTIO_SECRET_KEY=...
-obioctl cluster topology
-obioctl node list
+export IOLAKE_ENDPOINT=http://gateway:9000
+export IOLAKE_ACCESS_KEY=... IOLAKE_SECRET_KEY=...
+iolakectl cluster topology
+iolakectl node list
 
 # Example output (cluster topology):
 # 3 OSD(s): 1 region(s), 1 zone(s), 1 datacenter(s), 3 rack(s), 3 host(s)

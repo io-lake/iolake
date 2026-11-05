@@ -1,4 +1,4 @@
-//! Delta Sharing protocol server for `ObjectIO`.
+//! Delta Sharing protocol server for `IOLake`.
 //!
 //! Implements the Delta Sharing REST API v1 as an Axum sub-router.
 //! The router is nested at `/delta-sharing` in the gateway and is served
@@ -18,7 +18,7 @@ use axum::Router;
 use axum::routing::{get, post};
 use catalog::DeltaCatalog;
 use handlers::DeltaState;
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
 use std::sync::Arc;
 use std::time::Duration;
 use tonic::transport::Channel;
@@ -32,7 +32,7 @@ const DEFAULT_URL_TTL_SECS: u64 = 3600;
 /// Configuration for the Delta Sharing router.
 pub struct DeltaSharingConfig {
     /// Gateway public endpoint used to construct presigned URLs
-    /// (e.g. `http://localhost:9000` or `https://objectio.example.com`).
+    /// (e.g. `http://localhost:9000` or `https://iolake.example.com`).
     pub endpoint: String,
     /// AWS region string for `SigV4` presigned URL credential scope.
     pub region: String,

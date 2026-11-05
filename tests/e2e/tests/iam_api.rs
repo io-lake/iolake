@@ -4,7 +4,7 @@
 //! for S3 at once; one tenant can't see another's; a role assumed through
 //! STS acts with the role's policies.
 
-use objectio_e2e::{Cluster, Response};
+use iolake_e2e::{Cluster, Response};
 use serde_json::json;
 
 type Creds = (String, String);

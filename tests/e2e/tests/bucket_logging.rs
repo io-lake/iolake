@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
-use objectio_e2e::{Cluster, Response};
+use iolake_e2e::{Cluster, Response};
 use serde_json::json;
 
 /// Roll time the clusters here run with: a log object every few seconds.

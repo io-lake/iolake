@@ -1,4 +1,4 @@
-//! Scrub by placement group (B31 phase 4, objectio-docs core/pg-recovery.md).
+//! Scrub by placement group (B31 phase 4, iolake-docs core/pg-recovery.md).
 //!
 //! Each placement group is scrubbed every `scrub/every_seconds` (a week by
 //! default): every acting member reads back the shards it holds of the
@@ -20,8 +20,8 @@ use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use objectio_proto::metadata::PgScrub;
-use objectio_proto::storage::{ScrubPgRequest, storage_service_client::StorageServiceClient};
+use iolake_proto::metadata::PgScrub;
+use iolake_proto::storage::{ScrubPgRequest, storage_service_client::StorageServiceClient};
 
 /// Raft table of each placement group's scrub.
 pub(crate) const SCRUB_TABLE: &str = "pg_scrub";
@@ -93,22 +93,22 @@ pub fn render_metrics(out: &mut String) {
     use std::fmt::Write as _;
     for (name, help, v) in [
         (
-            "objectio_meta_scrub_bytes_total",
+            "iolake_meta_scrub_bytes_total",
             "Shard bytes read back and checked by placement-group scrubs",
             &BYTES,
         ),
         (
-            "objectio_meta_scrub_shards_total",
+            "iolake_meta_scrub_shards_total",
             "Shards checked by placement-group scrubs",
             &SHARDS,
         ),
         (
-            "objectio_meta_scrub_pgs_completed_total",
+            "iolake_meta_scrub_pgs_completed_total",
             "Placement-group scrubs completed",
             &COMPLETED,
         ),
         (
-            "objectio_meta_scrub_errors_total",
+            "iolake_meta_scrub_errors_total",
             "Scrub steps a member couldn't take (it didn't answer); retried next step",
             &ERRORS,
         ),
@@ -116,7 +116,7 @@ pub fn render_metrics(out: &mut String) {
         let _ = writeln!(out, "# HELP {name} {help}\n# TYPE {name} counter");
         let _ = writeln!(out, "{name} {}", v.load(Ordering::Relaxed));
     }
-    let name = "objectio_meta_scrub_shards_bad_total";
+    let name = "iolake_meta_scrub_shards_bad_total";
     let _ = writeln!(
         out,
         "# HELP {name} Shards a scrub found missing or failing their checksum (their PG's recovery \
@@ -134,12 +134,12 @@ pub fn render_metrics(out: &mut String) {
     );
     for (name, help, v) in [
         (
-            "objectio_meta_scrub_pgs_never",
+            "iolake_meta_scrub_pgs_never",
             "Placement groups not yet scrubbed (as last counted by the leader)",
             &NEVER,
         ),
         (
-            "objectio_meta_scrub_oldest_seconds",
+            "iolake_meta_scrub_oldest_seconds",
             "Age of the oldest completed scrub of a placement group: alert when it passes \
              twice scrub/every_seconds",
             &OLDEST_SECS,
@@ -248,7 +248,7 @@ impl MetaService {
             scrub.requested = true;
             match self
                 .cas_one(
-                    objectio_meta_store::CasTable::Named(SCRUB_TABLE.into()),
+                    iolake_meta_store::CasTable::Named(SCRUB_TABLE.into()),
                     &key,
                     held,
                     Some(scrub.encode_to_vec()),
@@ -386,7 +386,7 @@ impl MetaService {
             .topology
             .read()
             .all_nodes()
-            .filter(|n| n.status == objectio_common::NodeStatus::Active)
+            .filter(|n| n.status == iolake_common::NodeStatus::Active)
             .map(|n| *n.id.as_bytes())
             .collect();
         let members: Vec<(String, String)> = pg
@@ -534,7 +534,7 @@ impl MetaService {
             }
             match self
                 .cas_one(
-                    objectio_meta_store::CasTable::Named(SCRUB_TABLE.into()),
+                    iolake_meta_store::CasTable::Named(SCRUB_TABLE.into()),
                     &key,
                     held,
                     Some(scrub.encode_to_vec()),

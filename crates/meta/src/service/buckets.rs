@@ -6,7 +6,7 @@ impl MetaService {
     /// The dedup policy `bucket` resolves to: its own, then its tenant's,
     /// then the cluster default. In-memory only, so `GetPlacement` can
     /// return it at no cost.
-    pub fn effective_dedup(&self, bucket: &str) -> objectio_proto::dedup::Effective {
+    pub fn effective_dedup(&self, bucket: &str) -> iolake_proto::dedup::Effective {
         let (bucket_policy, tenant_name) = self
             .buckets
             .read()
@@ -17,9 +17,9 @@ impl MetaService {
         let cluster = self
             .config
             .read()
-            .get(objectio_proto::dedup::CLUSTER_KEY)
-            .and_then(|e| objectio_proto::dedup::cluster_from_config(&e.value));
-        objectio_proto::dedup::resolve(
+            .get(iolake_proto::dedup::CLUSTER_KEY)
+            .and_then(|e| iolake_proto::dedup::cluster_from_config(&e.value));
+        iolake_proto::dedup::resolve(
             bucket,
             &tenant_name,
             bucket_policy.as_ref(),
@@ -92,7 +92,7 @@ impl MetaService {
             return Ok(());
         }
         self.cas_one(
-            objectio_meta_store::CasTable::Named(OSD_PURGE_TABLE.into()),
+            iolake_meta_store::CasTable::Named(OSD_PURGE_TABLE.into()),
             &key,
             current,
             state.map(|s| s.as_bytes().to_vec()),
@@ -106,8 +106,8 @@ impl MetaService {
     pub(super) fn bucket_config_rows(
         &self,
         bucket: &str,
-    ) -> Vec<(objectio_meta_store::CasTable, String, Vec<u8>)> {
-        use objectio_meta_store::CasTable;
+    ) -> Vec<(iolake_meta_store::CasTable, String, Vec<u8>)> {
+        use iolake_meta_store::CasTable;
         let Some(store) = &self.store else {
             return Vec::new();
         };
@@ -118,7 +118,7 @@ impl MetaService {
             CasTable::Named("lifecycle_configs".into()),
             CasTable::Named("bucket_encryption_configs".into()),
         ] {
-            if let Some(v) = store.read_named(objectio_meta_store::cas_table_name(&table), bucket) {
+            if let Some(v) = store.read_named(iolake_meta_store::cas_table_name(&table), bucket) {
                 rows.push((table, bucket.to_string(), v));
             }
         }
@@ -227,7 +227,7 @@ impl MetaService {
         // written, all in the bucket's own commit.
         #[allow(clippy::type_complexity)] // was inside #[async_trait], which clippy did not see
         let mut config_ops: Vec<(
-            objectio_meta_store::CasTable,
+            iolake_meta_store::CasTable,
             String,
             Option<Vec<u8>>,
             Option<Vec<u8>>,
@@ -243,7 +243,7 @@ impl MetaService {
                 .find(|(_, k, _)| *k == key)
                 .map(|(_, _, v)| v.clone());
             config_ops.push((
-                objectio_meta_store::CasTable::Named(BUCKET_SETTINGS_TABLE.into()),
+                iolake_meta_store::CasTable::Named(BUCKET_SETTINGS_TABLE.into()),
                 key,
                 current,
                 Some(value.clone()),
@@ -255,7 +255,7 @@ impl MetaService {
             }
         }
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let mut ops = vec![CasOp {
                 table: CasTable::Buckets,
                 key: req.name.clone(),
@@ -293,7 +293,7 @@ impl MetaService {
             store.put_bucket(&req.name, &bucket);
             for (table, key, _, new_value) in &config_ops {
                 store.write_named(
-                    objectio_meta_store::cas_table_name(table),
+                    iolake_meta_store::cas_table_name(table),
                     key,
                     new_value.as_deref(),
                 );
@@ -347,7 +347,7 @@ impl MetaService {
         let config_rows = self.bucket_config_rows(&req.name);
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let mut ops = vec![CasOp {
                 table: CasTable::Buckets,
                 key: req.name.clone(),
@@ -380,7 +380,7 @@ impl MetaService {
         } else if let Some(store) = &self.store {
             store.delete_bucket(&req.name);
             for (table, key, _) in &config_rows {
-                store.write_named(objectio_meta_store::cas_table_name(table), key, None);
+                store.write_named(iolake_meta_store::cas_table_name(table), key, None);
             }
         }
 
@@ -464,7 +464,7 @@ impl MetaService {
         let new_value = Some(req.policy_json.as_bytes().to_vec());
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::BucketPolicies,
@@ -544,7 +544,7 @@ impl MetaService {
             .map(|v| v.as_bytes().to_vec());
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::BucketPolicies,
@@ -611,7 +611,7 @@ impl MetaService {
         };
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Buckets,
@@ -652,16 +652,16 @@ impl MetaService {
 
     pub(crate) async fn set_bucket_dedup(
         &self,
-        request: Request<objectio_proto::metadata::SetBucketDedupRequest>,
-    ) -> Result<Response<objectio_proto::metadata::SetBucketDedupResponse>, Status> {
-        use objectio_proto::metadata::{DedupMode, DedupScope};
+        request: Request<iolake_proto::metadata::SetBucketDedupRequest>,
+    ) -> Result<Response<iolake_proto::metadata::SetBucketDedupResponse>, Status> {
+        use iolake_proto::metadata::{DedupMode, DedupScope};
         let req = request.into_inner();
         // All-unset is no policy at all: the bucket inherits.
         let policy = req
             .policy
             .filter(|p| p.mode() != DedupMode::Unset || p.scope() != DedupScope::Unset);
         if let Some(p) = &policy {
-            objectio_proto::dedup::validate(p).map_err(Status::invalid_argument)?;
+            iolake_proto::dedup::validate(p).map_err(Status::invalid_argument)?;
         }
 
         let (expected_bytes, new_bucket, new_bytes) = {
@@ -678,7 +678,7 @@ impl MetaService {
         };
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Buckets,
@@ -708,20 +708,20 @@ impl MetaService {
         self.buckets.write().insert(req.bucket.clone(), new_bucket);
         info!("Set dedup policy for bucket '{}'", req.bucket);
         Ok(Response::new(
-            objectio_proto::metadata::SetBucketDedupResponse {},
+            iolake_proto::metadata::SetBucketDedupResponse {},
         ))
     }
 
     pub(crate) async fn get_dedup_policy(
         &self,
-        request: Request<objectio_proto::metadata::GetDedupPolicyRequest>,
-    ) -> Result<Response<objectio_proto::metadata::GetDedupPolicyResponse>, Status> {
+        request: Request<iolake_proto::metadata::GetDedupPolicyRequest>,
+    ) -> Result<Response<iolake_proto::metadata::GetDedupPolicyResponse>, Status> {
         let req = request.into_inner();
         let cluster = self
             .config
             .read()
-            .get(objectio_proto::dedup::CLUSTER_KEY)
-            .and_then(|e| objectio_proto::dedup::cluster_from_config(&e.value));
+            .get(iolake_proto::dedup::CLUSTER_KEY)
+            .and_then(|e| iolake_proto::dedup::cluster_from_config(&e.value));
         let (bucket, tenant_name) = if req.bucket.is_empty() {
             (None, String::new())
         } else {
@@ -736,14 +736,14 @@ impl MetaService {
         } else {
             self.tenants.read().get(&tenant_name).and_then(|t| t.dedup)
         };
-        let e = objectio_proto::dedup::resolve(
+        let e = iolake_proto::dedup::resolve(
             &req.bucket,
             &tenant_name,
             bucket.as_ref(),
             tenant.as_ref(),
             cluster.as_ref(),
         );
-        let mut resp = objectio_proto::metadata::GetDedupPolicyResponse {
+        let mut resp = iolake_proto::metadata::GetDedupPolicyResponse {
             bucket,
             tenant,
             cluster,
@@ -781,7 +781,7 @@ impl MetaService {
         };
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Buckets,
@@ -833,7 +833,7 @@ impl MetaService {
         };
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Buckets,
@@ -907,7 +907,7 @@ impl MetaService {
             .map(|c| c.encode_to_vec());
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Named("object_lock_configs".into()),
@@ -986,7 +986,7 @@ impl MetaService {
             .map(|c| c.encode_to_vec());
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Named("lifecycle_configs".into()),
@@ -1062,7 +1062,7 @@ impl MetaService {
         }
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Named("lifecycle_configs".into()),
@@ -1123,7 +1123,7 @@ impl MetaService {
             .map(|c| c.encode_to_vec());
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Named("bucket_encryption_configs".into()),
@@ -1180,8 +1180,8 @@ impl MetaService {
 
     pub(crate) async fn get_bucket_setting(
         &self,
-        request: Request<objectio_proto::metadata::GetBucketSettingRequest>,
-    ) -> Result<Response<objectio_proto::metadata::GetBucketSettingResponse>, Status> {
+        request: Request<iolake_proto::metadata::GetBucketSettingRequest>,
+    ) -> Result<Response<iolake_proto::metadata::GetBucketSettingResponse>, Status> {
         let req = request.into_inner();
         let value = self.store.as_ref().and_then(|s| {
             s.read_named(
@@ -1190,7 +1190,7 @@ impl MetaService {
             )
         });
         Ok(Response::new(
-            objectio_proto::metadata::GetBucketSettingResponse {
+            iolake_proto::metadata::GetBucketSettingResponse {
                 found: value.is_some(),
                 value: value.unwrap_or_default(),
             },
@@ -1199,8 +1199,8 @@ impl MetaService {
 
     pub(crate) async fn put_bucket_setting(
         &self,
-        request: Request<objectio_proto::metadata::PutBucketSettingRequest>,
-    ) -> Result<Response<objectio_proto::metadata::PutBucketSettingResponse>, Status> {
+        request: Request<iolake_proto::metadata::PutBucketSettingRequest>,
+    ) -> Result<Response<iolake_proto::metadata::PutBucketSettingResponse>, Status> {
         let req = request.into_inner();
         if req.name.is_empty() || req.name.contains('/') {
             return Err(Status::invalid_argument("invalid setting name"));
@@ -1216,11 +1216,11 @@ impl MetaService {
         let existed = current.is_some();
         if req.delete && !existed {
             return Ok(Response::new(
-                objectio_proto::metadata::PutBucketSettingResponse { existed },
+                iolake_proto::metadata::PutBucketSettingResponse { existed },
             ));
         }
         self.cas_one(
-            objectio_meta_store::CasTable::Named(BUCKET_SETTINGS_TABLE.into()),
+            iolake_meta_store::CasTable::Named(BUCKET_SETTINGS_TABLE.into()),
             &key,
             current,
             (!req.delete).then_some(req.value),
@@ -1228,7 +1228,7 @@ impl MetaService {
         )
         .await?;
         Ok(Response::new(
-            objectio_proto::metadata::PutBucketSettingResponse { existed },
+            iolake_proto::metadata::PutBucketSettingResponse { existed },
         ))
     }
 
@@ -1249,7 +1249,7 @@ impl MetaService {
         }
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Named("bucket_encryption_configs".into()),

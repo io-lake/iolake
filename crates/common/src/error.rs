@@ -1,14 +1,14 @@
-//! Error types for ObjectIO
+//! Error types for IOLake
 //!
 //! This module defines the common error types used throughout the system.
 
 use crate::types::BucketNameError;
 use thiserror::Error;
 
-/// Common result type for ObjectIO operations
+/// Common result type for IOLake operations
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Common error type for ObjectIO
+/// Common error type for IOLake
 #[derive(Debug, Error)]
 pub enum Error {
     // Storage errors

@@ -16,11 +16,11 @@
 //! ```
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use objectio_common::{DiskId, Error, Result};
+use iolake_common::{DiskId, Error, Result};
 use std::io::Write;
 use uuid::Uuid;
 
-/// Magic number for ObjectIO disk format
+/// Magic number for the disk format (from before the rename to IOLake; on disk, so kept)
 pub const MAGIC: [u8; 8] = *b"OBJECTIO";
 
 /// Current disk format version

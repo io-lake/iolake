@@ -9,10 +9,10 @@ use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
 use futures::future::join_all;
-use objectio_common::ErasureConfig;
-use objectio_erasure::ErasureCodec;
-use objectio_proto::metadata::{GetPlacementRequest, NodePlacement, ShardLocation, StripeMeta};
-use objectio_proto::stripe::{self, Scheme};
+use iolake_common::ErasureConfig;
+use iolake_erasure::ErasureCodec;
+use iolake_proto::metadata::{GetPlacementRequest, NodePlacement, ShardLocation, StripeMeta};
+use iolake_proto::stripe::{self, Scheme};
 use tracing::warn;
 use uuid::Uuid;
 
@@ -209,7 +209,7 @@ pub async fn read_stripe(
 /// Best effort: a shard that will not delete is leaked space, not lost
 /// data. Returns how many deletes failed.
 pub async fn free_stripes(meta: &MetaBlocks, pool: &OsdPool, stripes: &[StripeMeta]) -> usize {
-    use objectio_proto::storage::{DeleteShardRequest, ShardId};
+    use iolake_proto::storage::{DeleteShardRequest, ShardId};
 
     let futs = stripes.iter().flat_map(|stripe| {
         stripe.shards.iter().map(move |loc| async move {

@@ -1,13 +1,13 @@
 //! A rolling upgrade from the previous release, node by node, under
-//! traffic (objectio-docs core/upgrade-path.md, "How it is tested").
+//! traffic (iolake-docs core/upgrade-path.md, "How it is tested").
 //!
 //! Needs the previous release's binaries (a release with format levels),
 //! so it is ignored by default; run with `--ignored`, where it fails
 //! without them (CI: the `rolling upgrade` job):
 //!
 //! ```text
-//! OBJECTIO_PREVIOUS_RELEASE_BIN=$(scripts/upgrade-test/previous-release.sh) \
-//!   cargo test -p objectio-e2e --test rolling_upgrade -- --ignored
+//! IOLAKE_PREVIOUS_RELEASE_BIN=$(scripts/upgrade-test/previous-release.sh) \
+//!   cargo test -p iolake-e2e --test rolling_upgrade -- --ignored
 //! ```
 
 use std::collections::BTreeMap;
@@ -17,9 +17,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use objectio_common::version::{FORMAT_LEVEL, RELEASE};
-use objectio_e2e::ha::HaCluster;
-use objectio_e2e::{Cluster, Response};
+use iolake_common::version::{FORMAT_LEVEL, RELEASE};
+use iolake_e2e::ha::HaCluster;
+use iolake_e2e::{Cluster, Response};
 use serde_json::{Value, json};
 
 const METAS: usize = 3;
@@ -28,14 +28,14 @@ const GATEWAYS: usize = 2;
 const MASTER_KEY: &str = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=";
 
 fn previous_release() -> PathBuf {
-    let bin = std::env::var_os("OBJECTIO_PREVIOUS_RELEASE_BIN").map(PathBuf::from);
+    let bin = std::env::var_os("IOLAKE_PREVIOUS_RELEASE_BIN").map(PathBuf::from);
     let bin = bin.expect(
-        "OBJECTIO_PREVIOUS_RELEASE_BIN: the previous release's binaries \
+        "IOLAKE_PREVIOUS_RELEASE_BIN: the previous release's binaries \
          (scripts/upgrade-test/previous-release.sh)",
     );
     assert!(
-        bin.join("objectio-meta").is_file(),
-        "OBJECTIO_PREVIOUS_RELEASE_BIN={}: no objectio-meta there",
+        iolake_e2e::ha::bin(Some(&bin), "iolake-meta").is_file(),
+        "IOLAKE_PREVIOUS_RELEASE_BIN={}: no meta binary there",
         bin.display()
     );
     bin
@@ -124,9 +124,11 @@ fn on_release(v: &Value, kind: &str, release: &str) -> usize {
 /// A gateway from `bins`, against a cluster finalized past its level: it
 /// must not serve.
 fn old_gateway_is_refused(ha: &HaCluster, bins: &Path, path: &str) {
-    let port = objectio_e2e::free_port();
-    let mut child = Command::new(bins.join("objectio-gateway"))
-        .env("OBJECTIO_MASTER_KEY", MASTER_KEY)
+    let port = iolake_e2e::free_port();
+    let gateway = iolake_e2e::ha::bin(Some(bins), "iolake-gateway");
+    let master_key = iolake_e2e::ha::env_name(gateway.as_os_str(), "IOLAKE_MASTER_KEY");
+    let mut child = Command::new(gateway)
+        .env(master_key, MASTER_KEY)
         .args([
             "--listen",
             &format!("127.0.0.1:{port}"),
@@ -189,7 +191,14 @@ fn load(c: &Cluster, stored: &Stored) -> Loaded {
         json!({"name": "packs", "ec_type": 0, "ec_k": 2, "ec_m": 1, "enabled": true}),
     );
     assert!(r.status < 300, "pool: {}", r.text());
-    let r = c.request_with_headers("PUT", "/packed", &[], &[("x-objectio-pool", "packs")]);
+    // Both names of the pool header: a release before the rename to
+    // IOLake (0.1.0-rc.3) reads `x-objectio-pool`.
+    let r = c.request_with_headers(
+        "PUT",
+        "/packed",
+        &[],
+        &[("x-iolake-pool", "packs"), ("x-objectio-pool", "packs")],
+    );
     assert_eq!(r.status, 200, "/packed: {}", r.text());
     let put = |path: &str, bytes: Vec<u8>, headers: &[(&str, &[u8])]| -> Response {
         let r = c.request_signed("PUT", path, &bytes, headers, false);
@@ -431,7 +440,7 @@ fn roll_back_and_forward(ha: &mut HaCluster, prev: &Path, prev_level: u32, store
 }
 
 #[test]
-#[ignore = "needs the previous release's binaries in OBJECTIO_PREVIOUS_RELEASE_BIN; CI: rolling upgrade"]
+#[ignore = "needs the previous release's binaries in IOLAKE_PREVIOUS_RELEASE_BIN; CI: rolling upgrade"]
 fn a_rolling_upgrade_from_the_previous_release_loses_nothing() {
     let prev = previous_release();
     let mut ha = HaCluster::start_from(Some(&prev), METAS, OSDS, GATEWAYS);

@@ -1,6 +1,6 @@
 """SigV4 vectors, shared verbatim with the Go SDK.
 
-The same constants appear in sdk/go/objectio/sigv4_test.go. Two
+The same constants appear in sdk/go/iolake/sigv4_test.go. Two
 implementations of one algorithm drift silently; pinning both to the same
 bytes is what catches it.
 """
@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from objectio._sigv4 import (
+from iolake._sigv4 import (
     EMPTY_PAYLOAD_SHA256,
     canonical_query,
     escape,

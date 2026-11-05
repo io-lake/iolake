@@ -258,7 +258,7 @@ pub async fn list_objects(
     // Meta's listing index is the listing.
     let mut meta_client = state.meta_client.clone();
     {
-        use objectio_proto::metadata::ListObjectsRequest as MetaListReq;
+        use iolake_proto::metadata::ListObjectsRequest as MetaListReq;
         let meta_req = MetaListReq {
             bucket: bucket.clone(),
             prefix: prefix.clone(),
@@ -422,7 +422,7 @@ pub(crate) struct VersionListing {
 
 /// One OSD's version listing, read a page of whole keys at a time.
 pub(crate) struct VersionSource {
-    pub(crate) node: objectio_proto::metadata::ListingNode,
+    pub(crate) node: iolake_proto::metadata::ListingNode,
     /// Where its next page starts; `None` once it has no more.
     pub(crate) next: Option<String>,
     /// The last key it returned: everything up to here is in.
@@ -448,7 +448,7 @@ pub(crate) async fn gather_versions(
     version_id_marker: &str,
     max_keys: u32,
 ) -> Result<(std::collections::BTreeMap<String, Vec<ObjectMeta>>, bool), Response> {
-    use objectio_proto::storage::ListObjectVersionsMetaRequest;
+    use iolake_proto::storage::ListObjectVersionsMetaRequest;
     let bucket = bucket.to_string();
     let req = VersionListing {
         prefix: prefix.to_string(),

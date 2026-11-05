@@ -1,4 +1,4 @@
-# ObjectIO OSD Configuration - Single Node Deployment
+# IOLake OSD Configuration - Single Node Deployment
 #
 # One OSD on one server, with several drives. An OSD holds at most one
 # shard of a stripe, so this one keeps a single copy of each object (meta

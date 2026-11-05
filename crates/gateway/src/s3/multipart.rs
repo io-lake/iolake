@@ -259,7 +259,7 @@ pub(crate) async fn initiate_multipart_upload_internal(
                         StatusCode::SERVICE_UNAVAILABLE,
                     );
                 };
-                let dek = objectio_kms::generate_dek();
+                let dek = iolake_kms::generate_dek();
                 (
                     SseAlgorithm::SseS3 as i32,
                     String::new(),
@@ -281,7 +281,7 @@ pub(crate) async fn initiate_multipart_upload_internal(
                     .await
                 {
                     Ok(g) => g,
-                    Err(objectio_kms::KmsError::KeyNotFound(id)) => {
+                    Err(iolake_kms::KmsError::KeyNotFound(id)) => {
                         return S3Error::xml_response(
                             "KMS.NotFoundException",
                             &format!("KMS key '{id}' does not exist"),
@@ -414,14 +414,14 @@ pub(crate) async fn upload_part_internal(
 pub(crate) struct PartPlan {
     /// The upload's key: each of the part's stripes is encrypted with it
     /// and an IV of its own.
-    dek: Option<[u8; objectio_kms::DEK_LEN]>,
+    dek: Option<[u8; iolake_kms::DEK_LEN]>,
     sse_response_header: Option<&'static str>,
     sse_kms_key_id: String,
     sse_c_key_md5: String,
     /// The checksum algorithm the upload declared, computed for a part
     /// that sends none.
     declared_checksum: Option<crate::checksum::ChecksumAlgorithm>,
-    placement: objectio_proto::metadata::GetPlacementResponse,
+    placement: iolake_proto::metadata::GetPlacementResponse,
 }
 
 /// Everything an UploadPart of `size` bytes asks meta before its body
@@ -1514,7 +1514,7 @@ pub(crate) async fn abort_upload(
     bucket: &str,
     key: &str,
     upload_id: &str,
-) -> Result<Vec<objectio_proto::metadata::StripeMeta>, tonic::Status> {
+) -> Result<Vec<iolake_proto::metadata::StripeMeta>, tonic::Status> {
     let mut client = state.meta_client.clone();
     let abort = || AbortMultipartUploadRequest {
         bucket: bucket.to_string(),

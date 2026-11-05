@@ -1,0 +1,27 @@
+{{- if .Values.blockGateway.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "iolake.blockGateway.fullname" . }}
+  labels:
+    {{- include "iolake.labels" . | nindent 4 }}
+    app.kubernetes.io/component: block-gateway
+spec:
+  type: {{ .Values.blockGateway.service.type }}
+  ports:
+    - name: grpc
+      port: {{ .Values.blockGateway.service.grpcPort }}
+      targetPort: grpc
+      protocol: TCP
+    - name: nbd
+      port: {{ .Values.blockGateway.service.nbdPort }}
+      targetPort: nbd
+      protocol: TCP
+    - name: metrics
+      port: {{ .Values.blockGateway.service.metricsPort }}
+      targetPort: metrics
+      protocol: TCP
+  selector:
+    {{- include "iolake.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: block-gateway
+{{- end }}

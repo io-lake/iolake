@@ -1,11 +1,11 @@
 #!/bin/bash
-# B4 single-host baseline: ObjectIO, RustFS and SeaweedFS on the same disk,
+# B4 single-host baseline: IOLake, RustFS and SeaweedFS on the same disk,
 # driven by the same warp cells. Results (warp output per cell) land in
 # $BENCH/results; see the developer guide's performance page.
 #
-#   BENCH=/data/bench scripts/bench/baseline.sh objectio rustfs seaweedfs
+#   BENCH=/data/bench scripts/bench/baseline.sh iolake rustfs seaweedfs
 #
-# Needs in $BENCH/bin: warp, objectio-aio (release, --features io-uring),
+# Needs in $BENCH/bin: warp, iolake-aio (release, --features io-uring),
 # weed; and docker for RustFS. Ports 19000, 19010, 19020 (+ SeaweedFS's
 # 19080, 19333, 19888) must be free.
 set -u
@@ -31,17 +31,17 @@ bench() { # name host
 
 # 4+2 over six OSDs in one process. 64 GiB sparse disks: the default
 # 10 GiB fills during one 16 MiB PUT cell.
-objectio() {
-  rm -rf "$B/objectio"
+iolake() {
+  rm -rf "$B/iolake"
   for i in 0 1 2 3 4 5; do
-    mkdir -p "$B/objectio/osd-$i/disk0"
-    truncate -s 64G "$B/objectio/osd-$i/disk0/disk.raw"
+    mkdir -p "$B/iolake/osd-$i/disk0"
+    truncate -s 64G "$B/iolake/osd-$i/disk0/disk.raw"
   done
-  "$B/bin/objectio-aio" --data "$B/objectio" --osds 6 --ec-k 4 --ec-m 2 --port 19000 \
-    --strict-port --log-level warn > "$B/objectio.log" 2>&1 & local pid=$!
+  "$B/bin/iolake-aio" --data "$B/iolake" --osds 6 --ec-k 4 --ec-m 2 --port 19000 \
+    --strict-port --log-level warn > "$B/iolake.log" 2>&1 & local pid=$!
   wait_up http://127.0.0.1:19000/ && sleep 5
-  bench objectio 127.0.0.1:19000
-  kill $pid; wait $pid 2>/dev/null; rm -rf "$B/objectio"
+  bench iolake 127.0.0.1:19000
+  kill $pid; wait $pid 2>/dev/null; rm -rf "$B/iolake"
 }
 
 # EC:2 over six directories (4+2). They share one device here, which

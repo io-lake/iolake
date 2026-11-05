@@ -6,8 +6,8 @@
 //! a GET refreshes it itself only when it is missing or older than
 //! [`MAX_AGE`].
 
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
-use objectio_proto::metadata::{GetListingNodesRequest, ListingNode};
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_proto::metadata::{GetListingNodesRequest, ListingNode};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use tonic::transport::Channel;

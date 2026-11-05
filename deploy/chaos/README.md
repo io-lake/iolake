@@ -12,7 +12,7 @@ machines, each with its own kernel, network stack and block device:
 4+2 erasure coding; meta runs repair every minute.
 
 ```bash
-# Linux x86_64 objectio-meta, objectio-osd, objectio-gateway in <bin-dir>
+# Linux x86_64 iolake-meta, iolake-osd, iolake-gateway in <bin-dir>
 deploy/chaos/cluster.sh up <bin-dir>
 python3 deploy/chaos/chaos.py        # about 15 minutes
 deploy/chaos/cluster.sh down

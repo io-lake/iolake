@@ -262,7 +262,7 @@ pub(crate) async fn lookup_access_key_tenant(
 ) -> Option<String> {
     let mut client = state.meta_client.clone();
     let key = client
-        .get_access_key(objectio_proto::metadata::GetAccessKeyRequest {
+        .get_access_key(iolake_proto::metadata::GetAccessKeyRequest {
             access_key_id: access_key_id.to_string(),
         })
         .await
@@ -464,16 +464,16 @@ pub async fn admin_create_access_key(
 
     // Reject a malformed scope rather than storing one that matches nothing.
     if !params.scope.is_empty()
-        && let Err(msg) = objectio_auth::validate_scope(&params.scope)
+        && let Err(msg) = iolake_auth::validate_scope(&params.scope)
     {
         return admin_key_error(&msg);
     }
 
     let operation = match params.operation.as_deref() {
         None => ProtoKeyOperation::KeyOpReadWrite,
-        Some(raw) => match objectio_auth::Operation::parse(raw) {
-            Some(objectio_auth::Operation::Read) => ProtoKeyOperation::KeyOpRead,
-            Some(objectio_auth::Operation::ReadWrite) => ProtoKeyOperation::KeyOpReadWrite,
+        Some(raw) => match iolake_auth::Operation::parse(raw) {
+            Some(iolake_auth::Operation::Read) => ProtoKeyOperation::KeyOpRead,
+            Some(iolake_auth::Operation::ReadWrite) => ProtoKeyOperation::KeyOpReadWrite,
             None => {
                 return admin_key_error(&format!(
                     "invalid operation '{raw}': expected 'R'/'read-only' or 'RW'/'read-write'"

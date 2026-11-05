@@ -1,4 +1,4 @@
-//! Byte and object quotas, per bucket and per tenant (A8b; objectio-docs
+//! Byte and object quotas, per bucket and per tenant (A8b; iolake-docs
 //! `s3/quotas.md`).
 //!
 //! A write that adds data is admitted here before any of it is stored:

@@ -5,8 +5,8 @@ use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
-use objectio_e2e::Cluster;
-use objectio_e2e::ha::HaCluster;
+use iolake_e2e::Cluster;
+use iolake_e2e::ha::HaCluster;
 use serde_json::json;
 
 /// Shard reads the gateway has made so far.
@@ -15,7 +15,7 @@ fn shard_reads(c: &Cluster) -> u64 {
         .text()
         .lines()
         .filter(|l| {
-            l.starts_with("objectio_gateway_shard_latency_seconds_count")
+            l.starts_with("iolake_gateway_shard_latency_seconds_count")
                 && l.contains("direction=\"read\"")
         })
         .filter_map(|l| l.rsplit(' ').next()?.parse::<u64>().ok())

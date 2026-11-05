@@ -39,7 +39,7 @@ pub(crate) async fn bucket_lock(
 pub(crate) async fn bucket_lock_with(
     meta_client: &mut MetadataServiceClient<Channel>,
     bucket: &str,
-    pre: Option<Result<objectio_proto::metadata::GetObjectLockConfigResponse, tonic::Status>>,
+    pre: Option<Result<iolake_proto::metadata::GetObjectLockConfigResponse, tonic::Status>>,
 ) -> Result<Option<ProtoObjectLockConfig>, Response> {
     let answer = match pre {
         Some(answer) => answer,
@@ -85,7 +85,7 @@ pub(crate) async fn object_lock_for_write(
     meta_client: &mut MetadataServiceClient<Channel>,
     bucket: &str,
     headers: &HeaderMap,
-    pre: Option<Result<objectio_proto::metadata::GetObjectLockConfigResponse, tonic::Status>>,
+    pre: Option<Result<iolake_proto::metadata::GetObjectLockConfigResponse, tonic::Status>>,
 ) -> Result<(Option<ObjectRetention>, Option<LegalHold>), Response> {
     let header = |name: &str| {
         headers
@@ -161,7 +161,7 @@ pub(crate) async fn object_lock_for_write(
 /// NoSuchVersion, or 405 for a delete marker asked for by version.
 pub(crate) async fn object_to_read(
     state: &AppState,
-    nodes: &[objectio_proto::metadata::NodePlacement],
+    nodes: &[iolake_proto::metadata::NodePlacement],
     bucket: &str,
     key: &str,
     version_id: Option<&str>,
@@ -174,7 +174,7 @@ pub(crate) async fn object_to_read(
 /// shards kept with its metadata (B21), so a small GET reads none.
 pub(crate) async fn object_to_read_with(
     state: &AppState,
-    nodes: &[objectio_proto::metadata::NodePlacement],
+    nodes: &[iolake_proto::metadata::NodePlacement],
     bucket: &str,
     key: &str,
     version_id: Option<&str>,

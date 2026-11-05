@@ -11,7 +11,7 @@
 //! an upload id and a set of part `ETag`s, across the gateway, meta and the
 //! OSD. Nothing about that is visible from inside one component.
 
-use objectio_e2e::{Cluster, Response};
+use iolake_e2e::{Cluster, Response};
 use serde_json::json;
 use std::fmt::Write as _;
 
@@ -520,7 +520,7 @@ fn aborting_frees_parts_wherever_they_were_placed() {
 /// the parts were freed and a retry was told `NoSuchUpload`.
 #[test]
 fn a_completion_that_fails_to_store_can_be_retried() {
-    use objectio_e2e::ha::HaCluster;
+    use iolake_e2e::ha::HaCluster;
     let mut ha = HaCluster::start(1, 6, 1);
     let _ = ha.await_leader(std::time::Duration::from_secs(30));
     let c = &ha.clients[0];
@@ -631,7 +631,7 @@ fn a_completion_whose_answer_was_lost_completes_on_the_retry() {
 /// acknowledged with one copy, its data on one disk.
 #[test]
 fn a_replicated_part_is_acknowledged_with_the_replica_quorum() {
-    use objectio_e2e::ha::HaCluster;
+    use iolake_e2e::ha::HaCluster;
     use std::time::Duration;
 
     // Three OSDs, all three the pool's one placement group: none to stand
@@ -646,7 +646,7 @@ fn a_replicated_part_is_acknowledged_with_the_replica_quorum() {
             "failure_domain": "osd", "enabled": true}),
     );
     assert!(r.status < 300, "pool: {}", r.text());
-    c.request_with_headers("PUT", "/rep", &[], &[("x-objectio-pool", "rep3")])
+    c.request_with_headers("PUT", "/rep", &[], &[("x-iolake-pool", "rep3")])
         .expect(200);
     let body: Vec<u8> = (0..PART).map(|i| u8::try_from(i % 251).unwrap()).collect();
     c.request("PUT", "/rep/whole", &body).expect(200);
@@ -679,7 +679,7 @@ fn a_replicated_part_is_acknowledged_with_the_replica_quorum() {
 /// shards on disk (5 of 4+2), and 503 short of that.
 #[test]
 fn an_erasure_coded_part_is_acknowledged_with_a_puts_quorum() {
-    use objectio_e2e::ha::HaCluster;
+    use iolake_e2e::ha::HaCluster;
     use std::time::Duration;
 
     // Six OSDs, all six the pool's one placement group: none to stand in
@@ -694,7 +694,7 @@ fn an_erasure_coded_part_is_acknowledged_with_a_puts_quorum() {
             "failure_domain": "osd", "enabled": true}),
     );
     assert!(r.status < 300, "pool: {}", r.text());
-    c.request_with_headers("PUT", "/ecb", &[], &[("x-objectio-pool", "ec42")])
+    c.request_with_headers("PUT", "/ecb", &[], &[("x-iolake-pool", "ec42")])
         .expect(200);
     let body: Vec<u8> = (0..PART).map(|i| u8::try_from(i % 251).unwrap()).collect();
     c.request("PUT", "/ecb/whole", &body).expect(200);

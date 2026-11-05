@@ -551,7 +551,7 @@ pub async fn pool(cmd: PoolCmd, ctx: &mut Ctx<'_, '_>) -> Result<()> {
     Ok(())
 }
 
-/// `obioctl pg`: placement groups and what peering last found (B31).
+/// `iolakectl pg`: placement groups and what peering last found (B31).
 pub async fn pg(cmd: PgCmd, ctx: &mut Ctx<'_, '_>) -> Result<()> {
     match cmd {
         PgCmd::List { pool, state } => {
@@ -736,7 +736,7 @@ pub async fn pg(cmd: PgCmd, ctx: &mut Ctx<'_, '_>) -> Result<()> {
                 .await?
                 .json()?;
             ctx.out.emit(&v, |_| {
-                format!("pg {pool}/{pg_id}: scrub requested (obioctl pg get {pg_id} --pool {pool} shows it)")
+                format!("pg {pool}/{pg_id}: scrub requested (iolakectl pg get {pg_id} --pool {pool} shows it)")
             })?;
         }
     }

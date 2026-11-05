@@ -10,9 +10,9 @@
       "icon": "external link",
       "includeVars": true,
       "keepTime": true,
-      "tags": ["objectio"],
+      "tags": ["iolake"],
       "targetBlank": false,
-      "title": "ObjectIO Dashboards",
+      "title": "IOLake Dashboards",
       "type": "dashboards"
     }
   ],
@@ -59,7 +59,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_disk_healthy",
+          "expr": "iolake_disk_healthy",
           "legendFormat": "{{osd_id}} - {{disk}}",
           "refId": "A"
         }
@@ -109,7 +109,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_disk_smart_temperature_celsius",
+          "expr": "iolake_disk_smart_temperature_celsius",
           "legendFormat": "{{osd_id}} - {{device}}",
           "refId": "A"
         }
@@ -150,7 +150,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_disk_smart_health_score",
+          "expr": "iolake_disk_smart_health_score",
           "legendFormat": "{{osd_id}} - {{device}}",
           "refId": "A"
         }
@@ -204,7 +204,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_disk_smart_temperature_celsius",
+          "expr": "iolake_disk_smart_temperature_celsius",
           "legendFormat": "{{osd_id}} - {{device}}",
           "refId": "A"
         }
@@ -253,7 +253,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_disk_smart_reallocated_sectors",
+          "expr": "iolake_disk_smart_reallocated_sectors",
           "legendFormat": "{{osd_id}} - {{device}}",
           "refId": "A"
         }
@@ -293,7 +293,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_disk_smart_pending_sectors",
+          "expr": "iolake_disk_smart_pending_sectors",
           "legendFormat": "{{osd_id}} - {{device}}",
           "refId": "A"
         }
@@ -334,7 +334,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_disk_smart_power_on_hours",
+          "expr": "iolake_disk_smart_power_on_hours",
           "legendFormat": "{{osd_id}} - {{device}}",
           "refId": "A"
         }
@@ -385,7 +385,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_disk_smart_predicted_failure_days",
+          "expr": "iolake_disk_smart_predicted_failure_days",
           "legendFormat": "{{osd_id}} - {{device}}",
           "refId": "A"
         }
@@ -397,7 +397,7 @@
   "refresh": "30s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["objectio", "disk", "smart", "health"],
+  "tags": ["iolake", "disk", "smart", "health"],
   "templating": {
     "list": [
       {
@@ -420,8 +420,8 @@
   "time": { "from": "now-6h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "ObjectIO - Disk Health",
-  "uid": "objectio-disk-health",
+  "title": "IOLake - Disk Health",
+  "uid": "iolake-disk-health",
   "version": 1,
   "weekStart": ""
 }

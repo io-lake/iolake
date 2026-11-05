@@ -1,7 +1,7 @@
 //! `GET /_admin/meta/export`: a backup of meta's whole state machine, as
-//! the leader streams it (objectio-docs core/meta.md, "Backup, restore and
+//! the leader streams it (iolake-docs core/meta.md, "Backup, restore and
 //! losing a majority"). System admin only. The body is the backup file;
-//! `obioctl meta export` checks it as it arrives.
+//! `iolakectl meta export` checks it as it arrives.
 
 use std::sync::Arc;
 
@@ -11,8 +11,8 @@ use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use futures::StreamExt as _;
-use objectio_auth::AuthResult;
-use objectio_proto::metadata::ExportMetaRequest;
+use iolake_auth::AuthResult;
+use iolake_proto::metadata::ExportMetaRequest;
 use serde_json::json;
 
 use crate::s3::AppState;
@@ -57,7 +57,7 @@ pub async fn export(
         .header(header::CONTENT_TYPE, "application/octet-stream")
         .header(
             header::CONTENT_DISPOSITION,
-            "attachment; filename=\"objectio-meta.backup\"",
+            "attachment; filename=\"iolake-meta.backup\"",
         )
         .body(Body::from_stream(body))
         .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())

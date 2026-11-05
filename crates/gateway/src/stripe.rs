@@ -2,7 +2,7 @@
 //! pack's.
 //!
 //! Which OSD each shard goes to and when the write counts as stored are
-//! [`objectio_proto::stripe`]'s rules, which the block gateway keeps too.
+//! [`iolake_proto::stripe`]'s rules, which the block gateway keeps too.
 //! This adds how the gateway codes a stripe and sends its shards (each
 //! fenced by the placement group's epoch, over Transfer Engine where it
 //! can), what it records as sent, and how a write short of its quorum is
@@ -13,10 +13,10 @@ use std::future::Future;
 use axum::http::StatusCode;
 use axum::response::Response;
 use bytes::Bytes;
-use objectio_erasure::ErasureCodec;
-use objectio_proto::metadata::{GetPlacementResponse, NodePlacement, ShardLocation};
-use objectio_proto::storage::PgRef;
-pub use objectio_proto::stripe::{Scheme, Short};
+use iolake_erasure::ErasureCodec;
+use iolake_proto::metadata::{GetPlacementResponse, NodePlacement, ShardLocation};
+use iolake_proto::storage::PgRef;
+pub use iolake_proto::stripe::{Scheme, Short};
 
 use crate::osd_pool::{OsdPool, OsdPoolError, PendingShards, RdmaSource, StalePlacement};
 use crate::s3::S3Error;
@@ -36,7 +36,7 @@ impl<'a> Placed<'a> {
         Self {
             nodes: &placement.nodes,
             scheme: Scheme::of(placement),
-            fence: objectio_proto::stripe::fence(placement),
+            fence: iolake_proto::stripe::fence(placement),
         }
     }
 }
@@ -51,7 +51,7 @@ pub struct Coder {
 impl Coder {
     /// # Errors
     /// A scheme the codec can't keep.
-    pub fn new(scheme: Scheme) -> objectio_common::Result<Self> {
+    pub fn new(scheme: Scheme) -> iolake_common::Result<Self> {
         Ok(Self {
             scheme,
             codec: scheme.erasure().map(ErasureCodec::new).transpose()?,
@@ -67,7 +67,7 @@ impl Coder {
 
     /// # Errors
     /// The codec refusing the data.
-    pub fn shards(&self, data: Bytes) -> objectio_common::Result<Vec<Bytes>> {
+    pub fn shards(&self, data: Bytes) -> iolake_common::Result<Vec<Bytes>> {
         match &self.codec {
             None => Ok(vec![data; self.scheme.width()]),
             Some(codec) => codec.encode_bytes(&data),
@@ -87,7 +87,7 @@ pub fn encode(
     coder: &Coder,
     rdma: Option<&crate::rdma::GatewayRdma>,
     data: Bytes,
-) -> objectio_common::Result<(Vec<Bytes>, Option<u64>)> {
+) -> iolake_common::Result<(Vec<Bytes>, Option<u64>)> {
     let width = coder.scheme.width();
     let slot = rdma.zip(coder.codec()).and_then(|(r, codec)| {
         r.stripe_slot(codec.stripe_len(data.len()))
@@ -133,7 +133,7 @@ pub async fn write_stripe(
     let (k, m) = placed.scheme.shard_code();
     let pg = placed.fence.as_ref();
     let rdma = rdma.as_ref();
-    objectio_proto::stripe::write(
+    iolake_proto::stripe::write(
         placed.scheme,
         placed.nodes,
         shards,

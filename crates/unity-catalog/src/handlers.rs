@@ -27,9 +27,9 @@ use axum::Extension;
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use objectio_auth::AuthResult;
-use objectio_auth::policy::{BucketPolicy, PolicyDecision, PolicyEvaluator, RequestContext};
-use objectio_proto::metadata::{GetPolicyRequest, ListAttachedPoliciesRequest};
+use iolake_auth::AuthResult;
+use iolake_auth::policy::{BucketPolicy, PolicyDecision, PolicyEvaluator, RequestContext};
+use iolake_proto::metadata::{GetPolicyRequest, ListAttachedPoliciesRequest};
 use std::sync::Arc;
 
 type Result<T> = std::result::Result<T, UnityError>;
@@ -41,7 +41,7 @@ pub struct UnityState {
     /// Principals (user/group ARNs) granted admin access for catalog/schema/table policy management.
     pub admin_principals: Vec<String>,
     /// STS provider for `temporary-table-credentials`. `None` disables vending.
-    pub sts_provider: Option<objectio_auth::sts::StsProvider>,
+    pub sts_provider: Option<iolake_auth::sts::StsProvider>,
     /// S3 endpoint URL surfaced alongside vended credentials.
     pub s3_endpoint: String,
     /// Authentication is on (the gateway runs without `--no-auth`): a
@@ -102,7 +102,7 @@ enum Caller<'a> {
 /// anything.
 fn caller<'a>(state: &UnityState, auth: Option<&'a Extension<AuthResult>>) -> Result<Caller<'a>> {
     match auth {
-        Some(Extension(a)) if a.auth_mode != objectio_auth::AuthMode::Anonymous => {
+        Some(Extension(a)) if a.auth_mode != iolake_auth::AuthMode::Anonymous => {
             Ok(Caller::Identity(a))
         }
         _ if state.auth_required => Err(UnityError::unauthorized("Authentication required")),
@@ -118,7 +118,7 @@ async fn is_tenant_admin(state: &UnityState, tenant: &str, auth: &AuthResult) ->
     let resp = state
         .catalog
         .meta_client()
-        .get_tenant(objectio_proto::metadata::GetTenantRequest {
+        .get_tenant(iolake_proto::metadata::GetTenantRequest {
             name: tenant.to_string(),
         })
         .await
@@ -148,7 +148,7 @@ impl CatalogAccess<'_> {
     /// Vend nothing for a location outside the catalog's storage root: meta
     /// refuses to record one, and the credentials would be scoped to it.
     fn confine(&self, location: &str) -> Result<()> {
-        if objectio_common::location::within(location, &self.root) {
+        if iolake_common::location::within(location, &self.root) {
             Ok(())
         } else {
             Err(UnityError::forbidden(format!(
@@ -613,7 +613,7 @@ async fn attach_default_unity_bucket_policy(
     state: &UnityState,
     bucket: &str,
 ) -> std::result::Result<(), tonic::Status> {
-    use objectio_proto::metadata::SetBucketPolicyRequest;
+    use iolake_proto::metadata::SetBucketPolicyRequest;
     let policy_json = default_unity_bucket_policy_json(bucket);
     state
         .catalog
@@ -1007,7 +1007,7 @@ pub async fn create_function(
         serde_json::to_string(&req.return_params)
             .map_err(|e| UnityError::bad_request(format!("invalid return_params: {e}")))?
     };
-    let proto_req = objectio_proto::metadata::UnityCreateFunctionRequest {
+    let proto_req = iolake_proto::metadata::UnityCreateFunctionRequest {
         catalog_name: req.catalog_name,
         schema_name: req.schema_name,
         name: req.name,
@@ -1138,7 +1138,7 @@ pub async fn create_volume(
         "unity:CreateVolume",
     )
     .await?;
-    let proto_req = objectio_proto::metadata::UnityCreateVolumeRequest {
+    let proto_req = iolake_proto::metadata::UnityCreateVolumeRequest {
         catalog_name: req.catalog_name,
         schema_name: req.schema_name,
         name: req.name,
@@ -1255,7 +1255,7 @@ pub async fn create_model(
         "unity:CreateModel",
     )
     .await?;
-    let proto_req = objectio_proto::metadata::UnityCreateModelRequest {
+    let proto_req = iolake_proto::metadata::UnityCreateModelRequest {
         catalog_name: req.catalog_name,
         schema_name: req.schema_name,
         name: req.name,
@@ -1371,7 +1371,7 @@ pub async fn create_model_version(
     req.catalog_name = catalog;
     req.schema_name = schema;
     req.model_name = name;
-    let proto_req = objectio_proto::metadata::UnityCreateModelVersionRequest {
+    let proto_req = iolake_proto::metadata::UnityCreateModelVersionRequest {
         catalog_name: req.catalog_name,
         schema_name: req.schema_name,
         model_name: req.model_name,
@@ -1509,8 +1509,8 @@ pub async fn temporary_table_credentials(
     // onto our internal enum. Anything unrecognised is treated as the
     // safer Read — never silently widen.
     let operation = match req.operation.to_ascii_uppercase().as_str() {
-        "READ_WRITE" => objectio_auth::sts::Operation::ReadWrite,
-        _ => objectio_auth::sts::Operation::Read,
+        "READ_WRITE" => iolake_auth::sts::Operation::ReadWrite,
+        _ => iolake_auth::sts::Operation::Read,
     };
     access.confine(&table.storage_location)?;
     // Held to the catalog's tenant: a location in another tenant's bucket
@@ -1564,8 +1564,8 @@ pub async fn temporary_volume_credentials(
         Caller::Unchecked => "anonymous",
     };
     let operation = match req.operation.to_ascii_uppercase().as_str() {
-        "READ_WRITE" => objectio_auth::sts::Operation::ReadWrite,
-        _ => objectio_auth::sts::Operation::Read,
+        "READ_WRITE" => iolake_auth::sts::Operation::ReadWrite,
+        _ => iolake_auth::sts::Operation::Read,
     };
     access.confine(&volume.storage_location)?;
     let creds = sts.issue(
@@ -1758,7 +1758,7 @@ pub async fn set_table_security(
     .await?;
     let row_filter = req
         .row_filter
-        .map(|rf| objectio_proto::metadata::UnityRowFilter {
+        .map(|rf| iolake_proto::metadata::UnityRowFilter {
             function_full_name: rf.function_full_name,
             input_column_names: rf.input_column_names,
         });
@@ -1768,7 +1768,7 @@ pub async fn set_table_security(
         .map(|(col, m)| {
             (
                 col,
-                objectio_proto::metadata::UnityColumnMask {
+                iolake_proto::metadata::UnityColumnMask {
                     function_full_name: m.function_full_name,
                     using_column_names: m.using_column_names,
                 },

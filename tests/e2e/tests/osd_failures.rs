@@ -13,8 +13,8 @@
 
 use std::time::{Duration, Instant};
 
-use objectio_e2e::Cluster;
-use objectio_e2e::ha::HaCluster;
+use iolake_e2e::Cluster;
+use iolake_e2e::ha::HaCluster;
 use serde_json::json;
 
 /// The OSD each test fails.
@@ -70,7 +70,7 @@ fn setup(c: &Cluster) {
 /// was, and how it went (status, time).
 fn every_request(c: &Cluster, round: usize) -> Vec<(&'static str, u16, Duration)> {
     let mut out = Vec::new();
-    let mut time = |what: &'static str, expect: u16, f: &dyn Fn() -> objectio_e2e::Response| {
+    let mut time = |what: &'static str, expect: u16, f: &dyn Fn() -> iolake_e2e::Response| {
         let started = Instant::now();
         let r = f();
         let took = started.elapsed();

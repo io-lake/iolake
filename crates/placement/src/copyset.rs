@@ -33,7 +33,7 @@
 //! samples from — one pool per `(tier, failure_domain_level, k+m)`
 //! triple.
 
-use objectio_common::{FailureDomain, NodeId};
+use iolake_common::{FailureDomain, NodeId};
 use rand::rngs::StdRng;
 use rand::seq::{IteratorRandom, SliceRandom};
 use rand::{Rng, SeedableRng};
@@ -104,7 +104,7 @@ pub enum CopysetError {
 }
 
 /// How a pool's copies are spread over failure domains (B31 phase 1b,
-/// objectio-docs `core/pg-recovery.md`), as a Ceph CRUSH rule says "choose
+/// iolake-docs `core/pg-recovery.md`), as a Ceph CRUSH rule says "choose
 /// 3 racks, then 2 hosts in each".
 ///
 /// Each copyset uses `domains` distinct domains at `level`, at most
@@ -610,7 +610,7 @@ fn sample_copyset(
 mod tests {
     use super::*;
     use crate::topology::{ClusterTopology, NodeInfo};
-    use objectio_common::NodeStatus;
+    use iolake_common::NodeStatus;
     use std::net::SocketAddr;
 
     use crate::topology::FailureDomainInfo;

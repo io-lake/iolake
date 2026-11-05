@@ -2,7 +2,7 @@
 //! owner has `FULL_CONTROL` of everything in it, and access is granted by
 //! policies alone. An ACL saying just that is accepted; no other is.
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 const PUBLIC_READ: &str = "<AccessControlPolicy><Owner><ID>x</ID></Owner><AccessControlList>\

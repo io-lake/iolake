@@ -1,5 +1,5 @@
 //! Where the OSD keeps shard bytes and their locations, as an interface
-//! (B27, objectio-docs `core/osd-engines.md`): what the OSD's handlers need
+//! (B27, iolake-docs `core/osd-engines.md`): what the OSD's handlers need
 //! of the engine, so one engine can replace another. [`BlockStore`] (raw
 //! disks of checksummed blocks, locations recorded in the metadata index)
 //! is the implementation today.
@@ -28,10 +28,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
-use objectio_common::version::SMALL_SHARD_MAX;
-use objectio_proto::storage::{ShardId, ShardState, SmallShard};
-use objectio_storage::metadata::{MetaIndex, MetadataKey, MetadataOp};
-use objectio_storage::{BlockHeader, DiskManager};
+use iolake_common::version::SMALL_SHARD_MAX;
+use iolake_proto::storage::{ShardId, ShardState, SmallShard};
+use iolake_storage::metadata::{MetaIndex, MetadataKey, MetadataOp};
+use iolake_storage::{BlockHeader, DiskManager};
 use parking_lot::RwLock;
 use tonic::Status;
 use tracing::{debug, error, info, warn};
@@ -209,17 +209,17 @@ thread_local! {
 
 /// An injected "no room" (ENOSPC), as the storage engine reports one.
 #[cfg(test)]
-fn injected_no_room(what: &str) -> objectio_common::Error {
-    objectio_common::Error::io(
+fn injected_no_room(what: &str) -> iolake_common::Error {
+    iolake_common::Error::io(
         format_args!("injected: {what}"),
         &std::io::Error::from(std::io::ErrorKind::StorageFull),
     )
 }
 
 #[cfg(test)]
-fn location_records_fail() -> objectio_common::Result<()> {
+fn location_records_fail() -> iolake_common::Result<()> {
     if LOCATION_RECORDS_FAIL.with(std::cell::Cell::get) {
-        return Err(objectio_common::Error::storage(
+        return Err(iolake_common::Error::storage(
             "injected: the metadata log is unwritable",
         ));
     }
@@ -234,11 +234,7 @@ fn location_records_fail() -> objectio_common::Result<()> {
 /// for it (ENOSPC, EDQUOT), as a disk refused at its full ratio is, so the
 /// gateway answers 507 rather than taking this OSD for unreachable;
 /// otherwise `otherwise`.
-pub(crate) fn write_failed(
-    what: &str,
-    e: &objectio_common::Error,
-    otherwise: tonic::Code,
-) -> Status {
+pub(crate) fn write_failed(what: &str, e: &iolake_common::Error, otherwise: tonic::Code) -> Status {
     if e.is_out_of_space() {
         Status::resource_exhausted(format!("{what}: no room: {e}"))
     } else {
@@ -561,7 +557,7 @@ pub(crate) fn persist_shard_location(
     shard_key: &str,
     loc: &ShardLocation,
     old: Option<&ShardLocation>,
-) -> objectio_common::Result<()> {
+) -> iolake_common::Result<()> {
     #[cfg(test)]
     location_records_fail()?;
     meta_store.write(location_ops(shard_key, loc, old))
@@ -573,7 +569,7 @@ fn forget_shard_location(
     meta_store: &dyn MetaIndex,
     shard_key: &str,
     old: &ShardLocation,
-) -> objectio_common::Result<()> {
+) -> iolake_common::Result<()> {
     #[cfg(test)]
     location_records_fail()?;
     let mut ops = vec![MetadataOp::Delete {
@@ -673,7 +669,7 @@ impl ShardIndex {
         &self,
         key: &str,
         loc: &ShardLocation,
-    ) -> objectio_common::Result<Option<ShardLocation>> {
+    ) -> iolake_common::Result<Option<ShardLocation>> {
         let _key = self.lock(key);
         let old = self.get(key);
         persist_shard_location(&*self.store, key, loc, old.as_ref())?;
@@ -689,7 +685,7 @@ impl ShardIndex {
         key: &str,
         loc: &ShardLocation,
         extra: Vec<(MetadataKey, Vec<u8>)>,
-    ) -> objectio_common::Result<Option<ShardLocation>> {
+    ) -> iolake_common::Result<Option<ShardLocation>> {
         let _key = self.lock(key);
         let old = self.get(key);
         #[cfg(test)]
@@ -706,7 +702,7 @@ impl ShardIndex {
 
     /// Forget `key` durably; where the shard was, if it was here. Its
     /// blocks may be freed only after this returns.
-    fn forget(&self, key: &str) -> objectio_common::Result<Option<ShardLocation>> {
+    fn forget(&self, key: &str) -> iolake_common::Result<Option<ShardLocation>> {
         let _key = self.lock(key);
         let Some(old) = self.get(key) else {
             return Ok(None);
@@ -828,16 +824,16 @@ thread_local! {
 
 /// Time of each shard's disk operation on this OSD: `write` (the block),
 /// `sync` (making it durable before the write is acknowledged), `read`.
-static DISK_SECONDS: std::sync::LazyLock<objectio_common::histogram::HistogramVec> =
+static DISK_SECONDS: std::sync::LazyLock<iolake_common::histogram::HistogramVec> =
     std::sync::LazyLock::new(|| {
-        objectio_common::histogram::HistogramVec::new(objectio_common::histogram::LATENCY_BUCKETS)
+        iolake_common::histogram::HistogramVec::new(iolake_common::histogram::LATENCY_BUCKETS)
     });
 
 /// Disk operation latency, as a Prometheus family.
 pub fn render_disk_metrics(out: &mut String, osd_label: &str) {
     DISK_SECONDS.render(
         out,
-        "objectio_osd_disk_seconds",
+        "iolake_osd_disk_seconds",
         "Time of one shard disk operation: write, sync (before the write is acknowledged), read",
         osd_label,
     );
@@ -884,7 +880,7 @@ impl Disks {
                     // the OSD destroying them. It stays as it is and the
                     // OSD doesn't start, saying why.
                     if std::path::Path::new(path).exists() {
-                        match objectio_storage::is_blank(path) {
+                        match iolake_storage::is_blank(path) {
                             Ok(true) => {}
                             Ok(false) => {
                                 return Err(format!(
@@ -925,7 +921,7 @@ impl Disks {
                     // Get device/file size - for block devices we need to check
                     let size = if std::path::Path::new(path).exists() {
                         // Use raw_io to get size
-                        let rf = objectio_storage::RawFile::open(path, true)
+                        let rf = iolake_storage::RawFile::open(path, true)
                             .map_err(|e| format!("Failed to check {}: {}", path, e))?;
                         rf.size()
                     } else {
@@ -1948,7 +1944,7 @@ pub(crate) fn rot_block(
         .unwrap();
     let len = f.metadata().unwrap().len();
     // Where blocks start on a disk of this size, as it was formatted.
-    let data_offset = objectio_storage::layout::Superblock::new(len, block_size)
+    let data_offset = iolake_storage::layout::Superblock::new(len, block_size)
         .unwrap()
         .data_offset;
     let start = data_offset + info.offset;
@@ -1983,8 +1979,8 @@ pub(crate) fn rot_small(meta: &dyn MetaIndex, id: &ShardId, rot: impl FnOnce(&mu
 #[cfg(test)]
 pub(crate) mod conformance {
     use super::{ShardInfo, ShardStore};
-    use objectio_proto::storage::{ShardId, ShardState, SmallShard};
-    use objectio_storage::metadata::{MetaIndex, MetadataKey};
+    use iolake_proto::storage::{ShardId, ShardState, SmallShard};
+    use iolake_storage::metadata::{MetaIndex, MetadataKey};
     use std::path::Path;
     use std::sync::Arc;
 
@@ -2289,7 +2285,7 @@ pub(crate) mod conformance {
             .expect("kept with its metadata");
         assert_eq!(got, small(&id(12, 0), &bytes));
         assert!(store.small_shard(&id(12, 1)).is_none());
-        let too_big = data(13, objectio_common::version::SMALL_SHARD_MAX + 1);
+        let too_big = data(13, iolake_common::version::SMALL_SHARD_MAX + 1);
         let err = store
             .write_with_metadata(small(&id(12, 2), &too_big), entry())
             .unwrap_err();
@@ -2357,15 +2353,15 @@ pub(crate) mod conformance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use objectio_storage::metadata::{MetadataStore, MetadataStoreConfig};
+    use iolake_storage::metadata::{MetadataStore, MetadataStoreConfig};
     use std::collections::HashMap;
 
     const BLOCK: u32 = 64 * 1024;
 
     fn open(dir: &Path) -> conformance::Opened {
         let meta_dir = dir.join("state");
-        let meta = objectio_storage::metadata::open(MetadataStoreConfig::with_data_dir(&meta_dir))
-            .unwrap();
+        let meta =
+            iolake_storage::metadata::open(MetadataStoreConfig::with_data_dir(&meta_dir)).unwrap();
         let disks = Disks::open(
             &[dir.join("disk.raw").display().to_string()],
             BLOCK,
@@ -2697,7 +2693,7 @@ mod tests {
     /// there), its metadata in `dir/state`.
     fn open_disks(dir: &Path, names: &[&str]) -> Result<(BlockStore, Arc<dyn MetaIndex>), String> {
         let meta =
-            objectio_storage::metadata::open(MetadataStoreConfig::with_data_dir(dir.join("state")))
+            iolake_storage::metadata::open(MetadataStoreConfig::with_data_dir(dir.join("state")))
                 .unwrap();
         open_disks_on(dir, names, meta)
     }
@@ -2989,15 +2985,15 @@ mod tests {
             }
             self.0.get(key)
         }
-        fn try_get(&self, key: &MetadataKey) -> objectio_common::Result<Option<Vec<u8>>> {
+        fn try_get(&self, key: &MetadataKey) -> iolake_common::Result<Option<Vec<u8>>> {
             if key.0 == DISK_SET_KEY {
-                return Err(objectio_common::Error::Storage(
+                return Err(iolake_common::Error::Storage(
                     "injected: page unreadable".into(),
                 ));
             }
             self.0.try_get(key)
         }
-        fn write(&self, ops: Vec<MetadataOp>) -> objectio_common::Result<()> {
+        fn write(&self, ops: Vec<MetadataOp>) -> iolake_common::Result<()> {
             self.0.write(ops)
         }
         fn for_each_prefix(
@@ -3023,7 +3019,7 @@ mod tests {
     async fn an_unreadable_disk_set_record_refuses_the_store() {
         let dir = tempfile::tempdir().unwrap();
         write_shards(dir.path(), &["a", "b", "c"], 0..9).await;
-        let meta = objectio_storage::metadata::open(MetadataStoreConfig::with_data_dir(
+        let meta = iolake_storage::metadata::open(MetadataStoreConfig::with_data_dir(
             dir.path().join("state"),
         ))
         .unwrap();
@@ -3052,7 +3048,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = |n: &str| dir.path().join(n).display().to_string();
         let open = |names: &[&str]| {
-            let meta = objectio_storage::metadata::open(MetadataStoreConfig::with_data_dir(
+            let meta = iolake_storage::metadata::open(MetadataStoreConfig::with_data_dir(
                 dir.path().join("state"),
             ))
             .unwrap();

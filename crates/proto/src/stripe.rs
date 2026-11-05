@@ -10,7 +10,7 @@ use std::collections::HashSet;
 use std::fmt;
 use std::future::Future;
 
-use objectio_common::ErasureConfig;
+use iolake_common::ErasureConfig;
 
 use crate::metadata::{
     ErasureType, GetPlacementResponse, NodePlacement, ShardLocation, StripeMeta,

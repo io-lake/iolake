@@ -118,17 +118,17 @@ export const SECTIONS: Section[] = [
       {
         label: "Unflushed data",
         sub: "journaled, not yet stored as stripes",
-        value: gauge("objectio_block_cache_dirty_bytes", "bytes"),
+        value: gauge("iolake_block_cache_dirty_bytes", "bytes"),
       },
       {
         label: "Volumes",
-        sub: "objectio_block_volumes_total",
-        value: gauge("objectio_block_volumes_total", "count"),
+        sub: "iolake_block_volumes_total",
+        value: gauge("iolake_block_volumes_total", "count"),
       },
       {
         label: "Journal fsync p99",
         sub: "every write waits for one",
-        value: livePercentile("objectio_block_journal_fsync_seconds", 0.99),
+        value: livePercentile("iolake_block_journal_fsync_seconds", 0.99),
       },
       {
         label: "Flush failures",
@@ -136,7 +136,7 @@ export const SECTIONS: Section[] = [
         value: (cur) => {
           const g = groupSum(
             cur.samples,
-            "objectio_block_chunks_flushed_total",
+            "iolake_block_chunks_flushed_total",
             "result",
           );
           return Object.keys(g).length === 0
@@ -150,47 +150,47 @@ export const SECTIONS: Section[] = [
         title: "Block operations",
         subtitle: "per second, by operation",
         unit: "per_s",
-        prom: "sum by (op) (rate(objectio_block_io_seconds_count[$RATE]))",
+        prom: "sum by (op) (rate(iolake_block_io_seconds_count[$RATE]))",
         legend: (l) => l.op,
-        live: (c, p) => rate(c, p, "objectio_block_io_seconds_count", "op"),
+        live: (c, p) => rate(c, p, "iolake_block_io_seconds_count", "op"),
       },
       {
         title: "Block latency p99",
         subtitle: "milliseconds · read, write, trim (a flush waits for chunks to be stored)",
         unit: "ms",
         scale: ms,
-        prom: 'histogram_quantile(0.99, sum by (op, le) (rate(objectio_block_io_seconds_bucket{op!="flush"}[$RATE])))',
+        prom: 'histogram_quantile(0.99, sum by (op, le) (rate(iolake_block_io_seconds_bucket{op!="flush"}[$RATE])))',
         legend: (l) => l.op,
         live: (c, p) =>
-          quantile(c, p, "objectio_block_io_seconds", 0.99, "op", { op: (o) => o !== "flush" }),
+          quantile(c, p, "iolake_block_io_seconds", 0.99, "op", { op: (o) => o !== "flush" }),
       },
       {
         title: "Block throughput",
         subtitle: "bytes per second, by operation",
         unit: "bytes/s",
-        prom: "sum by (op) (rate(objectio_block_io_bytes_total[$RATE]))",
+        prom: "sum by (op) (rate(iolake_block_io_bytes_total[$RATE]))",
         legend: (l) => l.op,
-        live: (c, p) => rate(c, p, "objectio_block_io_bytes_total", "op"),
+        live: (c, p) => rate(c, p, "iolake_block_io_bytes_total", "op"),
       },
       {
         title: "Unflushed data",
         subtitle: "bytes journaled, not yet stored as stripes",
         unit: "bytes",
         prom: [
-          { name: "dirty", query: "sum(objectio_block_cache_dirty_bytes)" },
+          { name: "dirty", query: "sum(iolake_block_cache_dirty_bytes)" },
         ],
         live: (c) => ({
-          dirty: total(c.samples, "objectio_block_cache_dirty_bytes") ?? 0,
+          dirty: total(c.samples, "iolake_block_cache_dirty_bytes") ?? 0,
         }),
       },
       {
         title: "Chunk flushes",
         subtitle: "per second, by result",
         unit: "per_s",
-        prom: "sum by (result) (rate(objectio_block_chunks_flushed_total[$RATE]))",
+        prom: "sum by (result) (rate(iolake_block_chunks_flushed_total[$RATE]))",
         legend: (l) => l.result,
         live: (c, p) =>
-          rate(c, p, "objectio_block_chunks_flushed_total", "result"),
+          rate(c, p, "iolake_block_chunks_flushed_total", "result"),
       },
       {
         title: "Journal fsync",
@@ -201,21 +201,21 @@ export const SECTIONS: Section[] = [
           {
             name: "p50",
             query:
-              "histogram_quantile(0.5, sum by (le) (rate(objectio_block_journal_fsync_seconds_bucket[$RATE])))",
+              "histogram_quantile(0.5, sum by (le) (rate(iolake_block_journal_fsync_seconds_bucket[$RATE])))",
           },
           {
             name: "p99",
             query:
-              "histogram_quantile(0.99, sum by (le) (rate(objectio_block_journal_fsync_seconds_bucket[$RATE])))",
+              "histogram_quantile(0.99, sum by (le) (rate(iolake_block_journal_fsync_seconds_bucket[$RATE])))",
           },
         ],
         live: (c, p) => ({
           ...rename(
-            quantile(c, p, "objectio_block_journal_fsync_seconds", 0.5),
+            quantile(c, p, "iolake_block_journal_fsync_seconds", 0.5),
             "p50",
           ),
           ...rename(
-            quantile(c, p, "objectio_block_journal_fsync_seconds", 0.99),
+            quantile(c, p, "iolake_block_journal_fsync_seconds", 0.99),
             "p99",
           ),
         }),
@@ -224,9 +224,9 @@ export const SECTIONS: Section[] = [
         title: "Block errors",
         subtitle: "per second, by operation",
         unit: "per_s",
-        prom: "sum by (op) (rate(objectio_block_io_errors_total[$RATE]))",
+        prom: "sum by (op) (rate(iolake_block_io_errors_total[$RATE]))",
         legend: (l) => l.op,
-        live: (c, p) => rate(c, p, "objectio_block_io_errors_total", "op"),
+        live: (c, p) => rate(c, p, "iolake_block_io_errors_total", "op"),
       },
     ],
   },
@@ -240,7 +240,7 @@ export const SECTIONS: Section[] = [
         label: "Raft leader",
         sub: "a cluster without one accepts no writes",
         value: (cur) => {
-          const v = total(cur.samples, "objectio_meta_raft_has_leader");
+          const v = total(cur.samples, "iolake_meta_raft_has_leader");
           if (v === undefined) return undefined;
           return v > 0 ? "elected" : "NONE";
         },
@@ -248,17 +248,17 @@ export const SECTIONS: Section[] = [
       {
         label: "Term",
         sub: "rises with each election",
-        value: gauge("objectio_meta_raft_term", "count"),
+        value: gauge("iolake_meta_raft_term", "count"),
       },
       {
         label: "Applied index",
         sub: "Raft entries applied",
-        value: gauge("objectio_meta_raft_applied_index", "count"),
+        value: gauge("iolake_meta_raft_applied_index", "count"),
       },
       {
         label: "Voters",
         sub: "meta nodes in the cluster",
-        value: gauge("objectio_meta_raft_voters", "count"),
+        value: gauge("iolake_meta_raft_voters", "count"),
       },
     ],
     charts: [
@@ -266,10 +266,10 @@ export const SECTIONS: Section[] = [
         title: "Meta calls",
         subtitle: "per second, busiest methods",
         unit: "per_s",
-        prom: "topk(4, sum by (method) (rate(objectio_meta_grpc_requests_total[$RATE])))",
+        prom: "topk(4, sum by (method) (rate(iolake_meta_grpc_requests_total[$RATE])))",
         legend: (l) => l.method,
         live: (c, p) =>
-          top(rate(c, p, "objectio_meta_grpc_requests_total", "method"), 4),
+          top(rate(c, p, "iolake_meta_grpc_requests_total", "method"), 4),
       },
       {
         title: "Meta call latency",
@@ -280,21 +280,21 @@ export const SECTIONS: Section[] = [
           {
             name: "p50",
             query:
-              "histogram_quantile(0.5, sum by (le) (rate(objectio_meta_grpc_latency_seconds_bucket[$RATE])))",
+              "histogram_quantile(0.5, sum by (le) (rate(iolake_meta_grpc_latency_seconds_bucket[$RATE])))",
           },
           {
             name: "p99",
             query:
-              "histogram_quantile(0.99, sum by (le) (rate(objectio_meta_grpc_latency_seconds_bucket[$RATE])))",
+              "histogram_quantile(0.99, sum by (le) (rate(iolake_meta_grpc_latency_seconds_bucket[$RATE])))",
           },
         ],
         live: (c, p) => ({
           ...rename(
-            quantile(c, p, "objectio_meta_grpc_latency_seconds", 0.5),
+            quantile(c, p, "iolake_meta_grpc_latency_seconds", 0.5),
             "p50",
           ),
           ...rename(
-            quantile(c, p, "objectio_meta_grpc_latency_seconds", 0.99),
+            quantile(c, p, "iolake_meta_grpc_latency_seconds", 0.99),
             "p99",
           ),
         }),
@@ -308,11 +308,11 @@ export const SECTIONS: Section[] = [
           {
             name: "p99",
             query:
-              "histogram_quantile(0.99, sum by (le) (rate(objectio_meta_commit_seconds_bucket[$RATE])))",
+              "histogram_quantile(0.99, sum by (le) (rate(iolake_meta_commit_seconds_bucket[$RATE])))",
           },
         ],
         live: (c, p) =>
-          rename(quantile(c, p, "objectio_meta_commit_seconds", 0.99), "p99"),
+          rename(quantile(c, p, "iolake_meta_commit_seconds", 0.99), "p99"),
       },
       {
         title: "Raft entries applied",
@@ -321,23 +321,23 @@ export const SECTIONS: Section[] = [
         prom: [
           {
             name: "applied",
-            query: "max(rate(objectio_meta_raft_applied_index[$RATE]))",
+            query: "max(rate(iolake_meta_raft_applied_index[$RATE]))",
           },
         ],
         live: (c, p) =>
-          rename(rate(c, p, "objectio_meta_raft_applied_index"), "applied"),
+          rename(rate(c, p, "iolake_meta_raft_applied_index"), "applied"),
       },
       {
         title: "Replication lag",
         subtitle: "entries each follower is behind (leader's view)",
         unit: "count",
-        prom: "max by (peer) (objectio_meta_raft_replication_lag_entries)",
+        prom: "max by (peer) (iolake_meta_raft_replication_lag_entries)",
         legend: (l) => `node ${l.peer}`,
         live: (c) =>
           prefix(
             groupSum(
               c.samples,
-              "objectio_meta_raft_replication_lag_entries",
+              "iolake_meta_raft_replication_lag_entries",
               "peer",
             ),
             "node ",
@@ -347,10 +347,10 @@ export const SECTIONS: Section[] = [
         title: "Meta call errors",
         subtitle: "per second, by method",
         unit: "per_s",
-        prom: 'sum by (method) (rate(objectio_meta_grpc_requests_total{code!="OK"}[$RATE]))',
+        prom: 'sum by (method) (rate(iolake_meta_grpc_requests_total{code!="OK"}[$RATE]))',
         legend: (l) => l.method,
         live: (c, p) =>
-          rate(c, p, "objectio_meta_grpc_requests_total", "method", notOk),
+          rate(c, p, "iolake_meta_grpc_requests_total", "method", notOk),
       },
     ],
   },
@@ -363,12 +363,12 @@ export const SECTIONS: Section[] = [
       {
         label: "Degraded objects",
         sub: "missing a shard, still readable",
-        value: gauge("objectio_objects_degraded", "count"),
+        value: gauge("iolake_objects_degraded", "count"),
       },
       {
         label: "At-risk objects",
         sub: "one more loss from unreadable",
-        value: gauge("objectio_objects_at_risk", "count"),
+        value: gauge("iolake_objects_at_risk", "count"),
       },
       {
         label: "Last repair pass",
@@ -376,7 +376,7 @@ export const SECTIONS: Section[] = [
         value: (cur) => {
           const g = groupSum(
             cur.samples,
-            "objectio_meta_repair_last_pass_timestamp_seconds",
+            "iolake_meta_repair_last_pass_timestamp_seconds",
           );
           if (!("value" in g)) return undefined;
           return g.value > 0 ? ago(cur.t / 1000 - g.value) : "not yet";
@@ -388,7 +388,7 @@ export const SECTIONS: Section[] = [
         value: (cur) => {
           const g = groupSum(
             cur.samples,
-            "objectio_osd_scrub_last_pass_timestamp_seconds",
+            "iolake_osd_scrub_last_pass_timestamp_seconds",
             "osd_id",
           );
           const ts = Object.values(g);
@@ -404,32 +404,32 @@ export const SECTIONS: Section[] = [
         subtitle: "degraded, at risk, unreadable",
         unit: "count",
         prom: [
-          { name: "degraded", query: "max(objectio_objects_degraded)" },
-          { name: "at risk", query: "max(objectio_objects_at_risk)" },
-          { name: "unreadable", query: "max(objectio_objects_unreadable)" },
+          { name: "degraded", query: "max(iolake_objects_degraded)" },
+          { name: "at risk", query: "max(iolake_objects_at_risk)" },
+          { name: "unreadable", query: "max(iolake_objects_unreadable)" },
         ],
         live: (c) => ({
-          degraded: total(c.samples, "objectio_objects_degraded") ?? 0,
-          "at risk": total(c.samples, "objectio_objects_at_risk") ?? 0,
-          unreadable: total(c.samples, "objectio_objects_unreadable") ?? 0,
+          degraded: total(c.samples, "iolake_objects_degraded") ?? 0,
+          "at risk": total(c.samples, "iolake_objects_at_risk") ?? 0,
+          unreadable: total(c.samples, "iolake_objects_unreadable") ?? 0,
         }),
       },
       {
         title: "Shards rebuilt",
         subtitle: "per second, by reason",
         unit: "per_s",
-        prom: "sum by (reason) (rate(objectio_meta_repair_shards_rebuilt_total[$RATE]))",
+        prom: "sum by (reason) (rate(iolake_meta_repair_shards_rebuilt_total[$RATE]))",
         legend: (l) => l.reason,
         live: (c, p) =>
-          rate(c, p, "objectio_meta_repair_shards_rebuilt_total", "reason"),
+          rate(c, p, "iolake_meta_repair_shards_rebuilt_total", "reason"),
       },
       {
         title: "Corrupt shards",
         subtitle: "on OSDs, not yet rebuilt",
         unit: "count",
-        prom: [{ name: "corrupt", query: "sum(objectio_osd_corrupt_shards)" }],
+        prom: [{ name: "corrupt", query: "sum(iolake_osd_corrupt_shards)" }],
         live: (c) => ({
-          corrupt: total(c.samples, "objectio_osd_corrupt_shards") ?? 0,
+          corrupt: total(c.samples, "iolake_osd_corrupt_shards") ?? 0,
         }),
       },
       {
@@ -439,11 +439,11 @@ export const SECTIONS: Section[] = [
         prom: [
           {
             name: "scrubbed",
-            query: "sum(rate(objectio_osd_scrub_bytes_total[$RATE]))",
+            query: "sum(rate(iolake_osd_scrub_bytes_total[$RATE]))",
           },
         ],
         live: (c, p) =>
-          rename(rate(c, p, "objectio_osd_scrub_bytes_total"), "scrubbed"),
+          rename(rate(c, p, "iolake_osd_scrub_bytes_total"), "scrubbed"),
       },
     ],
   },
@@ -457,8 +457,8 @@ export const SECTIONS: Section[] = [
         label: "OSDs up",
         sub: "answered the gateway's last poll",
         value: (cur) => {
-          const up = total(cur.samples, "objectio_cluster_osds_up");
-          const all = total(cur.samples, "objectio_cluster_osds_total");
+          const up = total(cur.samples, "iolake_cluster_osds_up");
+          const all = total(cur.samples, "iolake_cluster_osds_total");
           return up === undefined || all === undefined
             ? undefined
             : `${up} / ${all}`;
@@ -468,8 +468,8 @@ export const SECTIONS: Section[] = [
         label: "Raw capacity used",
         sub: "across OSDs that answered",
         value: (cur) => {
-          const used = total(cur.samples, "objectio_cluster_used_bytes");
-          const cap = total(cur.samples, "objectio_cluster_capacity_bytes");
+          const used = total(cur.samples, "iolake_cluster_used_bytes");
+          const cap = total(cur.samples, "iolake_cluster_capacity_bytes");
           return used === undefined || !cap
             ? undefined
             : `${((100 * used) / cap).toFixed(1)}%`;
@@ -478,14 +478,14 @@ export const SECTIONS: Section[] = [
       {
         label: "Shard sync p99",
         sub: "making a write durable",
-        value: livePercentile("objectio_osd_disk_seconds", 0.99, {
+        value: livePercentile("iolake_osd_disk_seconds", 0.99, {
           op: "sync",
         }),
       },
       {
         label: "Disk errors",
         sub: "since start · read, write, checksum",
-        value: gauge("objectio_disk_errors_total", "count"),
+        value: gauge("iolake_disk_errors_total", "count"),
       },
     ],
     charts: [
@@ -494,23 +494,23 @@ export const SECTIONS: Section[] = [
         subtitle: "milliseconds · p99, by operation",
         unit: "ms",
         scale: ms,
-        prom: "histogram_quantile(0.99, sum by (op, le) (rate(objectio_osd_disk_seconds_bucket[$RATE])))",
+        prom: "histogram_quantile(0.99, sum by (op, le) (rate(iolake_osd_disk_seconds_bucket[$RATE])))",
         legend: (l) => l.op,
-        live: (c, p) => quantile(c, p, "objectio_osd_disk_seconds", 0.99, "op"),
+        live: (c, p) => quantile(c, p, "iolake_osd_disk_seconds", 0.99, "op"),
       },
       {
         title: "Shard write latency per OSD",
         subtitle: "milliseconds · p99 of WriteShard",
         unit: "ms",
         scale: ms,
-        prom: 'histogram_quantile(0.99, sum by (osd_id, le) (rate(objectio_osd_grpc_latency_seconds_bucket{method="WriteShard"}[$RATE])))',
+        prom: 'histogram_quantile(0.99, sum by (osd_id, le) (rate(iolake_osd_grpc_latency_seconds_bucket{method="WriteShard"}[$RATE])))',
         legend: (l) => short(l.osd_id ?? "osd"),
         live: (c, p) =>
           shortKeys(
             quantile(
               c,
               p,
-              "objectio_osd_grpc_latency_seconds",
+              "iolake_osd_grpc_latency_seconds",
               0.99,
               "osd_id",
               { method: "WriteShard" },
@@ -526,11 +526,11 @@ export const SECTIONS: Section[] = [
           {
             name: "p99",
             query:
-              "histogram_quantile(0.99, sum by (le) (rate(objectio_osd_wal_fsync_seconds_bucket[$RATE])))",
+              "histogram_quantile(0.99, sum by (le) (rate(iolake_osd_wal_fsync_seconds_bucket[$RATE])))",
           },
         ],
         live: (c, p) =>
-          rename(quantile(c, p, "objectio_osd_wal_fsync_seconds", 0.99), "p99"),
+          rename(quantile(c, p, "iolake_osd_wal_fsync_seconds", 0.99), "p99"),
       },
       {
         title: "Disk throughput",
@@ -539,26 +539,26 @@ export const SECTIONS: Section[] = [
         prom: [
           {
             name: "written",
-            query: "sum(rate(objectio_disk_written_bytes_total[$RATE]))",
+            query: "sum(rate(iolake_disk_written_bytes_total[$RATE]))",
           },
           {
             name: "read",
-            query: "sum(rate(objectio_disk_read_bytes_total[$RATE]))",
+            query: "sum(rate(iolake_disk_read_bytes_total[$RATE]))",
           },
         ],
         live: (c, p) => ({
-          ...rename(rate(c, p, "objectio_disk_written_bytes_total"), "written"),
-          ...rename(rate(c, p, "objectio_disk_read_bytes_total"), "read"),
+          ...rename(rate(c, p, "iolake_disk_written_bytes_total"), "written"),
+          ...rename(rate(c, p, "iolake_disk_read_bytes_total"), "read"),
         }),
       },
       {
         title: "OSD call errors",
         subtitle: "per second, by method",
         unit: "per_s",
-        prom: 'sum by (method) (rate(objectio_osd_grpc_requests_total{code!="OK"}[$RATE]))',
+        prom: 'sum by (method) (rate(iolake_osd_grpc_requests_total{code!="OK"}[$RATE]))',
         legend: (l) => l.method,
         live: (c, p) =>
-          rate(c, p, "objectio_osd_grpc_requests_total", "method", notOk),
+          rate(c, p, "iolake_osd_grpc_requests_total", "method", notOk),
       },
     ],
   },

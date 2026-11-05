@@ -1,4 +1,4 @@
-package objectio
+package iolake
 
 import (
 	"fmt"
@@ -12,24 +12,24 @@ import (
 // both this client and whatever S3 SDK sits beside it — a pod that already has
 // AWS_ACCESS_KEY_ID for mountpoint-s3 needs nothing extra.
 const (
-	EnvEndpoint = "OBJECTIO_ENDPOINT"
+	EnvEndpoint = "IOLAKE_ENDPOINT"
 	// EnvURL is accepted as a synonym for EnvEndpoint.
-	EnvURL       = "OBJECTIO_URL"
-	EnvAccessKey = "OBJECTIO_ACCESS_KEY"
-	EnvSecretKey = "OBJECTIO_SECRET_KEY"
+	EnvURL       = "IOLAKE_URL"
+	EnvAccessKey = "IOLAKE_ACCESS_KEY"
+	EnvSecretKey = "IOLAKE_SECRET_KEY"
 	// EnvSecretKeyFile points at a file holding the secret — how a Kubernetes
 	// Secret is normally projected. Prefer it: a value in the environment is
 	// readable from /proc, lands in crash dumps, and shows up in `kubectl
 	// describe pod` when it was set inline rather than from a secretRef.
-	EnvSecretKeyFile = "OBJECTIO_SECRET_KEY_FILE"
+	EnvSecretKeyFile = "IOLAKE_SECRET_KEY_FILE"
 	// EnvAccessKeyFile is the matching file for the access key ID. Less
 	// important — the ID is not a secret — but symmetric.
-	EnvAccessKeyFile = "OBJECTIO_ACCESS_KEY_FILE"
-	EnvRegion        = "OBJECTIO_REGION"
+	EnvAccessKeyFile = "IOLAKE_ACCESS_KEY_FILE"
+	EnvRegion        = "IOLAKE_REGION"
 	// EnvProvisionerUserID is the provisioner's own user_id, which
 	// ProvisionBucket needs. Not used by ConfigFromEnv; read it with
 	// ProvisionerUserIDFromEnv.
-	EnvProvisionerUserID = "OBJECTIO_PROVISIONER_USER_ID"
+	EnvProvisionerUserID = "IOLAKE_PROVISIONER_USER_ID"
 )
 
 // readValue resolves one setting from, in order: a *_FILE variable, a direct
@@ -42,7 +42,7 @@ func readValue(fileEnv, directEnv string, fallbacks ...string) (string, error) {
 	if path := os.Getenv(fileEnv); path != "" {
 		b, err := os.ReadFile(path)
 		if err != nil {
-			return "", fmt.Errorf("objectio: reading %s=%s: %w", fileEnv, path, err)
+			return "", fmt.Errorf("iolake: reading %s=%s: %w", fileEnv, path, err)
 		}
 		return strings.TrimSpace(string(b)), nil
 	}
@@ -59,10 +59,10 @@ func readValue(fileEnv, directEnv string, fallbacks ...string) (string, error) {
 
 // ConfigFromEnv builds a Config from the environment.
 //
-//	OBJECTIO_ENDPOINT     | OBJECTIO_URL                          (required)
-//	OBJECTIO_ACCESS_KEY_FILE | OBJECTIO_ACCESS_KEY | AWS_ACCESS_KEY_ID
-//	OBJECTIO_SECRET_KEY_FILE | OBJECTIO_SECRET_KEY | AWS_SECRET_ACCESS_KEY
-//	OBJECTIO_REGION          | AWS_REGION | AWS_DEFAULT_REGION     (default us-east-1)
+//	IOLAKE_ENDPOINT     | IOLAKE_URL                          (required)
+//	IOLAKE_ACCESS_KEY_FILE | IOLAKE_ACCESS_KEY | AWS_ACCESS_KEY_ID
+//	IOLAKE_SECRET_KEY_FILE | IOLAKE_SECRET_KEY | AWS_SECRET_ACCESS_KEY
+//	IOLAKE_REGION          | AWS_REGION | AWS_DEFAULT_REGION     (default us-east-1)
 //
 // For each, the first one set is used.
 // The credential must be unscoped: a key confined to a bucket is refused on
@@ -73,7 +73,7 @@ func ConfigFromEnv() (Config, error) {
 		return Config{}, err
 	}
 	if endpoint == "" {
-		return Config{}, fmt.Errorf("objectio: %s (or %s) is not set", EnvEndpoint, EnvURL)
+		return Config{}, fmt.Errorf("iolake: %s (or %s) is not set", EnvEndpoint, EnvURL)
 	}
 
 	accessKey, err := readValue(EnvAccessKeyFile, EnvAccessKey, "AWS_ACCESS_KEY_ID")
@@ -81,7 +81,7 @@ func ConfigFromEnv() (Config, error) {
 		return Config{}, err
 	}
 	if accessKey == "" {
-		return Config{}, fmt.Errorf("objectio: %s, %s or AWS_ACCESS_KEY_ID is not set",
+		return Config{}, fmt.Errorf("iolake: %s, %s or AWS_ACCESS_KEY_ID is not set",
 			EnvAccessKey, EnvAccessKeyFile)
 	}
 
@@ -90,7 +90,7 @@ func ConfigFromEnv() (Config, error) {
 		return Config{}, err
 	}
 	if secretKey == "" {
-		return Config{}, fmt.Errorf("objectio: %s, %s or AWS_SECRET_ACCESS_KEY is not set",
+		return Config{}, fmt.Errorf("iolake: %s, %s or AWS_SECRET_ACCESS_KEY is not set",
 			EnvSecretKey, EnvSecretKeyFile)
 	}
 
@@ -117,7 +117,7 @@ func NewFromEnv() (*Client, error) {
 	return New(cfg)
 }
 
-// ProvisionerUserIDFromEnv reads OBJECTIO_PROVISIONER_USER_ID, the user that
+// ProvisionerUserIDFromEnv reads IOLAKE_PROVISIONER_USER_ID, the user that
 // ProvisionBucket mints bucket credentials on. Empty when unset —
 // callers that can discover it another way need not set it.
 func ProvisionerUserIDFromEnv() string {

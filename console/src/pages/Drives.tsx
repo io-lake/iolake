@@ -168,7 +168,7 @@ export default function Drives({ embedded = false }: Props = {}) {
           // `le` must survive the sum, or there is no histogram left to
           // take a quantile of. Through the gateway every OSD's series
           // share one `instance`; `osd_id` tells them apart.
-          'histogram_quantile(0.99, sum by (osd_id, le) (rate(objectio_osd_grpc_latency_seconds_bucket{method="WriteShard"}[5m])))',
+          'histogram_quantile(0.99, sum by (osd_id, le) (rate(iolake_osd_grpc_latency_seconds_bucket{method="WriteShard"}[5m])))',
           3600
         ).catch(() => [] as Series[]);
         if (!cancelled) setLatency(s);
@@ -417,7 +417,7 @@ export default function Drives({ embedded = false }: Props = {}) {
           ) : (
             <div className="h-[200px] flex flex-col items-center justify-center text-center px-6 gap-1.5">
               <code className="font-mono text-[11px] text-text-2 bg-surface-2 px-1.5 py-px rounded-[5px]">
-                objectio_osd_grpc_latency_seconds
+                iolake_osd_grpc_latency_seconds
               </code>
               <p className="text-[11px] text-muted max-w-xs">
                 {promReady

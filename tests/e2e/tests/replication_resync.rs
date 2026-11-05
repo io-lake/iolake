@@ -5,7 +5,7 @@
 
 use std::time::{Duration, Instant};
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::{Value, json};
 
 fn payload(len: usize, seed: u32) -> Vec<u8> {
@@ -271,12 +271,12 @@ fn a_resync_resumes_after_a_restart() {
     assert_all_on_target(&dst, &written);
 }
 
-/// `objectio_replication_bytes_total{target="dr"}` on the source.
+/// `iolake_replication_bytes_total{target="dr"}` on the source.
 fn bytes_sent(src: &Cluster) -> u64 {
     src.request("GET", "/metrics", &[])
         .text()
         .lines()
-        .find(|l| l.starts_with("objectio_replication_bytes_total{target=\"dr\"}"))
+        .find(|l| l.starts_with("iolake_replication_bytes_total{target=\"dr\"}"))
         .and_then(|l| l.rsplit(' ').next())
         .and_then(|n| n.parse().ok())
         .unwrap_or(0)

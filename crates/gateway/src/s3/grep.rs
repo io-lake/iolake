@@ -101,7 +101,7 @@ pub(crate) async fn grep_prefix_internal(
     // resume where the last scan stopped.
     let mut meta_client = state.meta_client.clone();
     let list_resp = match meta_client
-        .list_objects(objectio_proto::metadata::ListObjectsRequest {
+        .list_objects(iolake_proto::metadata::ListObjectsRequest {
             bucket: bucket.clone(),
             prefix: caps.prefix.clone(),
             delimiter: String::new(),

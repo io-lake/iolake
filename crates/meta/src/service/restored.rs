@@ -1,5 +1,5 @@
 //! Exporting a backup, and running after a restore to an older point
-//! (objectio-docs `core/meta.md`, "Backup, restore and losing a majority").
+//! (iolake-docs `core/meta.md`, "Backup, restore and losing a majority").
 //!
 //! A restored meta is older than its OSDs: copies by reference, packs and
 //! completed uploads made after the backup are uses of stripes that the
@@ -95,8 +95,8 @@ impl MetaService {
     pub(crate) fn hold_restored_frees(
         &self,
         freeable: Vec<Vec<u8>>,
-        freed_packs: Vec<objectio_proto::metadata::StripeMeta>,
-    ) -> (Vec<Vec<u8>>, Vec<objectio_proto::metadata::StripeMeta>) {
+        freed_packs: Vec<iolake_proto::metadata::StripeMeta>,
+    ) -> (Vec<Vec<u8>>, Vec<iolake_proto::metadata::StripeMeta>) {
         let Some(before) = self.restored().map(|r| r.hold_frees_before_ms) else {
             return (freeable, freed_packs);
         };
@@ -131,7 +131,7 @@ impl MetaService {
         if EPOCHS_PUSHED.load(Ordering::Relaxed) == term + 1 {
             return;
         }
-        let pgs: Vec<objectio_proto::metadata::PlacementGroup> =
+        let pgs: Vec<iolake_proto::metadata::PlacementGroup> =
             self.placement_groups.read().values().cloned().collect();
         self.push_pg_epochs(&pgs, &[]).await;
         EPOCHS_PUSHED.store(term + 1, Ordering::Relaxed);
@@ -151,7 +151,7 @@ impl MetaService {
 
     /// An operator set OSD `node`'s state: it no longer waits.
     pub(crate) async fn confirm_osd(&self, node: &[u8; 16], by: &str) -> Result<(), Status> {
-        use objectio_meta_store::CasOp;
+        use iolake_meta_store::CasOp;
         let hex = hex::encode(node);
         for attempt in 0..CAS_ATTEMPTS {
             if attempt > 0 {
@@ -205,27 +205,27 @@ impl MetaService {
             .map_or(0, |s| s.list_named(PG_RELIST_TABLE).len());
         let _ = writeln!(
             out,
-            "# HELP objectio_meta_restored 1 if this state machine was restored from a backup or \
-             forced to one voter\n# TYPE objectio_meta_restored gauge\nobjectio_meta_restored {}",
+            "# HELP iolake_meta_restored 1 if this state machine was restored from a backup or \
+             forced to one voter\n# TYPE iolake_meta_restored gauge\niolake_meta_restored {}",
             u8::from(restored.is_some())
         );
         let _ = writeln!(
             out,
-            "# HELP objectio_meta_pgs_to_relist Placement groups still to be listed after a \
-             restore\n# TYPE objectio_meta_pgs_to_relist gauge\nobjectio_meta_pgs_to_relist {relist}"
+            "# HELP iolake_meta_pgs_to_relist Placement groups still to be listed after a \
+             restore\n# TYPE iolake_meta_pgs_to_relist gauge\niolake_meta_pgs_to_relist {relist}"
         );
         let _ = writeln!(
             out,
-            "# HELP objectio_meta_restore_osds_unconfirmed OSDs left draining or out by a \
+            "# HELP iolake_meta_restore_osds_unconfirmed OSDs left draining or out by a \
              restore, waiting for an operator to set their state\n# TYPE \
-             objectio_meta_restore_osds_unconfirmed gauge\nobjectio_meta_restore_osds_unconfirmed {}",
+             iolake_meta_restore_osds_unconfirmed gauge\niolake_meta_restore_osds_unconfirmed {}",
             restored.map_or(0, |r| r.osds_to_confirm.len())
         );
         let _ = writeln!(
             out,
-            "# HELP objectio_meta_restore_frees_held_total Stripes not freed because they predate \
-             a restore (space held, never lost)\n# TYPE objectio_meta_restore_frees_held_total \
-             counter\nobjectio_meta_restore_frees_held_total {}",
+            "# HELP iolake_meta_restore_frees_held_total Stripes not freed because they predate \
+             a restore (space held, never lost)\n# TYPE iolake_meta_restore_frees_held_total \
+             counter\niolake_meta_restore_frees_held_total {}",
             FREES_HELD.load(Ordering::Relaxed)
         );
     }
@@ -233,9 +233,9 @@ impl MetaService {
     /// `ExportMeta`: a backup of the state machine, streamed.
     pub(crate) async fn export_meta(
         &self,
-        request: Request<objectio_proto::metadata::ExportMetaRequest>,
+        request: Request<iolake_proto::metadata::ExportMetaRequest>,
     ) -> Result<Response<ExportStream>, Status> {
-        use objectio_proto::metadata::ExportMetaChunk;
+        use iolake_proto::metadata::ExportMetaChunk;
         let raft = self
             .raft_handle()
             .ok_or_else(|| Status::unavailable("raft is not running"))?;
@@ -257,7 +257,7 @@ impl MetaService {
                 buf: Vec::with_capacity(EXPORT_CHUNK),
             };
             let started = std::time::Instant::now();
-            match objectio_meta_store::MetaRaftStorage::export(&db, out) {
+            match iolake_meta_store::MetaRaftStorage::export(&db, out) {
                 Ok(h) => info!(
                     "meta export for {who}: at {:?}, {:.1} s",
                     h.last_applied,
@@ -278,10 +278,7 @@ impl MetaService {
 
 /// The stream `ExportMeta` answers with.
 pub type ExportStream = std::pin::Pin<
-    Box<
-        dyn futures::Stream<Item = Result<objectio_proto::metadata::ExportMetaChunk, Status>>
-            + Send,
-    >,
+    Box<dyn futures::Stream<Item = Result<iolake_proto::metadata::ExportMetaChunk, Status>> + Send>,
 >;
 
 /// Bytes per `ExportMetaChunk`.
@@ -290,7 +287,7 @@ const EXPORT_CHUNK: usize = 1 << 20;
 /// Writes into the export's channel, a chunk at a time: a slow reader holds
 /// the export back. A reader gone ends it.
 struct ChunkWriter {
-    tx: tokio::sync::mpsc::Sender<Result<objectio_proto::metadata::ExportMetaChunk, Status>>,
+    tx: tokio::sync::mpsc::Sender<Result<iolake_proto::metadata::ExportMetaChunk, Status>>,
     buf: Vec<u8>,
 }
 
@@ -301,7 +298,7 @@ impl ChunkWriter {
         }
         let data = std::mem::replace(&mut self.buf, Vec::with_capacity(EXPORT_CHUNK));
         self.tx
-            .blocking_send(Ok(objectio_proto::metadata::ExportMetaChunk { data }))
+            .blocking_send(Ok(iolake_proto::metadata::ExportMetaChunk { data }))
             .map_err(|_| {
                 std::io::Error::new(std::io::ErrorKind::BrokenPipe, "the reader went away")
             })

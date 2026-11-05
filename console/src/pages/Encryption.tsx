@@ -156,7 +156,7 @@ export default function Encryption() {
             <div className="text-[13px] font-medium">Service master key</div>
             <div className="text-[11px] text-muted mt-0.5">
               Wraps per-object DEKs for SSE-S3 and, when the local KMS backend is used, KMS key
-              material. Loaded from the <code>OBJECTIO_MASTER_KEY</code> environment variable at
+              material. Loaded from the <code>IOLAKE_MASTER_KEY</code> environment variable at
               startup; rotation is an operator-only action to avoid orphaning existing objects.
             </div>
             <div className="mt-2 text-[13px]">

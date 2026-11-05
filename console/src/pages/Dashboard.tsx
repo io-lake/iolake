@@ -40,10 +40,10 @@ import { bytes, bytesShort, count, ms, percent, perSecond, plural } from "../com
 // moves), and a feed pieced together from whatever this page happens to know
 // would read as a history it isn't.
 
-const REQUESTS = "objectio_s3_requests_total";
-const READ_BYTES = "objectio_s3_response_bytes_total";
-const WRITE_BYTES = "objectio_s3_request_bytes_total";
-const DURATION = "objectio_s3_request_duration_seconds";
+const REQUESTS = "iolake_s3_requests_total";
+const READ_BYTES = "iolake_s3_response_bytes_total";
+const WRITE_BYTES = "iolake_s3_request_bytes_total";
+const DURATION = "iolake_s3_request_duration_seconds";
 
 const PROM = {
   read: `sum(rate(${READ_BYTES}[$RATE]))`,

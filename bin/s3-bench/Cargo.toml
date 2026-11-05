@@ -1,5 +1,5 @@
 [package]
-name = "objectio-s3-bench"
+name = "iolake-s3-bench"
 description = "PUT/GET load generator that splits request time into encode, shard transfer and disk"
 version.workspace = true
 edition.workspace = true
@@ -7,7 +7,7 @@ license.workspace = true
 publish = false
 
 [[bin]]
-name = "objectio-s3-bench"
+name = "iolake-s3-bench"
 path = "src/main.rs"
 
 # Talks to the gateway over HTTP only, like any S3 client, so it can be

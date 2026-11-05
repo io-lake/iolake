@@ -1,5 +1,5 @@
 //! An object's metadata, read from its copies, several reads to an OSD in
-//! one call (B21; objectio-docs `core/small-object-path.md`).
+//! one call (B21; iolake-docs `core/small-object-path.md`).
 //!
 //! Every GET asks each copy of its key for the object's metadata
 //! (`GetObjectMeta`, with a small object's shard): six calls for 4+2. On
@@ -17,8 +17,8 @@
 
 #![allow(clippy::result_large_err)] // tonic::Status, as every gRPC call answers
 
-use objectio_proto::storage::storage_service_client::StorageServiceClient;
-use objectio_proto::storage::{GetObjectMetaRequest, GetObjectMetaResponse, GetObjectMetasRequest};
+use iolake_proto::storage::storage_service_client::StorageServiceClient;
+use iolake_proto::storage::{GetObjectMetaRequest, GetObjectMetaResponse, GetObjectMetasRequest};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

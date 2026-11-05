@@ -5,10 +5,10 @@
 
 use std::sync::Arc;
 
-use objectio_block::volume::VolumeState;
-use objectio_block::{VolumeManager, WriteCache};
-use objectio_proto::block::block_service_server::BlockService;
-use objectio_proto::block::{
+use iolake_block::volume::VolumeState;
+use iolake_block::{VolumeManager, WriteCache};
+use iolake_proto::block::block_service_server::BlockService;
+use iolake_proto::block::{
     AttachVolumeRequest, AttachVolumeResponse, Attachment, CloneVolumeRequest, CloneVolumeResponse,
     CreateSnapshotRequest, CreateSnapshotResponse, CreateVolumeRequest, CreateVolumeResponse,
     DeleteSnapshotRequest, DeleteSnapshotResponse, DeleteVolumeRequest, DeleteVolumeResponse,
@@ -22,7 +22,7 @@ use objectio_proto::block::{
     TrimResponse, UpdateVolumeQosRequest, UpdateVolumeQosResponse, Volume as ProtoVolume,
     VolumeQos, VolumeState as ProtoVolumeState, WriteRequest, WriteResponse,
 };
-use objectio_proto::metadata::{
+use iolake_proto::metadata::{
     BlockCloneVolumeRequest, BlockCreateSnapshotRequest, BlockCreateVolumeRequest,
     BlockDeleteSnapshotRequest, BlockDeleteVolumeRequest, BlockGetSnapshotRequest,
     BlockGetVolumeRequest, BlockListSnapshotsRequest, BlockListVolumesRequest,
@@ -151,8 +151,8 @@ impl BlockGatewayService {
 // ── Conversions ───────────────────────────────────────────────────────────────
 
 /// Meta's record of a volume, as the volume manager holds it.
-pub fn from_proto(v: &ProtoVolume) -> objectio_block::volume::Volume {
-    objectio_block::volume::Volume {
+pub fn from_proto(v: &ProtoVolume) -> iolake_block::volume::Volume {
+    iolake_block::volume::Volume {
         volume_id: v.volume_id.clone(),
         name: v.name.clone(),
         size_bytes: v.size_bytes,
@@ -212,8 +212,8 @@ pub fn chunk_size_of(v: &ProtoVolume) -> u64 {
     }
 }
 
-fn block_err_to_status(e: objectio_block::error::BlockError) -> Status {
-    use objectio_block::error::BlockError;
+fn block_err_to_status(e: iolake_block::error::BlockError) -> Status {
+    use iolake_block::error::BlockError;
     match e {
         BlockError::VolumeNotFound(id) => Status::not_found(format!("volume not found: {id}")),
         BlockError::SnapshotNotFound(id) => Status::not_found(format!("snapshot not found: {id}")),
@@ -281,7 +281,7 @@ impl BlockService for BlockGatewayService {
         {
             if !req.force {
                 return Err(block_err_to_status(
-                    objectio_block::error::BlockError::VolumeAttached(req.volume_id),
+                    iolake_block::error::BlockError::VolumeAttached(req.volume_id),
                 ));
             }
             // Its NBD clients are disconnected, their I/O finished, first.

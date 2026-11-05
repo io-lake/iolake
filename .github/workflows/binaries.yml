@@ -62,17 +62,17 @@ jobs:
         env:
           RUSTFLAGS: -C link-arg=-fuse-ld=mold
         run: |
-          features=objectio-osd-bin/io-uring,objectio-osd-bin/rocksdb,objectio-aio/io-uring,objectio-aio/rocksdb
+          features=iolake-osd-bin/io-uring,iolake-osd-bin/rocksdb,iolake-aio/io-uring,iolake-aio/rocksdb
           cargo build --release --features "$features" \
-            --bin objectio-meta --bin objectio-osd --bin objectio-gateway --bin objectio-aio --bin obioctl
+            --bin iolake-meta --bin iolake-osd --bin iolake-gateway --bin iolake-aio --bin iolakectl
           mkdir -p out
-          cp target/release/objectio-meta target/release/objectio-osd target/release/objectio-gateway \
-            target/release/objectio-aio target/release/obioctl out/
+          cp target/release/iolake-meta target/release/iolake-osd target/release/iolake-gateway \
+            target/release/iolake-aio target/release/iolakectl out/
           cd out
           echo "${{ github.sha }}" > REF
-          sha256sum objectio-* obioctl > SHA256SUMS
+          sha256sum iolake-* iolakectl > SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
-          name: objectio-linux-${{ matrix.arch }}
+          name: iolake-linux-${{ matrix.arch }}
           path: out/
           retention-days: 30

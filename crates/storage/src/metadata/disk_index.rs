@@ -1,4 +1,4 @@
-//! The OSD's metadata index (objectio-docs `core/storage-engine.md`,
+//! The OSD's metadata index (iolake-docs `core/storage-engine.md`,
 //! "Memory, and the index on disk"): recent changes in a memtable, the rest
 //! in a B-tree file (redb) whose page cache is bounded. Memory does not grow
 //! with the number of entries.
@@ -8,7 +8,7 @@
 //! the LSN a checkpoint has made durable in the file.
 
 use super::types::{MetadataEntry, MetadataKey};
-use objectio_common::{Error, Result};
+use iolake_common::{Error, Result};
 use parking_lot::RwLock;
 use redb::{Database, ReadableTableMetadata, TableDefinition};
 use std::collections::BTreeMap;

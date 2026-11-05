@@ -16,7 +16,7 @@ use crate::types::{
     CatalogInfo, ColumnInfo, FunctionInfo, ModelInfo, ModelVersionInfo, SchemaInfo, TableInfo,
     VolumeInfo,
 };
-use objectio_proto::metadata::{
+use iolake_proto::metadata::{
     UnityCatalog as ProtoCatalog, UnityCreateCatalogRequest, UnityCreateFunctionRequest,
     UnityCreateModelRequest, UnityCreateModelVersionRequest, UnityCreateSchemaRequest,
     UnityCreateTableRequest, UnityCreateVolumeRequest, UnityDeleteCatalogRequest,
@@ -790,8 +790,8 @@ impl UnityCatalogClient {
         catalog_name: String,
         schema_name: String,
         table_name: String,
-        row_filter: Option<objectio_proto::metadata::UnityRowFilter>,
-        column_masks: std::collections::HashMap<String, objectio_proto::metadata::UnityColumnMask>,
+        row_filter: Option<iolake_proto::metadata::UnityRowFilter>,
+        column_masks: std::collections::HashMap<String, iolake_proto::metadata::UnityColumnMask>,
     ) -> Result<TableInfo> {
         let resp = self
             .meta_client

@@ -6,7 +6,7 @@
 //! all-in-one's certificate names every role, being every component; so
 //! does the test process's own, which calls meta, OSDs and block gateways
 //! directly as whichever component a test stands in for. On by default, as
-//! production should run; `OBJECTIO_E2E_PLAIN=1` runs plain gRPC instead,
+//! production should run; `IOLAKE_E2E_PLAIN=1` runs plain gRPC instead,
 //! and so does a node from another release (rolling-upgrade tests).
 //! `tests/mtls.rs` fails when the suite runs plain: it has nothing to test.
 
@@ -75,7 +75,7 @@ static FILES: OnceLock<Option<Files>> = OnceLock::new();
 pub fn files() -> Option<&'static Files> {
     FILES
         .get_or_init(|| {
-            if std::env::var_os("OBJECTIO_E2E_PLAIN").is_some() {
+            if std::env::var_os("IOLAKE_E2E_PLAIN").is_some() {
                 return None;
             }
             Some(make())
@@ -89,7 +89,7 @@ fn make() -> Files {
     ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
     ca_params
         .distinguished_name
-        .push(DnType::CommonName, "objectio e2e CA");
+        .push(DnType::CommonName, "iolake e2e CA");
     let ca_key = KeyPair::generate().expect("CA key");
     let ca = ca_params.self_signed(&ca_key).expect("CA certificate");
 
@@ -115,7 +115,7 @@ fn make() -> Files {
                 .expect("node params");
         params
             .distinguished_name
-            .push(DnType::CommonName, format!("objectio e2e {identity}"));
+            .push(DnType::CommonName, format!("iolake e2e {identity}"));
         for role in roles_of(identity) {
             params.subject_alt_names.push(SanType::URI(
                 format!("spiffe://objectio/{role}")
@@ -147,9 +147,13 @@ fn make() -> Files {
 pub fn apply(cmd: &mut Command, identity: &str) {
     if let Some(f) = files() {
         let (cert, key) = f.pair(identity);
-        cmd.env("OBJECTIO_TLS_CERT", cert)
-            .env("OBJECTIO_TLS_KEY", key)
-            .env("OBJECTIO_TLS_CA", &f.ca);
+        let var = |v| crate::ha::env_name(cmd.get_program(), v);
+        let (cert_var, key_var, ca_var) = (
+            var("IOLAKE_TLS_CERT"),
+            var("IOLAKE_TLS_KEY"),
+            var("IOLAKE_TLS_CA"),
+        );
+        cmd.env(cert_var, cert).env(key_var, key).env(ca_var, &f.ca);
     }
 }
 
@@ -159,7 +163,7 @@ pub fn apply(cmd: &mut Command, identity: &str) {
 pub fn client() {
     if let Some(f) = files() {
         let (cert, key) = f.pair(CLIENT);
-        objectio_proto::transport::configure_tls(&objectio_proto::transport::TlsArgs {
+        iolake_proto::transport::configure_tls(&iolake_proto::transport::TlsArgs {
             tls_cert: Some(cert.to_path_buf()),
             tls_key: Some(key.to_path_buf()),
             tls_ca: Some(f.ca.clone()),
@@ -175,7 +179,7 @@ pub fn client() {
 /// The address doesn't parse, or nothing answers.
 pub async fn channel(addr: &str) -> Result<tonic::transport::Channel, String> {
     client();
-    objectio_proto::transport::connect(&objectio_proto::transport::endpoint(addr)?)
+    iolake_proto::transport::connect(&iolake_proto::transport::endpoint(addr)?)
         .await
         .map_err(|e| e.to_string())
 }

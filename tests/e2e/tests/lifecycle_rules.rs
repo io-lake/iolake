@@ -6,7 +6,7 @@
 
 use std::time::{Duration, Instant};
 
-use objectio_e2e::{Cluster, Response};
+use iolake_e2e::{Cluster, Response};
 
 fn cluster(extra: &[&str]) -> Cluster {
     let mut args = vec![

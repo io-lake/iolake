@@ -552,7 +552,7 @@ export default function PoolPlacement() {
                     }`}
                     title={`${o.name} — ${o.pgs} PGs`}
                   >
-                    <div className="font-mono">{o.name.replace("objectio-osd-", "osd")}</div>
+                    <div className="font-mono">{o.name.replace("iolake-osd-", "osd")}</div>
                   </th>
                 ))}
                 <th className="px-2 py-1 text-center text-muted font-normal border-b border-border">

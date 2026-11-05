@@ -1880,7 +1880,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-aio"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -1904,7 +1904,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-auth"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -1927,7 +1927,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-block"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "bytes",
  "chrono",
@@ -1944,7 +1944,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-block-gateway"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "anyhow",
  "axum 0.8.8",
@@ -1970,7 +1970,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-block-gateway-bin"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "anyhow",
  "clap",
@@ -1983,7 +1983,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-cli"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2008,7 +2008,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-common"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "bytes",
  "crc32c",
@@ -2026,7 +2026,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-dedup-estimate"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "anyhow",
  "clap",
@@ -2035,7 +2035,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-delta-sharing"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "axum 0.8.8",
  "chrono",
@@ -2057,7 +2057,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-e2e"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "base64 0.22.1",
  "bzip2",
@@ -2083,7 +2083,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-erasure"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "bytes",
  "crc32c",
@@ -2096,7 +2096,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-gateway"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2166,7 +2166,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-gateway-bin"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "anyhow",
  "clap",
@@ -2179,7 +2179,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-iceberg"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "axum 0.8.8",
  "iolake-auth",
@@ -2195,7 +2195,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-install"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "anyhow",
  "clap",
@@ -2212,7 +2212,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-io-bench"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "anyhow",
  "clap",
@@ -2226,7 +2226,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-kms"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -2239,7 +2239,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-meta"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "anyhow",
  "axum 0.8.8",
@@ -2276,7 +2276,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-meta-bin"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "anyhow",
  "clap",
@@ -2289,7 +2289,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-meta-store"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "crc32c",
  "iolake-common",
@@ -2310,7 +2310,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-osd"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2345,7 +2345,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-osd-bin"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "anyhow",
  "clap",
@@ -2358,7 +2358,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-placement"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "iolake-common",
  "rand 0.8.5",
@@ -2369,7 +2369,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-proto"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "clap",
  "futures",
@@ -2392,7 +2392,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-s3-bench"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2408,7 +2408,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-storage"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "async-trait",
  "bindgen 0.72.1",
@@ -2437,7 +2437,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-transport-te"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "bytes",
  "futures",
@@ -2449,7 +2449,7 @@ dependencies = [
 
 [[package]]
 name = "iolake-unity-catalog"
-version = "0.1.0-dev"
+version = "0.1.0-rc.4"
 dependencies = [
  "axum 0.8.8",
  "iolake-auth",

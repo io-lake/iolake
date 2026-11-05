@@ -279,3 +279,4 @@ test_sts::test_session_policy_check_with_deny_on_same_op,test-environment,no [we
 test_sts::test_session_policy_copy_object,test-environment,no [webidentity] section / IdP configured
 test_sts::test_session_policy_no_bucket_role_policy,test-environment,no [webidentity] section / IdP configured
 test_sts::test_swapping_role_policy_and_session_policy,test-environment,no [webidentity] section / IdP configured
+test_sts::test_get_caller_identity_non_root_user,test-environment,"creates the IAM user s3-tests-MyUser, as test_get_caller_identity_after_assume_role does: on parallel pytest workers the two collide (EntityAlreadyExists); passes alone and with --jobs 1"

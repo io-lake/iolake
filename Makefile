@@ -1,4 +1,4 @@
-# ObjectIO Makefile
+# IOLake Makefile
 # Common build, test, and deployment commands
 #
 # Usage:
@@ -20,7 +20,7 @@ DOCKER_REGISTRY ?=
 DOCKER_TAG ?= latest
 RUST_VERSION ?= 1.93
 PLATFORMS ?= linux/amd64,linux/arm64
-BUILDX_BUILDER ?= objectio-builder
+BUILDX_BUILDER ?= iolake-builder
 
 # Default target
 all: build
@@ -67,39 +67,39 @@ docker: docker-gateway docker-meta docker-osd docker-cli docker-all
 
 ## Build gateway image
 docker-gateway:
-	docker build --target gateway -t $(DOCKER_REGISTRY)objectio-gateway:$(DOCKER_TAG) .
+	docker build --target gateway -t $(DOCKER_REGISTRY)iolake-gateway:$(DOCKER_TAG) .
 
 ## Build metadata service image
 docker-meta:
-	docker build --target meta -t $(DOCKER_REGISTRY)objectio-meta:$(DOCKER_TAG) .
+	docker build --target meta -t $(DOCKER_REGISTRY)iolake-meta:$(DOCKER_TAG) .
 
 ## Build OSD image
 docker-osd:
-	docker build --target osd -t $(DOCKER_REGISTRY)objectio-osd:$(DOCKER_TAG) .
+	docker build --target osd -t $(DOCKER_REGISTRY)iolake-osd:$(DOCKER_TAG) .
 
 ## Build CLI image
 docker-cli:
-	docker build --target cli -t $(DOCKER_REGISTRY)objectio-cli:$(DOCKER_TAG) .
+	docker build --target cli -t $(DOCKER_REGISTRY)iolake-cli:$(DOCKER_TAG) .
 
 ## Build all-in-one image
 docker-all:
-	docker build --target all -t $(DOCKER_REGISTRY)objectio:$(DOCKER_TAG) .
+	docker build --target all -t $(DOCKER_REGISTRY)iolake:$(DOCKER_TAG) .
 
 ## Build with BuildKit cache (faster rebuilds)
 docker-cached:
 	DOCKER_BUILDKIT=1 docker build \
 		--target all \
-		--cache-from $(DOCKER_REGISTRY)objectio:cache \
+		--cache-from $(DOCKER_REGISTRY)iolake:cache \
 		--build-arg BUILDKIT_INLINE_CACHE=1 \
-		-t $(DOCKER_REGISTRY)objectio:$(DOCKER_TAG) .
+		-t $(DOCKER_REGISTRY)iolake:$(DOCKER_TAG) .
 
 ## Push all images to registry
 push:
-	docker push $(DOCKER_REGISTRY)objectio-gateway:$(DOCKER_TAG)
-	docker push $(DOCKER_REGISTRY)objectio-meta:$(DOCKER_TAG)
-	docker push $(DOCKER_REGISTRY)objectio-osd:$(DOCKER_TAG)
-	docker push $(DOCKER_REGISTRY)objectio-cli:$(DOCKER_TAG)
-	docker push $(DOCKER_REGISTRY)objectio:$(DOCKER_TAG)
+	docker push $(DOCKER_REGISTRY)iolake-gateway:$(DOCKER_TAG)
+	docker push $(DOCKER_REGISTRY)iolake-meta:$(DOCKER_TAG)
+	docker push $(DOCKER_REGISTRY)iolake-osd:$(DOCKER_TAG)
+	docker push $(DOCKER_REGISTRY)iolake-cli:$(DOCKER_TAG)
+	docker push $(DOCKER_REGISTRY)iolake:$(DOCKER_TAG)
 
 # =============================================================================
 # Multi-Architecture Docker Builds (requires docker buildx)
@@ -121,35 +121,35 @@ docker-multiarch: buildx-setup docker-multiarch-gateway docker-multiarch-meta do
 docker-multiarch-gateway: buildx-setup
 	docker buildx build --platform $(PLATFORMS) \
 		--target gateway \
-		-t $(DOCKER_REGISTRY)objectio-gateway:$(DOCKER_TAG) \
+		-t $(DOCKER_REGISTRY)iolake-gateway:$(DOCKER_TAG) \
 		--push .
 
 ## Build multi-arch meta and push
 docker-multiarch-meta: buildx-setup
 	docker buildx build --platform $(PLATFORMS) \
 		--target meta \
-		-t $(DOCKER_REGISTRY)objectio-meta:$(DOCKER_TAG) \
+		-t $(DOCKER_REGISTRY)iolake-meta:$(DOCKER_TAG) \
 		--push .
 
 ## Build multi-arch OSD and push
 docker-multiarch-osd: buildx-setup
 	docker buildx build --platform $(PLATFORMS) \
 		--target osd \
-		-t $(DOCKER_REGISTRY)objectio-osd:$(DOCKER_TAG) \
+		-t $(DOCKER_REGISTRY)iolake-osd:$(DOCKER_TAG) \
 		--push .
 
 ## Build multi-arch CLI and push
 docker-multiarch-cli: buildx-setup
 	docker buildx build --platform $(PLATFORMS) \
 		--target cli \
-		-t $(DOCKER_REGISTRY)objectio-cli:$(DOCKER_TAG) \
+		-t $(DOCKER_REGISTRY)iolake-cli:$(DOCKER_TAG) \
 		--push .
 
 ## Build multi-arch all-in-one and push
 docker-multiarch-all: buildx-setup
 	docker buildx build --platform $(PLATFORMS) \
 		--target all \
-		-t $(DOCKER_REGISTRY)objectio:$(DOCKER_TAG) \
+		-t $(DOCKER_REGISTRY)iolake:$(DOCKER_TAG) \
 		--push .
 
 ## Build multi-arch images locally (load into Docker)
@@ -157,7 +157,7 @@ docker-multiarch-all: buildx-setup
 docker-multiarch-local:
 	docker buildx build --platform linux/$(shell uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/') \
 		--target all \
-		-t $(DOCKER_REGISTRY)objectio:$(DOCKER_TAG) \
+		-t $(DOCKER_REGISTRY)iolake:$(DOCKER_TAG) \
 		--load .
 
 # =============================================================================
@@ -184,13 +184,13 @@ docker-lint:
 # Kind (Kubernetes in Docker) Cluster — the supported local-dev path
 # =============================================================================
 
-## Create Kind cluster and deploy full ObjectIO stack (S3 + Iceberg + Delta Sharing)
+## Create Kind cluster and deploy full IOLake stack (S3 + Iceberg + Delta Sharing)
 kind-up:
 	bash deploy/kind/setup.sh
 
 ## Create Kind cluster and deploy using pre-built GHCR images (no local build)
 kind-up-registry:
-	bash deploy/kind/setup.sh --registry ghcr.io/object-io
+	bash deploy/kind/setup.sh --registry ghcr.io/io-lake
 
 ## Tear down the Kind cluster
 kind-down:
@@ -198,24 +198,24 @@ kind-down:
 
 ## Build all images and load into the running Kind cluster
 kind-load:
-	docker build --target gateway       -t objectio-gateway:latest .
-	docker build --target meta          -t objectio-meta:latest .
-	docker build --target osd           -t objectio-osd:latest .
-	docker build --target cli           -t objectio-cli:latest .
-	docker build --target block-gateway -t objectio-block-gateway:latest .
-	kind load docker-image objectio-gateway:latest       --name objectio
-	kind load docker-image objectio-meta:latest          --name objectio
-	kind load docker-image objectio-osd:latest           --name objectio
-	kind load docker-image objectio-cli:latest           --name objectio
-	kind load docker-image objectio-block-gateway:latest --name objectio
+	docker build --target gateway       -t iolake-gateway:latest .
+	docker build --target meta          -t iolake-meta:latest .
+	docker build --target osd           -t iolake-osd:latest .
+	docker build --target cli           -t iolake-cli:latest .
+	docker build --target block-gateway -t iolake-block-gateway:latest .
+	kind load docker-image iolake-gateway:latest       --name iolake
+	kind load docker-image iolake-meta:latest          --name iolake
+	kind load docker-image iolake-osd:latest           --name iolake
+	kind load docker-image iolake-cli:latest           --name iolake
+	kind load docker-image iolake-block-gateway:latest --name iolake
 
-## Tail logs for all ObjectIO pods in Kind
+## Tail logs for all IOLake pods in Kind
 kind-logs:
-	kubectl logs -n objectio -l app.kubernetes.io/name=objectio --all-containers -f --max-log-requests=20
+	kubectl logs -n iolake -l app.kubernetes.io/name=iolake --all-containers -f --max-log-requests=20
 
 ## Show pod status in Kind cluster
 kind-status:
-	kubectl get pods -n objectio -o wide
+	kubectl get pods -n iolake -o wide
 
 # =============================================================================
 # CI/CD Helpers
@@ -235,7 +235,7 @@ coverage:
 
 ## Show this help message
 help:
-	@echo "ObjectIO Build System"
+	@echo "IOLake Build System"
 	@echo ""
 	@echo "Usage: make [target]"
 	@echo ""

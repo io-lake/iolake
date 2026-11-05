@@ -147,7 +147,7 @@ struct StripeDone {
 /// Where a streamed upload's stripes go and how they are made.
 pub(crate) struct StreamTo<'a> {
     pub(crate) state: &'a Arc<AppState>,
-    pub(crate) placement: &'a objectio_proto::metadata::GetPlacementResponse,
+    pub(crate) placement: &'a iolake_proto::metadata::GetPlacementResponse,
     pub(crate) object_id: [u8; 16],
     pub(crate) cipher: StripeCipher,
     /// Over Transfer Engine where it can (a PUT's MDS stripes), or gRPC.
@@ -304,7 +304,7 @@ pub(crate) async fn stream_stripes(
 /// on while the next is read.
 async fn write_stripe(
     state: Arc<AppState>,
-    placement: Arc<objectio_proto::metadata::GetPlacementResponse>,
+    placement: Arc<iolake_proto::metadata::GetPlacementResponse>,
     rdma: Option<Arc<crate::rdma::GatewayRdma>>,
     (object_id, stripe): ([u8; 16], u64),
     encoded: Encoded,

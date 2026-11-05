@@ -1,5 +1,5 @@
 //! Stamps: the order of writes to one object's metadata copies
-//! (objectio-docs `core/object-metadata-quorum.md`).
+//! (iolake-docs `core/object-metadata-quorum.md`).
 //!
 //! A stamp is a hybrid logical clock value: the wall-clock milliseconds in
 //! the high 48 bits and a counter in the low 16. Every process that writes

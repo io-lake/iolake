@@ -7,7 +7,7 @@
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::time::{Duration, Instant};
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 /// Sum of every sample of `name` whose labels contain all of `labels`.
@@ -88,7 +88,7 @@ fn a_lost_disk_is_rebuilt_so_objects_survive_two_more_losses() {
     // OSD's report of shards dropped at start sets off.
     await_metric(
         &c,
-        "objectio_meta_pg_recovered_shards_total",
+        "iolake_meta_pg_recovered_shards_total",
         &[],
         OBJECTS as u64,
         Duration::from_secs(120),
@@ -101,11 +101,11 @@ fn a_lost_disk_is_rebuilt_so_objects_survive_two_more_losses() {
 
 /// Whether the OSD at `address` holds a metadata copy of `bucket/key`.
 fn osd_has_meta(address: &str, bucket: &str, key: &str) -> bool {
-    use objectio_proto::storage::GetObjectMetaRequest;
-    use objectio_proto::storage::storage_service_client::StorageServiceClient;
+    use iolake_proto::storage::GetObjectMetaRequest;
+    use iolake_proto::storage::storage_service_client::StorageServiceClient;
     tokio::runtime::Runtime::new().unwrap().block_on(async {
         let mut client = StorageServiceClient::new(
-            objectio_e2e::tls::channel(address)
+            iolake_e2e::tls::channel(address)
                 .await
                 .expect("connect OSD"),
         );
@@ -280,14 +280,14 @@ fn a_rotted_shard_is_found_by_the_scrubber_and_rebuilt() {
     assert_eq!(r.status, 202, "{}", r.text());
     await_metric(
         &c,
-        "objectio_meta_scrub_shards_bad_total",
+        "iolake_meta_scrub_shards_bad_total",
         &["reason=\"corrupt\""],
         1,
         Duration::from_secs(120),
     );
     await_metric(
         &c,
-        "objectio_meta_pg_recovered_shards_total",
+        "iolake_meta_pg_recovered_shards_total",
         &[],
         1,
         Duration::from_secs(120),
@@ -380,7 +380,7 @@ fn objects_written_while_an_osd_is_out_get_their_missing_shard_when_it_is_back()
 /// the objects then survive two more OSDs down.
 #[test]
 fn a_drive_replaced_in_place_is_rebuilt_without_an_operator() {
-    use objectio_e2e::ha::HaCluster;
+    use iolake_e2e::ha::HaCluster;
     let mut ha = HaCluster::start(1, 6, 1);
     let c = &ha.clients[0];
     assert_eq!(c.request("PUT", "/swap", &[]).status, 200);
@@ -471,7 +471,7 @@ fn a_drive_replaced_in_place_is_rebuilt_without_an_operator() {
 /// stale copies up to date instead of retrying them forever, and finishes.
 #[test]
 fn stale_copies_do_not_hold_up_a_lost_osds_evacuation() {
-    use objectio_e2e::ha::HaCluster;
+    use iolake_e2e::ha::HaCluster;
     let mut ha = HaCluster::start(1, 6, 1);
     let c = &ha.clients[0];
     assert_eq!(c.request("PUT", "/stale", &[]).status, 200);
@@ -575,7 +575,7 @@ fn stale_copies_do_not_hold_up_a_lost_osds_evacuation() {
 /// an hour, then two more lost.
 #[test]
 fn a_write_short_of_shards_is_repaired_from_its_record() {
-    use objectio_e2e::ha::HaCluster;
+    use iolake_e2e::ha::HaCluster;
     let mut ha = HaCluster::start_with_meta_args(1, 6, 1, &["--repair-interval-secs", "3600"]);
     let _ = ha.await_leader(Duration::from_secs(30));
     let c = &ha.clients[0];
@@ -609,7 +609,7 @@ fn a_write_short_of_shards_is_repaired_from_its_record() {
 /// back, and every object survives two more OSDs down.
 #[test]
 fn a_write_whose_owner_missed_it_is_repaired_without_a_heal() {
-    use objectio_e2e::ha::HaCluster;
+    use iolake_e2e::ha::HaCluster;
     let mut ha = HaCluster::start_with_meta_args(1, 6, 1, &["--repair-interval-secs", "3600"]);
     let _ = ha.await_leader(Duration::from_secs(30));
     assert_eq!(ha.clients[0].request("PUT", "/owner", &[]).status, 200);
@@ -626,15 +626,15 @@ fn a_write_whose_owner_missed_it_is_repaired_without_a_heal() {
     // every PG Clean.
     let deadline = Instant::now() + Duration::from_secs(120);
     let repaired = |ha: &HaCluster| {
-        ha.meta_metric("objectio_meta_degraded_objects") == Some(0.0)
-            && ha.meta_metric("objectio_meta_pgs_not_clean") == Some(0.0)
+        ha.meta_metric("iolake_meta_degraded_objects") == Some(0.0)
+            && ha.meta_metric("iolake_meta_pgs_not_clean") == Some(0.0)
     };
     while !repaired(&ha) {
         assert!(
             Instant::now() < deadline,
             "still degraded after 120 s: {:?} records, {:?} PGs not Clean",
-            ha.meta_metric("objectio_meta_degraded_objects"),
-            ha.meta_metric("objectio_meta_pgs_not_clean")
+            ha.meta_metric("iolake_meta_degraded_objects"),
+            ha.meta_metric("iolake_meta_pgs_not_clean")
         );
         std::thread::sleep(Duration::from_secs(2));
     }
@@ -653,7 +653,7 @@ fn a_write_whose_owner_missed_it_is_repaired_without_a_heal() {
 /// never while a holder of the rest is only down (it may have its shard).
 #[test]
 fn an_evacuation_records_a_lost_object_and_finishes() {
-    use objectio_e2e::ha::HaCluster;
+    use iolake_e2e::ha::HaCluster;
     let mut ha = HaCluster::start_with_meta_args(
         1,
         6,
@@ -729,7 +729,7 @@ fn an_evacuation_records_a_lost_object_and_finishes() {
         let m = c.request("GET", "/metrics", &[]).text();
         let lost = m
             .lines()
-            .find(|l| l.starts_with("objectio_meta_lost_objects"))
+            .find(|l| l.starts_with("iolake_meta_lost_objects"))
             .and_then(|l| l.rsplit(' ').next()?.parse::<f64>().ok())
             .unwrap_or(0.0);
         if lost >= 1.0 {
@@ -749,7 +749,7 @@ fn an_evacuation_records_a_lost_object_and_finishes() {
 /// The object then survives two more OSDs down.
 #[test]
 fn a_read_that_finds_a_shard_missing_has_it_rebuilt() {
-    use objectio_e2e::ha::HaCluster;
+    use iolake_e2e::ha::HaCluster;
     let mut ha = HaCluster::start_with_meta_args(1, 6, 1, &["--repair-interval-secs", "3600"]);
     let _ = ha.await_leader(Duration::from_secs(30));
     let c = &ha.clients[0];
@@ -773,7 +773,7 @@ fn a_read_that_finds_a_shard_missing_has_it_rebuilt() {
     // Until its placement group's recovery has rebuilt it.
     let deadline = Instant::now() + Duration::from_secs(120);
     while ha
-        .meta_metric("objectio_meta_pg_recovered_shards_total")
+        .meta_metric("iolake_meta_pg_recovered_shards_total")
         .is_none_or(|n| n < 0.5)
     {
         assert!(Instant::now() < deadline, "never rebuilt");
@@ -792,17 +792,12 @@ fn a_read_that_finds_a_shard_missing_has_it_rebuilt() {
 
 /// Which of `ha`'s OSDs holds position `pos` of `bucket/key`'s first
 /// stripe, from the object's metadata.
-fn holder_of_position(
-    ha: &objectio_e2e::ha::HaCluster,
-    bucket: &str,
-    key: &str,
-    pos: u32,
-) -> usize {
-    use objectio_proto::storage::GetObjectMetaRequest;
-    use objectio_proto::storage::storage_service_client::StorageServiceClient;
+fn holder_of_position(ha: &iolake_e2e::ha::HaCluster, bucket: &str, key: &str, pos: u32) -> usize {
+    use iolake_proto::storage::GetObjectMetaRequest;
+    use iolake_proto::storage::storage_service_client::StorageServiceClient;
     let object = tokio::runtime::Runtime::new().unwrap().block_on(async {
         let mut client = StorageServiceClient::new(
-            objectio_e2e::tls::channel(&ha.osd_endpoint(0))
+            iolake_e2e::tls::channel(&ha.osd_endpoint(0))
                 .await
                 .expect("connect OSD"),
         );
@@ -846,7 +841,7 @@ fn holder_of_position(
 /// shards at once, so it then survives two other OSDs down.
 #[test]
 fn a_small_write_refused_on_k_copies_is_repaired() {
-    use objectio_e2e::ha::HaCluster;
+    use iolake_e2e::ha::HaCluster;
     let mut ha = HaCluster::start_with_meta_args(1, 6, 1, &["--repair-interval-secs", "3600"]);
     let _ = ha.await_leader(Duration::from_secs(30));
     assert_eq!(ha.clients[0].request("PUT", "/short", &[]).status, 200);
@@ -876,7 +871,7 @@ fn a_small_write_refused_on_k_copies_is_repaired() {
 /// error, once the OSDs are back.
 #[test]
 fn a_small_write_refused_below_k_copies_is_withdrawn() {
-    use objectio_e2e::ha::HaCluster;
+    use iolake_e2e::ha::HaCluster;
     let mut ha = HaCluster::start_with_meta_args(1, 6, 1, &["--repair-interval-secs", "3600"]);
     let _ = ha.await_leader(Duration::from_secs(30));
     let c = &ha.clients[0];
@@ -936,7 +931,7 @@ fn a_small_write_refused_below_k_copies_is_withdrawn() {
 /// on all six, so it is kept.
 #[test]
 fn a_small_write_whose_answers_were_lost_is_kept_when_k_copies_hold_it() {
-    use objectio_e2e::ha::HaCluster;
+    use iolake_e2e::ha::HaCluster;
     let ha = HaCluster::start_with_meta_args(1, 6, 1, &["--repair-interval-secs", "3600"]);
     let _ = ha.await_leader(Duration::from_secs(30));
     let c = &ha.clients[0];
@@ -975,7 +970,7 @@ fn a_small_write_whose_answers_were_lost_is_kept_when_k_copies_hold_it() {
 /// now stands another OSD in for it, during the evacuation and after.
 #[test]
 fn a_pg_pool_places_around_a_lost_osd() {
-    use objectio_e2e::ha::HaCluster;
+    use iolake_e2e::ha::HaCluster;
     let mut ha = HaCluster::start_with_osd_hosts(1, 6, 1);
     let _ = ha.await_leader(Duration::from_secs(30));
     let c = &ha.clients[0];
@@ -994,7 +989,7 @@ fn a_pg_pool_places_around_a_lost_osd() {
         pgs["pgs"].as_array().is_some_and(|p| !p.is_empty()),
         "{pgs}"
     );
-    c.request_with_headers("PUT", "/pgpool", &[], &[("x-objectio-pool", "pgp")])
+    c.request_with_headers("PUT", "/pgpool", &[], &[("x-iolake-pool", "pgp")])
         .expect(200);
 
     let ids = |c: &Cluster| -> Vec<(String, String)> {
@@ -1065,7 +1060,7 @@ fn a_pg_pool_places_around_a_lost_osd() {
 /// all that time (and after it, until the walk reached it).
 #[test]
 fn a_replaced_disk_is_rebuilt_without_waiting_for_the_walk() {
-    use objectio_e2e::ha::HaCluster;
+    use iolake_e2e::ha::HaCluster;
     // The walk's default interval: an hour.
     let mut ha = HaCluster::start_with_meta_args(1, 6, 1, &["--repair-interval-secs", "3600"]);
     let _ = ha.await_leader(Duration::from_secs(30));

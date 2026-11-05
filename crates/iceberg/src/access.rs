@@ -1,7 +1,7 @@
 //! Iceberg namespace and table access control.
 //!
 //! Reuses the existing `BucketPolicy` / `PolicyEvaluator` / `RequestContext`
-//! from `objectio-auth::policy` with `iceberg:` action prefixes and
+//! from `iolake-auth::policy` with `iceberg:` action prefixes and
 //! `arn:obio:iceberg:::` resource ARNs.
 //!
 //! Populates `RequestContext.variables` with Iceberg-specific condition keys:
@@ -10,7 +10,7 @@
 //! - `iceberg:operation` — the action being performed (e.g. `"iceberg:CreateTable"`)
 
 use crate::error::IcebergError;
-use objectio_auth::policy::{BucketPolicy, PolicyDecision, PolicyEvaluator, RequestContext};
+use iolake_auth::policy::{BucketPolicy, PolicyDecision, PolicyEvaluator, RequestContext};
 use std::collections::HashMap;
 
 /// Prefix used for storing tags as namespace properties.

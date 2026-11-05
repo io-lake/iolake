@@ -1,4 +1,4 @@
-package objectio
+package iolake
 
 import (
 	"context"
@@ -19,7 +19,7 @@ import (
 // PublicAccessBlock is S3's four flags, under S3's names.
 type PublicAccessBlock struct {
 	// BlockPublicAcls and IgnorePublicAcls are kept and reported. ACLs are
-	// owner-enforced in ObjectIO, so no ACL can grant public access in the
+	// owner-enforced in IOLake, so no ACL can grant public access in the
 	// first place; both hold by construction.
 	BlockPublicAcls  bool `json:"BlockPublicAcls" xml:"BlockPublicAcls"`
 	IgnorePublicAcls bool `json:"IgnorePublicAcls" xml:"IgnorePublicAcls"`
@@ -113,7 +113,7 @@ func (c *Client) GetBucketPublicAccessBlock(ctx context.Context, bucket string) 
 	}
 	var doc publicAccessBlockXML
 	if err := xml.Unmarshal(raw, &doc); err != nil {
-		return nil, fmt.Errorf("objectio: decoding PublicAccessBlockConfiguration: %w", err)
+		return nil, fmt.Errorf("iolake: decoding PublicAccessBlockConfiguration: %w", err)
 	}
 	return &doc.PublicAccessBlock, nil
 }
@@ -125,7 +125,7 @@ func (c *Client) PutBucketPublicAccessBlock(ctx context.Context, bucket string, 
 		PublicAccessBlock: block,
 	})
 	if err != nil {
-		return fmt.Errorf("objectio: encoding PublicAccessBlockConfiguration: %w", err)
+		return fmt.Errorf("iolake: encoding PublicAccessBlockConfiguration: %w", err)
 	}
 	_, err = c.send(ctx, "PUT", "/"+bucket, url.Values{"publicAccessBlock": {""}}, body, "application/xml", true)
 	return err
@@ -149,7 +149,7 @@ func (c *Client) GetBucketPolicyStatus(ctx context.Context, bucket string) (bool
 		IsPublic bool `xml:"IsPublic"`
 	}
 	if err := xml.Unmarshal(raw, &doc); err != nil {
-		return false, fmt.Errorf("objectio: decoding PolicyStatus: %w", err)
+		return false, fmt.Errorf("iolake: decoding PolicyStatus: %w", err)
 	}
 	return doc.IsPublic, nil
 }

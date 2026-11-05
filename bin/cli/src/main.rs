@@ -1,4 +1,4 @@
-//! `obioctl` — the `ObjectIO` management CLI.
+//! `iolakectl` — the `IOLake` management CLI.
 //!
 //! A client of the gateway's admin HTTP API, signed with `SigV4` like the
 //! SDKs: every call goes through the gateway's authentication, tenant
@@ -24,7 +24,7 @@ mod http;
 mod output;
 mod skills;
 /// `SigV4` signing, shared with the gateway's replicator.
-use objectio_auth::signer as sigv4;
+use iolake_auth::signer as sigv4;
 #[cfg(test)]
 mod stub_tests;
 
@@ -56,8 +56,8 @@ pub async fn execute(
     };
     match args.command {
         Command::Configure(c) => {
-            let path = config::profile_path(env)
-                .context("neither OBJECTIO_CONFIG_FILE nor HOME is set")?;
+            let path =
+                config::profile_path(env).context("neither IOLAKE_CONFIG_FILE nor HOME is set")?;
             configure::run(&c, &flags, &path, &mut out)
         }
         Command::Volume { action } => block::volume(action, &args.block_endpoint, &mut out).await,
@@ -92,7 +92,7 @@ pub async fn execute(
             let mut ctx = commands::Ctx {
                 api: &api,
                 out,
-                provisioner: env("OBJECTIO_PROVISIONER_USER_ID").filter(|s| !s.is_empty()),
+                provisioner: env("IOLAKE_PROVISIONER_USER_ID").filter(|s| !s.is_empty()),
             };
             commands::run(cmd, &mut ctx).await
         }
@@ -107,7 +107,7 @@ async fn main() -> ExitCode {
         .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
         .init();
 
-    if let Err(e) = objectio_proto::transport::configure_tls(&args.tls) {
+    if let Err(e) = iolake_proto::transport::configure_tls(&args.tls) {
         eprintln!("error: {e}");
         return ExitCode::FAILURE;
     }
@@ -138,7 +138,7 @@ mod tests {
 
     #[test]
     fn an_empty_tenant_is_refused_at_parse_time() {
-        let r = Args::try_parse_from(["obioctl", "user", "list", "--tenant", ""]);
+        let r = Args::try_parse_from(["iolakectl", "user", "list", "--tenant", ""]);
         assert!(r.is_err());
     }
 
@@ -146,11 +146,20 @@ mod tests {
     fn a_policy_principal_is_exactly_one() {
         assert!(
             Args::try_parse_from([
-                "obioctl", "policy", "attach", "p", "--user", "u", "--group", "g"
+                "iolakectl",
+                "policy",
+                "attach",
+                "p",
+                "--user",
+                "u",
+                "--group",
+                "g"
             ])
             .is_err()
         );
-        assert!(Args::try_parse_from(["obioctl", "policy", "attach", "p"]).is_err());
-        assert!(Args::try_parse_from(["obioctl", "policy", "attach", "p", "--role", "r"]).is_ok());
+        assert!(Args::try_parse_from(["iolakectl", "policy", "attach", "p"]).is_err());
+        assert!(
+            Args::try_parse_from(["iolakectl", "policy", "attach", "p", "--role", "r"]).is_ok()
+        );
     }
 }

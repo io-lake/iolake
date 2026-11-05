@@ -5,7 +5,7 @@
 
 use std::fmt::Write as _;
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 fn noise(len: usize, seed: u64) -> Vec<u8> {
@@ -180,7 +180,7 @@ fn xml_tag(xml: &str, name: &str) -> String {
 /// stop meta.
 #[test]
 fn an_object_of_more_parts_than_one_share_takes_is_copied_by_reference() {
-    let parts = u32::try_from(objectio_common::META_MAX_OPS).unwrap() + 1;
+    let parts = u32::try_from(iolake_common::META_MAX_OPS).unwrap() + 1;
     let c = Cluster::start_with_ec(6, 4, 2);
     c.json("POST", "/_admin/buckets", json!({"name": "b"}))
         .expect_ok();

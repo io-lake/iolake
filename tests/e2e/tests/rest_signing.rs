@@ -6,10 +6,10 @@
 //! `/iceberg/v1/config`. The signature covers the body: one changed
 //! after it was signed is refused.
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
-fn names(r: &objectio_e2e::Response) -> Vec<String> {
+fn names(r: &iolake_e2e::Response) -> Vec<String> {
     r.json()["namespaces"]
         .as_array()
         .expect("namespaces")

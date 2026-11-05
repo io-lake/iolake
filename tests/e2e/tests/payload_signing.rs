@@ -5,7 +5,7 @@
 //! differs from what was signed stores nothing.
 
 use base64::Engine as _;
-use objectio_e2e::{Cluster, SignedRequest};
+use iolake_e2e::{Cluster, SignedRequest};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
@@ -14,7 +14,7 @@ fn bucket(c: &Cluster, name: &str) {
         .expect_ok();
 }
 
-fn code(r: &objectio_e2e::Response) -> String {
+fn code(r: &iolake_e2e::Response) -> String {
     let xml = r.text();
     xml.split("<Code>")
         .nth(1)
@@ -95,12 +95,7 @@ fn frame(req: &SignedRequest, payload: &[u8], how: Streaming) -> Vec<u8> {
 
 /// A signed streaming upload of `payload` to `path`, as aws-cli, the Java
 /// SDK and minio-go send one.
-fn put_streaming(
-    c: &Cluster,
-    path: &str,
-    payload: &[u8],
-    how: Streaming,
-) -> objectio_e2e::Response {
+fn put_streaming(c: &Cluster, path: &str, payload: &[u8], how: Streaming) -> iolake_e2e::Response {
     let decoded = payload.len().to_string();
     let mut signed = vec![
         ("content-encoding", "aws-chunked"),
@@ -368,7 +363,7 @@ fn a_streaming_upload_part_is_checked() {
         },
     );
     e2.expect(200);
-    let etag = |r: &objectio_e2e::Response| r.header("etag").expect("etag");
+    let etag = |r: &iolake_e2e::Response| r.header("etag").expect("etag");
     let complete = format!(
         "<CompleteMultipartUpload>\
          <Part><PartNumber>1</PartNumber><ETag>{}</ETag></Part>\

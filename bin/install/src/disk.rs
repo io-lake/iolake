@@ -10,14 +10,14 @@ use tracing::info;
 #[derive(Debug, PartialEq, Eq)]
 pub enum DiskState {
     Missing,
-    /// An ObjectIO superblock (either copy).
-    ObjectIo {
+    /// An IOLake superblock (either copy).
+    IoLake {
         disk_id: String,
         block_size: u32,
     },
     /// Both superblock places all zeros: what the OSD formats.
     Blank,
-    /// Anything else: data that isn't ObjectIO's, or a disk that can't be
+    /// Anything else: data that isn't IOLake's, or a disk that can't be
     /// read.
     Other(String),
 }
@@ -26,12 +26,12 @@ impl std::fmt::Display for DiskState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Missing => write!(f, "not found"),
-            Self::ObjectIo {
+            Self::IoLake {
                 disk_id,
                 block_size,
-            } => write!(f, "ObjectIO disk (ID: {disk_id}, block size {block_size})"),
+            } => write!(f, "IOLake disk (ID: {disk_id}, block size {block_size})"),
             Self::Blank => write!(f, "blank"),
-            Self::Other(why) => write!(f, "not an ObjectIO disk ({why})"),
+            Self::Other(why) => write!(f, "not an IOLake disk ({why})"),
         }
     }
 }
@@ -41,20 +41,20 @@ pub fn state(path: &str) -> DiskState {
     if !Path::new(path).exists() {
         return DiskState::Missing;
     }
-    if let Ok(sb) = objectio_storage::probe_superblock(path) {
-        return DiskState::ObjectIo {
+    if let Ok(sb) = iolake_storage::probe_superblock(path) {
+        return DiskState::IoLake {
             disk_id: sb.disk_id.to_string(),
             block_size: sb.block_size,
         };
     }
-    match objectio_storage::is_blank(path) {
+    match iolake_storage::is_blank(path) {
         Ok(true) => DiskState::Blank,
         Ok(false) => DiskState::Other("holds data".into()),
         Err(e) => DiskState::Other(format!("cannot read: {e}")),
     }
 }
 
-/// Detect available disks that can be used for ObjectIO
+/// Detect available disks that can be used for IOLake
 pub fn detect_available_disks() -> Result<Vec<String>> {
     let mut available = Vec::new();
     for dev_path in list_all_disks()? {
@@ -99,23 +99,23 @@ fn is_mounted(path: &str) -> bool {
         .any(|dev| dev.starts_with(path))
 }
 
-/// Whether a device is unmounted and so may be offered for ObjectIO.
+/// Whether a device is unmounted and so may be offered for IOLake.
 fn is_disk_suitable(path: &str) -> bool {
     Path::new(path).exists() && !is_mounted(path)
 }
 
 /// Check the disks an OSD is to be given: each must be blank (the OSD
-/// formats it when it first starts) or an ObjectIO disk already. Anything
+/// formats it when it first starts) or an IOLake disk already. Anything
 /// else is refused: it may be someone's data.
 pub fn check_for_osd(paths: &[String]) -> Result<()> {
     for path in paths {
         match state(path) {
             DiskState::Blank => info!("{path}: blank; the OSD formats it when it first starts"),
-            s @ DiskState::ObjectIo { .. } => info!("{path}: {s}"),
+            s @ DiskState::IoLake { .. } => info!("{path}: {s}"),
             DiskState::Missing => bail!("disk {path} not found"),
             DiskState::Other(why) => bail!(
-                "disk {path} is neither blank nor an ObjectIO disk ({why}): wipe it first if it \
-                 is to hold ObjectIO's data, or `objectio-install disk prepare --force` it"
+                "disk {path} is neither blank nor an IOLake disk ({why}): wipe it first if it \
+                 is to hold IOLake's data, or `iolake-install disk prepare --force` it"
             ),
         }
         if is_mounted(path) {
@@ -125,7 +125,7 @@ pub fn check_for_osd(paths: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// Format the disk at `path` for ObjectIO, with `block_size`, or the OSD's
+/// Format the disk at `path` for IOLake, with `block_size`, or the OSD's
 /// default when `None`. Refuses a disk that isn't blank unless `force`:
 /// formatting it destroys what it holds.
 pub fn prepare_disk(path: &str, force: bool, block_size: Option<u32>) -> Result<String> {
@@ -141,7 +141,7 @@ pub fn prepare_disk(path: &str, force: bool, block_size: Option<u32>) -> Result<
 
     // A block device's length is where its end is.
     let size = fs::File::open(path)?.seek(SeekFrom::End(0))?;
-    let disk = objectio_storage::DiskManager::init(path, size, block_size)
+    let disk = iolake_storage::DiskManager::init(path, size, block_size)
         .map_err(|e| anyhow::anyhow!("formatting {path}: {e}"))?;
     let disk_id = disk.id().to_string();
     info!(
@@ -179,9 +179,9 @@ mod tests {
         let id = prepare_disk(&path, false, None).unwrap();
         assert_eq!(
             state(&path),
-            DiskState::ObjectIo {
+            DiskState::IoLake {
                 disk_id: id.clone(),
-                block_size: objectio_storage::DEFAULT_BLOCK_SIZE,
+                block_size: iolake_storage::DEFAULT_BLOCK_SIZE,
             }
         );
         check_for_osd(std::slice::from_ref(&path)).unwrap();

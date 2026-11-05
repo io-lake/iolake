@@ -1,4 +1,4 @@
-//! Recovery by placement group (B31 phase 3a, objectio-docs
+//! Recovery by placement group (B31 phase 3a, iolake-docs
 //! `core/pg-recovery.md`): peering's findings acted on. The exit test, for
 //! MDS erasure coding:
 //!
@@ -17,7 +17,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use objectio_e2e::ha::HaCluster;
+use iolake_e2e::ha::HaCluster;
 use serde_json::{Value, json};
 
 fn payload(len: usize, seed: u8) -> Vec<u8> {
@@ -62,7 +62,7 @@ fn one_pg_bucket(ha: &HaCluster, bucket: &str) {
         "PUT",
         &format!("/{bucket}"),
         &[],
-        &[("x-objectio-pool", "one")],
+        &[("x-iolake-pool", "one")],
     )
     .expect(200);
 }
@@ -216,7 +216,7 @@ fn a_lost_drive_is_backfilled_through_its_pgs_and_survives_two_more_losses() {
     assert!(seen_filling, "no PG was ever filling");
     await_clean(&ha, "default", 120);
     assert!(
-        ha.meta_metric("objectio_meta_pg_recovered_shards_total")
+        ha.meta_metric("iolake_meta_pg_recovered_shards_total")
             .unwrap_or(0.0)
             > 0.0,
         "recovery wrote no shards"
@@ -377,7 +377,7 @@ fn stale_copies_an_overwrite_left_are_brought_up_to_date() {
     ha.start_osd(2, None);
     await_clean(&ha, "default", 120);
     assert!(
-        ha.meta_metric("objectio_meta_pg_recovered_copies_total")
+        ha.meta_metric("iolake_meta_pg_recovered_copies_total")
             .unwrap_or(0.0)
             > 0.0,
         "recovery wrote no copies"
@@ -465,7 +465,7 @@ fn draining_an_osd_empties_it_through_its_pgs() {
 
 /// How fast a backfill goes (not a test of anything): one PG of 400
 /// objects of 256 KiB, a member's drive lost, the time until the PG is
-/// clean. `cargo test -p objectio-e2e --test pg_recovery -- --ignored
+/// clean. `cargo test -p iolake-e2e --test pg_recovery -- --ignored
 /// --nocapture backfill_throughput`.
 #[test]
 #[ignore = "a measurement"]
@@ -552,7 +552,7 @@ fn a_full_listing_spends_degraded_records_while_the_pg_stays_unclean() {
         )
         .expect_ok();
     }
-    let records = |ha: &HaCluster| ha.meta_metric("objectio_meta_degraded_objects");
+    let records = |ha: &HaCluster| ha.meta_metric("iolake_meta_degraded_objects");
     let deadline = Instant::now() + Duration::from_secs(60);
     while records(&ha) != Some(4.0) {
         assert!(

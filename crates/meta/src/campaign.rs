@@ -29,7 +29,7 @@ const EVERY: Duration = Duration::from_millis(250);
 /// How long a voter has to accept a connection.
 const CONNECT_TIMEOUT: Duration = Duration::from_millis(300);
 
-type Raft = openraft::Raft<objectio_meta_store::MetaTypeConfig>;
+type Raft = openraft::Raft<iolake_meta_store::MetaTypeConfig>;
 
 pub fn spawn(raft: Arc<Raft>, self_id: u64) {
     tokio::spawn(async move {

@@ -31,7 +31,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use bytes::Bytes;
-use objectio_auth::AuthResult;
+use iolake_auth::AuthResult;
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::s3::AppState;

@@ -1,0 +1,36 @@
+{{- if .Values.monitoring.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "iolake.grafana.fullname" . }}-provisioning
+  labels:
+    {{- include "iolake.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+data:
+  datasources.yml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://{{ include "iolake.prometheus.fullname" . }}:{{ .Values.monitoring.prometheus.service.port }}
+        isDefault: true
+        editable: false
+        jsonData:
+          timeInterval: "15s"
+          httpMethod: POST
+
+  dashboards.yml: |
+    apiVersion: 1
+    providers:
+      - name: 'IOLake Dashboards'
+        orgId: 1
+        folder: 'IOLake'
+        folderUid: 'iolake'
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 30
+        allowUiUpdates: true
+        options:
+          path: /var/lib/grafana/dashboards
+{{- end }}

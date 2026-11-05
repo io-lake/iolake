@@ -6,7 +6,7 @@
 //! open and Delta Sharing recipients went on working. Each of these is its
 //! own authentication path, so each is driven here from the outside.
 
-use objectio_e2e::{Cluster, Response};
+use iolake_e2e::{Cluster, Response};
 use serde_json::json;
 
 const ALLOW_S3: &str =
@@ -90,7 +90,7 @@ fn key_login(c: &Cluster, ak: &str, sk: &str) -> String {
         .get_all(reqwest::header::SET_COOKIE)
         .iter()
         .filter_map(|v| v.to_str().ok())
-        .find_map(|c| c.split(';').next()?.strip_prefix("objectio-session="))
+        .find_map(|c| c.split(';').next()?.strip_prefix("iolake-session="))
         .expect("a session")
         .to_string()
 }
@@ -124,7 +124,7 @@ impl Paths<'_> {
             c.request_as_session("GET", "/acme-data/k", &[], (&s.0, &s.1, &s.2))
                 .status
         };
-        let cookie = format!("objectio-session={}", self.console);
+        let cookie = format!("iolake-session={}", self.console);
         let with_cookie = |path: &str| {
             c.fetch_with_headers(
                 "GET",

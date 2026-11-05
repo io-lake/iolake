@@ -34,7 +34,7 @@ pub(crate) async fn get_bucket_tagging(state: &AppState, bucket: &str) -> Respon
     let setting = match state
         .meta_client
         .clone()
-        .get_bucket_setting(objectio_proto::metadata::GetBucketSettingRequest {
+        .get_bucket_setting(iolake_proto::metadata::GetBucketSettingRequest {
             bucket: bucket.to_string(),
             name: BUCKET_TAGS_SETTING.to_string(),
         })
@@ -111,7 +111,7 @@ pub(crate) async fn set_bucket_tagging(
     match state
         .meta_client
         .clone()
-        .put_bucket_setting(objectio_proto::metadata::PutBucketSettingRequest {
+        .put_bucket_setting(iolake_proto::metadata::PutBucketSettingRequest {
             bucket: bucket.to_string(),
             name: BUCKET_TAGS_SETTING.to_string(),
             delete: body.is_none(),
@@ -262,7 +262,7 @@ pub(crate) async fn object_meta_for_update(
     state: &Arc<AppState>,
     bucket: &str,
     key: &str,
-) -> Result<(ObjectMeta, Vec<objectio_proto::metadata::NodePlacement>), Response> {
+) -> Result<(ObjectMeta, Vec<iolake_proto::metadata::NodePlacement>), Response> {
     let nodes = get_placement_nodes_for_object(state, bucket, key).await?;
     match get_object_meta_from_any(&state.osd_pool, &nodes, bucket, key).await {
         Ok(Some(meta)) if !meta.is_delete_marker => Ok((meta, nodes)),

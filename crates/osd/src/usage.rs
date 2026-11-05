@@ -13,9 +13,9 @@
 //! persisted, so there is no on-disk counter that can drift from the
 //! entries it summarises.
 
-use objectio_proto::metadata::ObjectMeta;
-use objectio_proto::storage::{BucketUsage, ObjectSafety};
-use objectio_storage::metadata::{MetaIndex, MetaSnapshot, MetadataKey};
+use iolake_proto::metadata::ObjectMeta;
+use iolake_proto::storage::{BucketUsage, ObjectSafety};
+use iolake_storage::metadata::{MetaIndex, MetaSnapshot, MetadataKey};
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use prost::Message;
 use std::collections::{HashMap, HashSet};
@@ -507,7 +507,7 @@ impl UsageTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use objectio_proto::metadata::{ShardLocation, StripeMeta};
+    use iolake_proto::metadata::{ShardLocation, StripeMeta};
 
     const ME: [u8; 16] = [1; 16];
     const OTHER: [u8; 16] = [2; 16];
@@ -862,15 +862,15 @@ mod tests {
 
     #[test]
     fn usage_counted_beside_writes_equals_a_full_count() {
-        // objectio-docs `core/osd-start.md`: as the OSD does it, each write
+        // iolake-docs `core/osd-start.md`: as the OSD does it, each write
         // under its key's lock reads the old entry, writes the new one and
         // applies the change, while the count walks the index a chunk at a
         // time, current entries (`m`) and versions (`v`).
-        use objectio_storage::metadata::MetadataStoreConfig;
+        use iolake_storage::metadata::MetadataStoreConfig;
         use std::sync::Arc;
         let d = tempfile::tempdir().unwrap();
         let ix =
-            objectio_storage::metadata::open(MetadataStoreConfig::with_data_dir(d.path())).unwrap();
+            iolake_storage::metadata::open(MetadataStoreConfig::with_data_dir(d.path())).unwrap();
         // `version`: a version's entry, rather than the key's current one.
         let write = |t: &UsageTracker,
                      bucket: &str,

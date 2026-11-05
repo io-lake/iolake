@@ -14,7 +14,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64;
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use ring::rand::SystemRandom;
 use ring::signature::{ECDSA_P256_SHA256_FIXED_SIGNING, EcdsaKeyPair, KeyPair};
 use serde_json::{Value, json};
@@ -93,7 +93,7 @@ impl Idp {
 
     /// The provider document the gateway stores for this provider.
     fn provider(&self, extra: &Value) -> Value {
-        let mut p = json!({"issuer_url": self.issuer, "client_id": "objectio"});
+        let mut p = json!({"issuer_url": self.issuer, "client_id": "iolake"});
         for (k, v) in extra.as_object().unwrap() {
             p[k] = v.clone();
         }
@@ -153,7 +153,7 @@ fn sign(key: &EcdsaKeyPair, issuer: &str, claims: &Value) -> String {
         .unwrap()
         .as_secs();
     let mut body = json!({
-        "iss": issuer, "aud": "objectio", "iat": now - 10, "exp": now + 300,
+        "iss": issuer, "aud": "iolake", "iat": now - 10, "exp": now + 300,
     });
     for (k, v) in claims.as_object().unwrap() {
         if v.is_null() {
@@ -243,7 +243,7 @@ fn callback(c: &Cluster, state: &str, cookie: &str, claims: &Value) -> SignIn {
         .unwrap();
     assert_eq!(r.status().as_u16(), 302, "callback: {}", r.status());
     SignIn {
-        session: set_cookie(&r, "objectio-session"),
+        session: set_cookie(&r, "iolake-session"),
         location: r
             .headers()
             .get(reqwest::header::LOCATION)
@@ -268,11 +268,11 @@ fn refused(s: &SignIn) {
 }
 
 /// A request with a console session.
-fn with_session(c: &Cluster, method: &str, path: &str, session: &str) -> objectio_e2e::Response {
+fn with_session(c: &Cluster, method: &str, path: &str, session: &str) -> iolake_e2e::Response {
     c.fetch_with_headers(
         method,
         &format!("{}{path}", c.endpoint),
-        &[("Cookie", &format!("objectio-session={session}"))],
+        &[("Cookie", &format!("iolake-session={session}"))],
     )
 }
 
@@ -280,7 +280,7 @@ fn with_session(c: &Cluster, method: &str, path: &str, session: &str) -> objecti
 fn post_with_session(c: &Cluster, path: &str, session: &str, body: &Value) -> u16 {
     browser()
         .post(format!("{}{path}", c.endpoint))
-        .header("Cookie", format!("objectio-session={session}"))
+        .header("Cookie", format!("iolake-session={session}"))
         .header("Content-Type", "application/json")
         .body(body.to_string())
         .send()
@@ -322,7 +322,7 @@ fn my_key(c: &Cluster, session: &str) -> (String, String) {
 fn key_login(c: &Cluster, ak: &str, sk: &str) -> String {
     let r = try_key_login(c, ak, sk);
     assert_eq!(r.status().as_u16(), 200, "login: {}", r.status());
-    set_cookie(&r, "objectio-session").expect("a session")
+    set_cookie(&r, "iolake-session").expect("a session")
 }
 
 fn try_key_login(c: &Cluster, ak: &str, sk: &str) -> reqwest::blocking::Response {
@@ -619,5 +619,5 @@ fn a_disabled_tenant_signs_in_to_nothing() {
     refused(&sign_in(&c, "provider=t-acme&tenant=acme", &dave));
     let r = try_key_login(&c, &ak, &sk);
     assert_eq!(r.status().as_u16(), 403);
-    assert!(set_cookie(&r, "objectio-session").is_none());
+    assert!(set_cookie(&r, "iolake-session").is_none());
 }

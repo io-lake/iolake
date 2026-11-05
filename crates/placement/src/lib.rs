@@ -1,4 +1,4 @@
-//! ObjectIO Placement - CRUSH-like data placement algorithm
+//! IOLake Placement - CRUSH-like data placement algorithm
 //!
 //! This crate implements data placement algorithms for deterministic
 //! shard distribution with failure domain awareness. Supports both MDS
@@ -15,7 +15,7 @@
 //!
 //! # Example
 //! ```ignore
-//! use objectio_placement::{Crush2, templates};
+//! use iolake_placement::{Crush2, templates};
 //!
 //! let crush = Crush2::new(topology, 64);
 //! let template = templates::lrc_6_2_2();

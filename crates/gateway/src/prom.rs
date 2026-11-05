@@ -84,7 +84,7 @@ pub async fn capabilities(State(state): State<Arc<AppState>>) -> Json<serde_json
 /// `GET /_console/api/metrics/query` — instant query.
 pub async fn query(
     State(state): State<Arc<AppState>>,
-    auth: Option<axum::Extension<objectio_auth::AuthResult>>,
+    auth: Option<axum::Extension<iolake_auth::AuthResult>>,
     headers: HeaderMap,
     Query(q): Query<InstantQuery>,
 ) -> Response {
@@ -104,7 +104,7 @@ pub async fn query(
 /// `GET /_console/api/metrics/query_range` — range query.
 pub async fn query_range(
     State(state): State<Arc<AppState>>,
-    auth: Option<axum::Extension<objectio_auth::AuthResult>>,
+    auth: Option<axum::Extension<iolake_auth::AuthResult>>,
     headers: HeaderMap,
     Query(q): Query<RangeQuery>,
 ) -> Response {

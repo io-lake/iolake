@@ -2,7 +2,7 @@
 //! may assume them.
 
 use axum::response::Response;
-use objectio_proto::metadata::{
+use iolake_proto::metadata::{
     CreateRoleRequest, DeleteRoleRequest, ListAttachedPoliciesRequest, ListInlinePoliciesRequest,
     RoleObject, UpdateRoleRequest,
 };
@@ -31,7 +31,7 @@ fn role_xml(x: &mut Xml, r: &RoleObject) {
 }
 
 fn resource(r: &RoleObject) -> String {
-    objectio_auth::policy::canonical_arn(&r.arn).into_owned()
+    iolake_auth::policy::canonical_arn(&r.arn).into_owned()
 }
 
 /// A trust policy, checked as the STS calls will read it.
@@ -43,7 +43,7 @@ fn check_trust_policy(doc: &str) -> IamResult<()> {
             "Maximum trust policy size of 2048 bytes exceeded.",
         ));
     }
-    objectio_auth::BucketPolicy::from_trust_json(doc)
+    iolake_auth::BucketPolicy::from_trust_json(doc)
         .map(drop)
         .map_err(|e| IamError::malformed_policy(e.to_string()))
 }

@@ -41,7 +41,7 @@
 //! is retried with backoff until it is taken, so a receiver may see an event
 //! twice (dedupe on `id`). Each target has a bounded queue; when it is full
 //! — the receiver has been down a long time — new events for it are dropped
-//! and counted (`objectio_audit_dropped_total`), never silently, and the
+//! and counted (`iolake_audit_dropped_total`), never silently, and the
 //! request itself is never held up or refused.
 
 use std::collections::HashMap;
@@ -59,10 +59,10 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use http_body::{Body as HttpBody, Frame, SizeHint};
-use objectio_auth::AuthResult;
-use objectio_common::histogram::CounterVec;
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
-use objectio_proto::metadata::{
+use iolake_auth::AuthResult;
+use iolake_common::histogram::CounterVec;
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_proto::metadata::{
     DeleteConfigRequest, GetConfigRequest, ListConfigRequest, SetConfigRequest,
 };
 use parking_lot::Mutex;
@@ -100,17 +100,17 @@ static FAILURES: LazyLock<CounterVec> = LazyLock::new(CounterVec::new);
 pub fn render_metrics(out: &mut String) {
     EVENTS.render(
         out,
-        "objectio_audit_events_total",
+        "iolake_audit_events_total",
         "Audit events delivered, by target",
     );
     DROPPED.render(
         out,
-        "objectio_audit_dropped_total",
+        "iolake_audit_dropped_total",
         "Audit events dropped because a queue was full, by target",
     );
     FAILURES.render(
         out,
-        "objectio_audit_delivery_failures_total",
+        "iolake_audit_delivery_failures_total",
         "Failed attempts to deliver a batch of audit events, by target",
     );
 }
@@ -118,7 +118,7 @@ pub fn render_metrics(out: &mut String) {
 fn label(target: &str) -> String {
     format!(
         "target=\"{}\"",
-        objectio_common::histogram::label_value(target)
+        iolake_common::histogram::label_value(target)
     )
 }
 
@@ -1263,7 +1263,7 @@ async fn dispatch_spooled(
 /// The system bucket: created (in the system scope) if missing, with a
 /// rule expiring events after `retention_days` (0: kept).
 async fn ensure_system_bucket(state: &AppState, bucket: &str, retention_days: u32) {
-    use objectio_proto::metadata::{
+    use iolake_proto::metadata::{
         CreateBucketRequest, LifecycleConfiguration, LifecycleRule, PutBucketLifecycleRequest,
     };
     let mut meta = state.meta_client.clone();

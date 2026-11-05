@@ -1,20 +1,20 @@
 [package]
-name = "objectio-block-gateway"
-description = "Block Storage Gateway for ObjectIO"
+name = "iolake-block-gateway"
+description = "Block Storage Gateway for IOLake"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [lib]
-name = "objectio_block_gateway"
+name = "iolake_block_gateway"
 path = "src/lib.rs"
 
 
 [dependencies]
-objectio-common = { workspace = true }
-objectio-block = { workspace = true }
-objectio-proto = { workspace = true }
-objectio-erasure = { workspace = true }
+iolake-common = { workspace = true }
+iolake-block = { workspace = true }
+iolake-proto = { workspace = true }
+iolake-erasure = { workspace = true }
 futures = { workspace = true }
 parking_lot = { workspace = true }
 thiserror = { workspace = true }

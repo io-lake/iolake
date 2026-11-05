@@ -1,4 +1,4 @@
-//! Unity Catalog REST API for `ObjectIO`.
+//! Unity Catalog REST API for `IOLake`.
 //!
 //! Implements a subset of the Databricks Unity Catalog REST API at
 //! `/api/2.1/unity-catalog/*` as an Axum sub-router. Three-level namespacing
@@ -17,8 +17,8 @@ use axum::Router;
 use axum::routing::{get, post};
 use catalog::UnityCatalogClient;
 use handlers::UnityState;
-use objectio_auth::policy::PolicyEvaluator;
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_auth::policy::PolicyEvaluator;
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
 use std::sync::Arc;
 use tonic::transport::Channel;
 
@@ -35,7 +35,7 @@ pub fn router(
     meta_client: MetadataServiceClient<Channel>,
     policy_evaluator: PolicyEvaluator,
     admin_principals: Vec<String>,
-    sts_provider: Option<objectio_auth::sts::StsProvider>,
+    sts_provider: Option<iolake_auth::sts::StsProvider>,
     s3_endpoint: String,
     auth_required: bool,
 ) -> Router {

@@ -160,7 +160,7 @@ async fn cli(argv: &[&str], replies: Vec<Canned>) -> Run {
 async fn cli_env(argv: &[&str], replies: Vec<Canned>, environment: &[(&str, &str)]) -> Run {
     let s = stub(replies).await;
     let mut full = vec![
-        "obioctl",
+        "iolakectl",
         "--endpoint",
         &s.url,
         "--access-key",
@@ -532,7 +532,7 @@ async fn sts_is_unsigned_and_needs_no_key() {
     .await;
     // No --access-key at all.
     let args = Args::try_parse_from([
-        "obioctl",
+        "iolakectl",
         "--endpoint",
         &s.url,
         "--output",
@@ -770,7 +770,7 @@ async fn provision_creates_then_mints_a_scoped_key() {
             ok(json!({"name": "ws-1"})),
             ok(json!({"access_key_id": "AK2", "secret_access_key": "S2", "scope": "s3://ws-1/data/"})),
         ],
-        &[("OBJECTIO_PROVISIONER_USER_ID", "prov")],
+        &[("IOLAKE_PROVISIONER_USER_ID", "prov")],
     )
     .await;
     r.result.unwrap();
@@ -1001,7 +1001,7 @@ async fn bytes_stub(body: Vec<u8>) -> (String, tokio::task::JoinHandle<String>) 
 
 fn a_backup() -> Vec<u8> {
     use std::io::Write as _;
-    let mut w = objectio_common::meta_backup::Writer::new(
+    let mut w = iolake_common::meta_backup::Writer::new(
         Vec::new(),
         br#"{"cluster_id":"ab","last_applied":{"index":7},"active_level":8}"#,
     )
@@ -1013,7 +1013,7 @@ fn a_backup() -> Vec<u8> {
 async fn export_to(file: &std::path::Path, body: Vec<u8>) -> (anyhow::Result<()>, String) {
     let (url, served) = bytes_stub(body).await;
     let parsed = Args::try_parse_from([
-        "obioctl",
+        "iolakectl",
         "--endpoint",
         &url,
         "--access-key",

@@ -1,12 +1,12 @@
 [package]
-name = "objectio-io-bench"
-description = "Micro-bench comparing pread vs io_uring for ObjectIO's storage I/O paths"
+name = "iolake-io-bench"
+description = "Micro-bench comparing pread vs io_uring for IOLake's storage I/O paths"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "objectio-io-bench"
+name = "iolake-io-bench"
 path = "src/main.rs"
 
 [dependencies]

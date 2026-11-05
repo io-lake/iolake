@@ -7,7 +7,7 @@ around in http://127.0.0.1:9000/_console/ → Unity Catalog.
 Re-run safely: every entity is created idempotently (delete-then-create).
 
 Usage:
-    OBJECTIO_HOST=http://127.0.0.1:9000 \
+    IOLAKE_HOST=http://127.0.0.1:9000 \
       AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... \
       .venv-dbx/bin/python seed_ui_demo.py
 """
@@ -33,8 +33,8 @@ from databricks.sdk.service.catalog import (
 from sklearn.linear_model import LogisticRegression
 
 
-HOST = os.environ.get("OBJECTIO_HOST", "http://127.0.0.1:9000")
-TOKEN = os.environ.get("OBJECTIO_TOKEN", "dummy")
+HOST = os.environ.get("IOLAKE_HOST", "http://127.0.0.1:9000")
+TOKEN = os.environ.get("IOLAKE_TOKEN", "dummy")
 
 
 def post(path: str, body: dict) -> dict:

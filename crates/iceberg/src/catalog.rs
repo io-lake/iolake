@@ -2,7 +2,7 @@
 
 use crate::error::IcebergError;
 use crate::types;
-use objectio_proto::metadata::{
+use iolake_proto::metadata::{
     CreateDataFilterRequest, DeleteDataFilterRequest, GetDataFiltersForPrincipalRequest,
     IcebergCommitTableRequest, IcebergCreateNamespaceRequest, IcebergCreateTableRequest,
     IcebergDataFilter, IcebergDropNamespaceRequest, IcebergDropTableRequest,
@@ -306,7 +306,7 @@ impl IcebergCatalog {
         &self,
         changes: Vec<(Vec<String>, String, String, String, Vec<u8>)>,
     ) -> Result<Vec<(String, Vec<u8>)>> {
-        use objectio_proto::metadata::{IcebergCommitTableChange, IcebergCommitTransactionRequest};
+        use iolake_proto::metadata::{IcebergCommitTableChange, IcebergCommitTransactionRequest};
         let table_changes = changes
             .into_iter()
             .map(

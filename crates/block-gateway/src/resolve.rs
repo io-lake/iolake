@@ -3,7 +3,7 @@
 //!
 //! A partial write to a chunk the cache does not hold is acknowledged once
 //! journaled; the cache keeps it as a pending chunk (see
-//! `objectio_block::cache::DirtyChunk::pending`). This module loads such
+//! `iolake_block::cache::DirtyChunk::pending`). This module loads such
 //! chunks' stored bytes and merges them in: in the background after the
 //! write, on demand when a read or a flush needs the chunk whole. The load
 //! used to happen before the write was acknowledged, ~17 ms of a random
@@ -13,8 +13,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Result;
-use objectio_block::WriteCache;
-use objectio_block::chunk::ChunkId;
+use iolake_block::WriteCache;
+use iolake_block::chunk::ChunkId;
 use parking_lot::Mutex;
 use tracing::warn;
 

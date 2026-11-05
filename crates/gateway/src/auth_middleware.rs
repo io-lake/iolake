@@ -12,8 +12,8 @@ use axum::{
 };
 use chrono::{DateTime, NaiveDateTime, Utc};
 use hmac::{Hmac, Mac};
-use objectio_auth::{AuthResult, CredentialScope, Operation};
-use objectio_proto::metadata::{
+use iolake_auth::{AuthResult, CredentialScope, Operation};
+use iolake_proto::metadata::{
     GetAccessKeyForAuthRequest, GetTenantRequest, GetTenantResponse, GetUserGroupsRequest,
     KeyOperation, metadata_service_client::MetadataServiceClient,
 };
@@ -83,7 +83,7 @@ pub struct AuthState {
     /// AWS region for SigV4 verification
     pub region: String,
     /// STS provider for validating temporary credentials
-    pub sts_provider: Option<objectio_auth::sts::StsProvider>,
+    pub sts_provider: Option<iolake_auth::sts::StsProvider>,
 }
 
 impl AuthState {
@@ -102,7 +102,7 @@ impl AuthState {
     }
 
     /// Set the STS provider for validating temporary credentials
-    pub fn with_sts(mut self, sts: objectio_auth::sts::StsProvider) -> Self {
+    pub fn with_sts(mut self, sts: iolake_auth::sts::StsProvider) -> Self {
         self.sts_provider = Some(sts);
         self
     }
@@ -375,7 +375,7 @@ async fn authenticate(
                 group_arns: Vec::new(),
                 group_ids: Vec::new(),
                 tenant: String::new(),
-                auth_mode: objectio_auth::AuthMode::Anonymous,
+                auth_mode: iolake_auth::AuthMode::Anonymous,
                 scope: None,
                 source_ip: None,
                 source_endpoint: None,
@@ -603,13 +603,13 @@ async fn session_identity(
         let user = auth_state
             .meta_client
             .clone()
-            .get_user(objectio_proto::metadata::GetUserRequest {
+            .get_user(iolake_proto::metadata::GetUserRequest {
                 user_id: user_id.clone(),
             })
             .await
             .ok()
             .and_then(|r| r.into_inner().user)
-            .filter(|u| u.status == objectio_proto::metadata::UserStatus::UserActive as i32)
+            .filter(|u| u.status == iolake_proto::metadata::UserStatus::UserActive as i32)
             .ok_or_else(|| {
                 AuthError::AccessDenied("the session's user is not active".to_string())
             })?;
@@ -639,7 +639,7 @@ async fn session_identity(
         group_arns,
         group_ids,
         tenant: cred.tenant.clone(),
-        auth_mode: objectio_auth::AuthMode::SessionToken,
+        auth_mode: iolake_auth::AuthMode::SessionToken,
         scope: None,
         source_ip: None,
         source_endpoint: None,
@@ -716,7 +716,7 @@ pub(crate) fn sts_session(
             group_arns: Vec::new(),
             group_ids: Vec::new(),
             tenant,
-            auth_mode: objectio_auth::AuthMode::AssumedRole,
+            auth_mode: iolake_auth::AuthMode::AssumedRole,
             scope: None,
             source_ip: None,
             source_endpoint: None,
@@ -729,7 +729,7 @@ pub(crate) fn sts_session(
             group_arns: Vec::new(),
             group_ids: Vec::new(),
             tenant: session_info.tenant,
-            auth_mode: objectio_auth::AuthMode::Sts,
+            auth_mode: iolake_auth::AuthMode::Sts,
             scope: cred.scope.clone(),
             source_ip: None,
             source_endpoint: None,
@@ -1068,7 +1068,7 @@ pub(crate) fn verify_presigned_v4<B>(
             group_arns: Vec::new(),
             group_ids: Vec::new(),
             tenant: cred.tenant.clone(),
-            auth_mode: objectio_auth::AuthMode::Permanent,
+            auth_mode: iolake_auth::AuthMode::Permanent,
             scope: cred.scope.clone(),
             source_ip: None,
             source_endpoint: None,
@@ -1100,7 +1100,7 @@ impl ParsedAuth {
 /// bucket created since June 2020.
 pub fn parse_authorization_header(header: &str) -> Result<ParsedAuth, AuthError> {
     if header.starts_with("AWS4-HMAC-SHA256") {
-        let parsed = objectio_auth::sigv4::parse_authorization(header).ok_or_else(|| {
+        let parsed = iolake_auth::sigv4::parse_authorization(header).ok_or_else(|| {
             AuthError::AccessDenied("invalid authorization header format".to_string())
         })?;
         Ok(ParsedAuth {
@@ -1400,7 +1400,7 @@ fn check_signature<B>(
             group_arns: Vec::new(),
             group_ids: Vec::new(),
             tenant: cred.tenant.clone(),
-            auth_mode: objectio_auth::AuthMode::Permanent,
+            auth_mode: iolake_auth::AuthMode::Permanent,
             scope: cred.scope.clone(),
             source_ip: None,
             source_endpoint: None,
@@ -1755,7 +1755,7 @@ pub enum AuthError {
 }
 
 impl AuthError {
-    /// Bounded reason for `objectio_auth_failures_total`.
+    /// Bounded reason for `iolake_auth_failures_total`.
     fn metric_reason(&self) -> &'static str {
         match self {
             AuthError::AccessDenied(msg) => {
@@ -2136,12 +2136,12 @@ mod sigv4_tests {
     }
 
     /// What this verifier accepts — not just what the SDK vectors say — of
-    /// what `objectio_auth::signer` (the CLI's and the replicator's signer)
+    /// what `iolake_auth::signer` (the CLI's and the replicator's signer)
     /// signs: a query string, a subresource, an escaped segment, a JSON body.
     #[test]
     fn the_verifier_accepts_what_the_signer_signs() {
         use super::{CachedCredential, verify_request_v4};
-        use objectio_auth::signer::{Request, Signer, canonical_query, escape_segment};
+        use iolake_auth::signer::{Request, Signer, canonical_query, escape_segment};
         type Case<'a> = (
             &'a str,
             String,
@@ -2242,7 +2242,7 @@ mod sigv4_tests {
     #[test]
     fn a_virtual_hosted_request_is_verified_as_it_was_sent() {
         use super::{CachedCredential, verify_request_v4};
-        use objectio_auth::signer::{Request, Signer};
+        use iolake_auth::signer::{Request, Signer};
         let cred = CachedCredential {
             access_key_id: "AKIAVHOST".into(),
             secret_access_key: SECRET.into(),
@@ -2452,7 +2452,7 @@ mod tenant_gate_tests {
     /// asking is refused as unavailable, which is how these tests tell an
     /// answer from the cache from one that had to ask.
     fn state() -> AuthState {
-        let channel = objectio_proto::transport::connect_lazy(
+        let channel = iolake_proto::transport::connect_lazy(
             &tonic::transport::Endpoint::from_static("http://127.0.0.1:1"),
         );
         AuthState::new(MetadataServiceClient::new(channel), "us-east-1")
@@ -2485,7 +2485,7 @@ mod tenant_gate_tests {
 
     #[test]
     fn only_a_tenant_that_exists_and_is_enabled_is_open() {
-        let tenant = |enabled| objectio_proto::metadata::TenantConfig {
+        let tenant = |enabled| iolake_proto::metadata::TenantConfig {
             name: "acme".into(),
             enabled,
             ..Default::default()
@@ -2558,7 +2558,7 @@ mod tenant_gate_tests {
 
     #[tokio::test]
     async fn a_role_session_is_refused_while_its_tenant_is_disabled() {
-        let sts = objectio_auth::sts::StsProvider::new(b"test-signing-key");
+        let sts = iolake_auth::sts::StsProvider::new(b"test-signing-key");
         let s = state().with_sts(sts.clone());
         let creds = sts.issue_for(
             "arn:obio:sts::acme:assumed-role/writer/s1",
@@ -2591,7 +2591,7 @@ mod tenant_gate_tests {
 
     #[tokio::test]
     async fn a_users_own_session_is_refused_while_its_tenant_is_disabled() {
-        let sts = objectio_auth::sts::StsProvider::new(b"test-signing-key");
+        let sts = iolake_auth::sts::StsProvider::new(b"test-signing-key");
         let s = state().with_sts(sts.clone());
         let creds = sts.issue_for(
             &format!("{USER_SESSION_PREFIX}u1"),

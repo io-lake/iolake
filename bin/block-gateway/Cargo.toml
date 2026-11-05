@@ -1,18 +1,18 @@
 [package]
-name = "objectio-block-gateway-bin"
-description = "The objectio-block-gateway binary: the block gateway (the code is in crates/block-gateway)"
+name = "iolake-block-gateway-bin"
+description = "The iolake-block-gateway binary: the block gateway (the code is in crates/block-gateway)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
 
 [[bin]]
-name = "objectio-block-gateway"
+name = "iolake-block-gateway"
 path = "src/main.rs"
 
 [dependencies]
-objectio-block-gateway = { workspace = true }
-objectio-common = { workspace = true }
+iolake-block-gateway = { workspace = true }
+iolake-common = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true }

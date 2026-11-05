@@ -1,4 +1,4 @@
-# ObjectIO OSD Configuration - Three Node Deployment (Node 1)
+# IOLake OSD Configuration - Three Node Deployment (Node 1)
 #
 # Three-node deployment with each node in a different rack, one OSD per
 # node: EC 2+1 survives one node or rack. Wider codes need more OSDs (one
@@ -7,7 +7,7 @@
 [osd]
 node_name = "osd-node1"
 listen = "0.0.0.0:9200"
-meta_endpoint = "http://meta.objectio.local:9100"
+meta_endpoint = "http://meta.iolake.local:9100"
 weight = 1.0
 
 # Node 1 is in rack-01

@@ -1,0 +1,142 @@
+{{- /*
+Who may connect to each component (networkPolicy.enabled). Ingress only:
+egress is left open (the OSDs' node-label lookup reaches the API server,
+the gateway an OIDC issuer or Vault).
+
+The internal ports (meta's gRPC and admin port, the OSDs' gRPC, the block
+gateway's gRPC and NBD) take only IOLake's own components and the Raft
+bootstrap Job; without mTLS they are unauthenticated, and these policies
+are what keeps them to IOLake. The metrics ports take every pod of the
+release (the chart's Prometheus) and metricsFrom; meta's admin port also
+adminFrom, the block gateway's ports blockGatewayFrom, the gateway's S3
+ports gatewayFrom (empty: anyone).
+
+Kubelet's probes (meta's admin port, the OSDs' metrics port) come from the
+pod's own node, which a NetworkPolicy does not filter.
+*/ -}}
+{{- if .Values.networkPolicy.enabled }}
+{{- $np := .Values.networkPolicy }}
+{{- $selector := fromYaml (include "iolake.selectorLabels" .) }}
+{{- $release := dict "podSelector" (dict "matchLabels" $selector) }}
+{{- $iolake := dict "podSelector" (dict
+      "matchLabels" $selector
+      "matchExpressions" (list (dict
+        "key" "app.kubernetes.io/component"
+        "operator" "In"
+        "values" (list "meta" "osd" "gateway" "block-gateway" "meta-raft-bootstrap")))) }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "iolake.meta.fullname" . }}
+  labels:
+    {{- include "iolake.labels" . | nindent 4 }}
+    app.kubernetes.io/component: meta
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml (merge (dict "app.kubernetes.io/component" "meta") $selector) | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - {{- toYaml $iolake | nindent 10 }}
+      ports:
+        - port: grpc
+        - port: admin
+    - from:
+        - {{- toYaml $release | nindent 10 }}
+        {{- with $np.metricsFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      ports:
+        - port: metrics
+    {{- with $np.adminFrom }}
+    - from:
+        {{- toYaml . | nindent 8 }}
+      ports:
+        - port: admin
+    {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "iolake.osd.fullname" . }}
+  labels:
+    {{- include "iolake.labels" . | nindent 4 }}
+    app.kubernetes.io/component: osd
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml (merge (dict "app.kubernetes.io/component" "osd") $selector) | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - {{- toYaml $iolake | nindent 10 }}
+      ports:
+        - port: grpc
+    - from:
+        - {{- toYaml $release | nindent 10 }}
+        {{- with $np.metricsFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      ports:
+        - port: metrics
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "iolake.gateway.fullname" . }}
+  labels:
+    {{- include "iolake.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml (merge (dict "app.kubernetes.io/component" "gateway") $selector) | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - {{- toYaml $release | nindent 10 }}
+    # S3, the console, Iceberg, Delta Sharing and /metrics.
+    - ports:
+        - port: http
+        {{- if .Values.gateway.endpoints.external.port }}
+        - port: http-external
+        {{- end }}
+      {{- with $np.gatewayFrom }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- if .Values.blockGateway.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "iolake.blockGateway.fullname" . }}
+  labels:
+    {{- include "iolake.labels" . | nindent 4 }}
+    app.kubernetes.io/component: block-gateway
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml (merge (dict "app.kubernetes.io/component" "block-gateway") $selector) | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    # gRPC (volume admin: role admin under mTLS) and NBD, which has no
+    # authentication of its own.
+    - from:
+        - {{- toYaml $iolake | nindent 10 }}
+        {{- with $np.blockGatewayFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      ports:
+        - port: grpc
+        - port: nbd
+    - from:
+        - {{- toYaml $release | nindent 10 }}
+        {{- with $np.metricsFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      ports:
+        - port: metrics
+{{- end }}
+{{- end }}

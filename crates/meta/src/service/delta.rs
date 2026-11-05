@@ -24,7 +24,7 @@ impl MetaService {
         let bytes = entry.encode_to_vec();
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::DeltaShares,
@@ -121,7 +121,7 @@ impl MetaService {
         };
 
         if self.raft_handle().is_some() {
-            use objectio_meta_store::{CasOp, CasTable};
+            use iolake_meta_store::{CasOp, CasTable};
             let mut ops = Vec::with_capacity(1 + table_deletes.len());
             for (tk, tb) in &table_deletes {
                 ops.push(CasOp {
@@ -181,7 +181,7 @@ impl MetaService {
         };
         let bytes = entry.encode_to_vec();
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::DeltaTables,
@@ -234,7 +234,7 @@ impl MetaService {
         }
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::DeltaTables,
@@ -322,7 +322,7 @@ impl MetaService {
         let bytes = entry.encode_to_vec();
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::DeltaRecipients,
@@ -413,7 +413,7 @@ impl MetaService {
         };
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::DeltaRecipients,

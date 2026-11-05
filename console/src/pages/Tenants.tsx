@@ -237,7 +237,7 @@ export default function Tenants() {
         </ChartCard>
         <ChartCard title="Requests by tenant" subtitle="requests per hour">
           <NeedsSeries
-            metric="objectio_s3_requests_total{tenant=…}"
+            metric="iolake_s3_requests_total{tenant=…}"
             reason="The S3 request counter is labelled by operation and status but
               not by tenant, so requests cannot be split per tenant. The counter
               is recorded in the metrics middleware, which runs before the auth
@@ -577,7 +577,7 @@ function TenantStorageChart() {
         if (cancelled || !c.prometheus) return;
         setPromReady(true);
         const s = await queryRange(
-          "sum by (tenant) (objectio_tenant_stored_bytes)",
+          "sum by (tenant) (iolake_tenant_stored_bytes)",
           WEEK
         ).catch(() => [] as Series[]);
         if (!cancelled) setSeries(s);
@@ -607,7 +607,7 @@ function TenantStorageChart() {
   if (rows.length === 0) {
     return (
       <NeedsSeries
-        metric="objectio_tenant_stored_bytes"
+        metric="iolake_tenant_stored_bytes"
         reason={
           promReady
             ? "No usage recorded yet: the gateway publishes it after its first usage poll (every 30 s)."

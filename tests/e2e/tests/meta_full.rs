@@ -14,7 +14,7 @@
 
 use std::time::{Duration, Instant};
 
-use objectio_e2e::ha::HaCluster;
+use iolake_e2e::ha::HaCluster;
 
 /// Each meta node's free space, read from this file in its data directory.
 const FREE_FILE: &str = "free-bytes";
@@ -115,7 +115,7 @@ fn a_leader_without_room_refuses_writes_serves_reads_and_takes_writes_again() {
         s.disk_full
     );
     assert!(
-        ha.meta_metric("objectio_meta_writes_refused_no_room_total")
+        ha.meta_metric("iolake_meta_writes_refused_no_room_total")
             .is_some_and(|n| n >= 1.0),
         "refusals counted"
     );

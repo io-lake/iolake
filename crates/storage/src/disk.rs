@@ -10,7 +10,7 @@ use crate::block::{BlockBitmap, Extent};
 use crate::io_backend::{IoBackend, best_available};
 use crate::layout::{BlockFooter, BlockHeader, DEFAULT_BLOCK_SIZE, SUPERBLOCK_SIZE, Superblock};
 use crate::raw_io::{AlignedBuffer, RawFile};
-use objectio_common::{DiskId, Error, Result};
+use iolake_common::{DiskId, Error, Result};
 use parking_lot::RwLock;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -59,7 +59,7 @@ pub struct DiskStats {
 }
 
 impl DiskManager {
-    /// Initialize a new disk with ObjectIO format
+    /// Initialize a new disk with IOLake format
     ///
     /// The block_size parameter determines the storage block size.
     /// Use None to use the default (64KB), or specify a custom size.
@@ -652,7 +652,7 @@ fn write_superblock(file: &RawFile, sb: &Superblock) -> Result<()> {
 /// a power cut, say), the backup, which then repairs the primary.
 /// Whether `path` is blank: both superblock copies all zeros, as a new or
 /// wiped device or file reads. Only a blank disk may be formatted; one
-/// with anything there, even an ObjectIO superblock that won't parse, is
+/// with anything there, even an IOLake superblock that won't parse, is
 /// data until an operator says otherwise. A read error is an error, not
 /// "blank".
 pub fn is_blank(path: impl AsRef<Path>) -> Result<bool> {
@@ -911,7 +911,7 @@ mod tests {
         let disk = DiskManager::init(&path, 2 * 1024 * 1024 * 1024, None).unwrap();
 
         let object_id = [1u8; 16];
-        let data = b"Hello, ObjectIO!";
+        let data = b"Hello, IOLake!";
 
         // Write block
         disk.write_block(0, object_id, 0, data).unwrap();

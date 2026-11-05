@@ -1,5 +1,5 @@
 //! Bucket replication: every new version written to a bucket, copied to a
-//! bucket on another ObjectIO cluster (architecture/design/
+//! bucket on another IOLake cluster (architecture/design/
 //! s3/bucket-replication.md).
 //!
 //! - **Targets** (`/_admin/replication/targets`): the remote cluster's
@@ -31,8 +31,8 @@ use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use objectio_auth::AuthResult;
-use objectio_proto::metadata::{
+use iolake_auth::AuthResult;
+use iolake_proto::metadata::{
     AcquireLeaseRequest, GetBucketSettingRequest, GetConfigRequest, ListBucketsRequest,
     ListConfigRequest, ObjectMeta, PutBucketSettingRequest, SetConfigRequest,
 };
@@ -297,7 +297,7 @@ pub async fn admin_delete_target(
     match state
         .meta_client
         .clone()
-        .delete_config(objectio_proto::metadata::DeleteConfigRequest {
+        .delete_config(iolake_proto::metadata::DeleteConfigRequest {
             key: target_key(&admin.tenant, &name),
         })
         .await
@@ -448,7 +448,7 @@ async fn bucket_tenant(state: &AppState, bucket: &str) -> Result<String, String>
     let tenant = state
         .meta_client
         .clone()
-        .get_bucket(objectio_proto::metadata::GetBucketRequest {
+        .get_bucket(iolake_proto::metadata::GetBucketRequest {
             name: bucket.to_string(),
         })
         .await
@@ -726,12 +726,12 @@ async fn put(state: &AppState, bucket: &str, doc: Result<ConfigXml, Response>) -
     let versioned = state
         .meta_client
         .clone()
-        .get_bucket_versioning(objectio_proto::metadata::GetBucketVersioningRequest {
+        .get_bucket_versioning(iolake_proto::metadata::GetBucketVersioningRequest {
             bucket: bucket.to_string(),
         })
         .await
         .is_ok_and(|r| {
-            r.into_inner().state() == objectio_proto::metadata::VersioningState::VersioningEnabled
+            r.into_inner().state() == iolake_proto::metadata::VersioningState::VersioningEnabled
         });
     if !versioned {
         return S3Error::xml_response(
@@ -852,7 +852,7 @@ async fn bucket_rules(state: &AppState, bucket: &str) -> Option<Arc<Vec<Rule>>> 
 /// write isn't refused for want of replication, and the gap shows in the
 /// scanner's log. (A resync marks it later.)
 pub async fn mark(state: &AppState, object: &mut ObjectMeta) {
-    let sse_c = object.encryption_algorithm == objectio_proto::metadata::SseAlgorithm::SseC as i32;
+    let sse_c = object.encryption_algorithm == iolake_proto::metadata::SseAlgorithm::SseC as i32;
     if !object.replica_of.is_empty() || sse_c || object.version_id.is_empty() {
         return;
     }
@@ -1065,7 +1065,7 @@ async fn count_gateways(state: &AppState) {
     let Ok(resp) = state
         .meta_client
         .clone()
-        .get_upgrade_status(objectio_proto::metadata::GetUpgradeStatusRequest {})
+        .get_upgrade_status(iolake_proto::metadata::GetUpgradeStatusRequest {})
         .await
     else {
         return;
@@ -1082,10 +1082,10 @@ async fn count_gateways(state: &AppState) {
         .store((n as u64).max(1), Ordering::Relaxed);
 }
 
-static SENT: std::sync::LazyLock<objectio_common::histogram::CounterVec> =
-    std::sync::LazyLock::new(objectio_common::histogram::CounterVec::new);
-static BYTES: std::sync::LazyLock<objectio_common::histogram::CounterVec> =
-    std::sync::LazyLock::new(objectio_common::histogram::CounterVec::new);
+static SENT: std::sync::LazyLock<iolake_common::histogram::CounterVec> =
+    std::sync::LazyLock::new(iolake_common::histogram::CounterVec::new);
+static BYTES: std::sync::LazyLock<iolake_common::histogram::CounterVec> =
+    std::sync::LazyLock::new(iolake_common::histogram::CounterVec::new);
 /// Per target, from the last scan: versions not yet sent, and the oldest
 /// one's age.
 static BACKLOG: std::sync::LazyLock<Mutex<HashMap<String, (u64, Duration)>>> =
@@ -1096,35 +1096,32 @@ pub fn render_metrics(out: &mut String) {
     use std::fmt::Write as _;
     SENT.render(
         out,
-        "objectio_replication_sent_total",
+        "iolake_replication_sent_total",
         "Versions sent to replication targets, by target and result",
     );
     BYTES.render(
         out,
-        "objectio_replication_bytes_total",
+        "iolake_replication_bytes_total",
         "Bytes sent to replication targets",
     );
     let backlog = BACKLOG.lock();
     let _ = writeln!(
         out,
-        "# HELP objectio_replication_backlog Versions not yet replicated to a target, at the last scan\n\
-         # TYPE objectio_replication_backlog gauge"
+        "# HELP iolake_replication_backlog Versions not yet replicated to a target, at the last scan\n\
+         # TYPE iolake_replication_backlog gauge"
     );
     for (target, (n, _)) in backlog.iter() {
-        let _ = writeln!(
-            out,
-            "objectio_replication_backlog{{target=\"{target}\"}} {n}"
-        );
+        let _ = writeln!(out, "iolake_replication_backlog{{target=\"{target}\"}} {n}");
     }
     let _ = writeln!(
         out,
-        "# HELP objectio_replication_lag_seconds Age of the oldest version not yet replicated to a target, at the last scan\n\
-         # TYPE objectio_replication_lag_seconds gauge"
+        "# HELP iolake_replication_lag_seconds Age of the oldest version not yet replicated to a target, at the last scan\n\
+         # TYPE iolake_replication_lag_seconds gauge"
     );
     for (target, (_, lag)) in backlog.iter() {
         let _ = writeln!(
             out,
-            "objectio_replication_lag_seconds{{target=\"{target}\"}} {}",
+            "iolake_replication_lag_seconds{{target=\"{target}\"}} {}",
             lag.as_secs()
         );
     }
@@ -1165,7 +1162,7 @@ pub fn spawn(state: Arc<AppState>, timing: Timing) {
     };
     let counting = Arc::clone(&state);
     tokio::spawn(async move {
-        let mut ticker = tokio::time::interval(objectio_proto::transport::VERSION_REPORT_EVERY);
+        let mut ticker = tokio::time::interval(iolake_proto::transport::VERSION_REPORT_EVERY);
         loop {
             ticker.tick().await;
             count_gateways(&counting).await;
@@ -1519,14 +1516,14 @@ fn object_headers(version: &ObjectMeta) -> Vec<(String, String)> {
     if version.legal_hold.as_ref().is_some_and(|l| l.status) {
         h.push(("x-amz-object-lock-legal-hold".to_string(), "ON".to_string()));
     }
-    match objectio_proto::metadata::SseAlgorithm::try_from(version.encryption_algorithm) {
-        Ok(objectio_proto::metadata::SseAlgorithm::SseS3) => {
+    match iolake_proto::metadata::SseAlgorithm::try_from(version.encryption_algorithm) {
+        Ok(iolake_proto::metadata::SseAlgorithm::SseS3) => {
             h.push((
                 "x-amz-server-side-encryption".to_string(),
                 "AES256".to_string(),
             ));
         }
-        Ok(objectio_proto::metadata::SseAlgorithm::SseKms) => {
+        Ok(iolake_proto::metadata::SseAlgorithm::SseKms) => {
             h.push((
                 "x-amz-server-side-encryption".to_string(),
                 "aws:kms".to_string(),
@@ -1687,7 +1684,7 @@ async fn request(
     headers: &[(String, String)],
     body: &[u8],
 ) -> Result<reqwest::Response, String> {
-    use objectio_auth::signer::{Request as SignRequest, Signer, escape_path, escape_segment};
+    use iolake_auth::signer::{Request as SignRequest, Signer, escape_path, escape_segment};
     let target = link.target;
     let base = target.endpoint.trim_end_matches('/');
     let host = base
@@ -1723,7 +1720,7 @@ async fn request(
         },
         chrono::Utc::now(),
     );
-    let qs = objectio_auth::signer::canonical_query(&query);
+    let qs = iolake_auth::signer::canonical_query(&query);
     let url = if qs.is_empty() {
         format!("{base}{path}")
     } else {
@@ -2209,7 +2206,7 @@ async fn resync_versions(state: &Arc<AppState>, r: &mut Resync) -> Result<bool, 
 /// replicates at all (not a replica, not SSE-C, versioned): what [`mark`]
 /// would have marked for the target.
 fn resync_covers(rules: &[Rule], target: &str, v: &ObjectMeta) -> bool {
-    let sse_c = v.encryption_algorithm == objectio_proto::metadata::SseAlgorithm::SseC as i32;
+    let sse_c = v.encryption_algorithm == iolake_proto::metadata::SseAlgorithm::SseC as i32;
     v.replica_of.is_empty()
         && !sse_c
         && !v.version_id.is_empty()

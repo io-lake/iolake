@@ -1,5 +1,5 @@
 //! Format levels: what lets a cluster run two releases side by side during a
-//! rolling upgrade (objectio-docs `architecture/design/core/upgrade-path.md`).
+//! rolling upgrade (iolake-docs `architecture/design/core/upgrade-path.md`).
 //!
 //! A binary's **format level** rises whenever a release adds something an
 //! older binary would misread: a stored or exchanged format, a Raft command,
@@ -30,7 +30,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 /// |---|---|---|
 /// | 8 | 0.1.0-rc.1 | the baseline |
 /// | 9 | 0.1.0-rc.2 | users bound to the OIDC issuer and subject of the single sign-on that created them: a meta node of the previous release would drop the binding, and the user could no longer sign on |
-/// | 10 | 0.1.0-rc.2 | roles on the services' certificates (objectio-docs `operations-guide/administration/mtls.md`): under mTLS each call between the services is checked against its peer's role, and a certificate of the previous release names none |
+/// | 10 | 0.1.0-rc.2 | roles on the services' certificates (iolake-docs `operations-guide/administration/mtls.md`): under mTLS each call between the services is checked against its peer's role, and a certificate of the previous release names none |
 pub const FORMAT_LEVEL: u32 = 10;
 
 /// The level from which a single sign-on creates a user bound to the

@@ -101,13 +101,13 @@ jobs:
         run: scripts/ci/apt-install.sh protobuf-compiler mold nasm autoconf automake libtool libclang-dev
       # Excluding the e2e package: it boots a cluster and belongs in its own
       # job so its runtime and its failures stay legible.
-      - run: cargo test --workspace --exclude objectio-e2e
+      - run: cargo test --workspace --exclude iolake-e2e
       # The release does disk I/O through io_uring; without it the tests
       # above run pread only.
-      - run: cargo test -p objectio-storage --features io-uring
+      - run: cargo test -p iolake-storage --features io-uring
       # The RocksDB metadata engine (B27): its conformance suite and the
       # refusal to open the other engine's directory.
-      - run: cargo test -p objectio-storage --features rocksdb --lib metadata
+      - run: cargo test -p iolake-storage --features rocksdb --lib metadata
 
   # The end-to-end suite boots real clusters and took ~40 minutes run as
   # one job, test after test: the critical path of every PR. It is built
@@ -140,9 +140,9 @@ jobs:
         env:
           RUSTFLAGS: -C link-arg=-fuse-ld=mold
         run: |
-          cargo build --bin objectio-aio --bin obioctl --bin objectio-meta --bin objectio-osd --bin objectio-gateway --bin objectio-block-gateway --bin objectio-install
-          cargo nextest archive --package objectio-e2e --archive-file e2e.tar.zst
-          mkdir -p bins && cp target/debug/objectio-aio target/debug/obioctl target/debug/objectio-meta target/debug/objectio-osd target/debug/objectio-gateway target/debug/objectio-block-gateway target/debug/objectio-install bins/
+          cargo build --bin iolake-aio --bin iolakectl --bin iolake-meta --bin iolake-osd --bin iolake-gateway --bin iolake-block-gateway --bin iolake-install
+          cargo nextest archive --package iolake-e2e --archive-file e2e.tar.zst
+          mkdir -p bins && cp target/debug/iolake-aio target/debug/iolakectl target/debug/iolake-meta target/debug/iolake-osd target/debug/iolake-gateway target/debug/iolake-block-gateway target/debug/iolake-install bins/
       - uses: actions/upload-artifact@v4
         with:
           name: e2e
@@ -204,8 +204,8 @@ jobs:
       # release.yml's linux-amd64 aio, and the same on the services'
       # binaries the multi-process tests start.
       FEATURES: >-
-        objectio-aio/io-uring,objectio-aio/grep-pcre2,
-        objectio-osd-bin/io-uring,objectio-gateway-bin/pcre2
+        iolake-aio/io-uring,iolake-aio/grep-pcre2,
+        iolake-osd-bin/io-uring,iolake-gateway-bin/pcre2
     steps:
       - uses: actions/checkout@v4
       # A build's target directory and the OSDs' metadata share the root
@@ -223,17 +223,17 @@ jobs:
       # Fails if this runner denies io_uring: the OSDs would otherwise fall
       # back to pread, and the run below test nothing new.
       - name: io_uring works here
-        run: cargo test -p objectio-storage --features io-uring --lib io_backend::tests::uring_roundtrip
+        run: cargo test -p iolake-storage --features io-uring --lib io_backend::tests::uring_roundtrip
       - name: build the binaries with the release features
         run: |
           cargo build --features "$(echo "$FEATURES" | tr -d ' \n')" \
-            --bin objectio-aio --bin obioctl --bin objectio-meta --bin objectio-osd \
-            --bin objectio-gateway --bin objectio-block-gateway
-      # Building the tests leaves the binaries above alone: objectio-e2e
+            --bin iolake-aio --bin iolakectl --bin iolake-meta --bin iolake-osd \
+            --bin iolake-gateway --bin iolake-block-gateway
+      # Building the tests leaves the binaries above alone: iolake-e2e
       # depends on none of their packages.
       - name: run
         run: |
-          cargo nextest run -p objectio-e2e --test-threads 1 --no-fail-fast \
+          cargo nextest run -p iolake-e2e --test-threads 1 --no-fail-fast \
             --success-output never --failure-output final \
             --test s3_compat --test multipart --test repair --test restart \
             --test packing --test shard_checksums --test osd_disks
@@ -261,7 +261,7 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     # A cluster on the previous release, rolled node by node to this one
-    # under traffic (objectio-docs core/upgrade-path.md). The test is
+    # under traffic (iolake-docs core/upgrade-path.md). The test is
     # #[ignore]d, so the e2e shards leave it out: it needs the previous
     # release's binaries, built here, and fails without them. Whether there
     # is a release to upgrade from is decided here, in the log, not by the
@@ -293,17 +293,17 @@ jobs:
           fi
       - name: build this release
         if: steps.previous.outputs.tag
-        run: cargo build --bin objectio-meta --bin objectio-osd --bin objectio-gateway
+        run: cargo build --bin iolake-meta --bin iolake-osd --bin iolake-gateway
       - name: build the previous release
         if: steps.previous.outputs.tag
         run: |
           bins=$(scripts/upgrade-test/previous-release.sh "${{ steps.previous.outputs.tag }}")
-          echo "OBJECTIO_PREVIOUS_RELEASE_BIN=$bins" >> "$GITHUB_ENV"
+          echo "IOLAKE_PREVIOUS_RELEASE_BIN=$bins" >> "$GITHUB_ENV"
       - name: run
         if: steps.previous.outputs.tag
         # --include-ignored, not --ignored: were the #[ignore] ever dropped,
         # --ignored would run nothing, and pass.
-        run: cargo test --package objectio-e2e --test rolling_upgrade -- --include-ignored --nocapture
+        run: cargo test --package iolake-e2e --test rolling_upgrade -- --include-ignored --nocapture
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -325,7 +325,7 @@ jobs:
       RUSTFLAGS: -C link-arg=-fuse-ld=mold
       # The runner's second disk: the images, logs and replays are sparse,
       # but a few GB are written, and / is short of room.
-      OBJECTIO_CRASH_DIR: /mnt/objectio-crash
+      IOLAKE_CRASH_DIR: /mnt/iolake-crash
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -346,11 +346,11 @@ jobs:
           sudo dmsetup targets | grep -w log-writes
       - name: a directory for the images
         run: |
-          sudo mkdir -p "$OBJECTIO_CRASH_DIR"
-          sudo chown "$(id -u):$(id -g)" "$OBJECTIO_CRASH_DIR"
-          df -h "$OBJECTIO_CRASH_DIR"
+          sudo mkdir -p "$IOLAKE_CRASH_DIR"
+          sudo chown "$(id -u):$(id -g)" "$IOLAKE_CRASH_DIR"
+          df -h "$IOLAKE_CRASH_DIR"
       - name: run
-        run: cargo test -p objectio-osd --test crash_consistency -- --include-ignored --nocapture
+        run: cargo test -p iolake-osd --test crash_consistency -- --include-ignored --nocapture
 
   image:
     name: docker image
@@ -383,7 +383,7 @@ jobs:
     name: rdma (transfer engine, tcp)
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
-    # The Transfer Engine code paths (objectio-transport-te, and the OSD's,
+    # The Transfer Engine code paths (iolake-transport-te, and the OSD's,
     # gateway's and aio's `rdma` features) only build against a Mooncake build,
     # so the jobs above never compile them. This builds Mooncake at the pinned
     # commit in an image — cached across runs, so only a Mooncake bump pays for
@@ -403,11 +403,11 @@ jobs:
           context: .
           file: crates/transport-te/test.Dockerfile
           load: true
-          tags: objectio-te-test
+          tags: iolake-te-test
           cache-from: type=gha,scope=te-test
           cache-to: type=gha,scope=te-test,mode=max
       - name: test
-        run: docker run --rm objectio-te-test
+        run: docker run --rm iolake-te-test
 
   chart:
     name: helm chart
@@ -425,8 +425,8 @@ jobs:
       - name: lint
         run: |
           set -euo pipefail
-          helm lint deploy/helm/objectio --strict
-          helm lint deploy/helm/objectio --strict --values deploy/helm/objectio/examples/production.yaml
+          helm lint deploy/helm/iolake --strict
+          helm lint deploy/helm/iolake --strict --values deploy/helm/iolake/examples/production.yaml
 
       # Render with the defaults a published install gets, with the kind
       # overlay (they take different branches of the image helper), and
@@ -435,11 +435,11 @@ jobs:
       - name: render
         run: |
           set -euo pipefail
-          helm template objectio deploy/helm/objectio > /tmp/default.yaml
-          helm template objectio deploy/helm/objectio \
+          helm template iolake deploy/helm/iolake > /tmp/default.yaml
+          helm template iolake deploy/helm/iolake \
             --values deploy/kind/values.yaml > /tmp/kind.yaml
-          helm template objectio deploy/helm/objectio \
-            --values deploy/helm/objectio/examples/production.yaml \
+          helm template iolake deploy/helm/iolake \
+            --values deploy/helm/iolake/examples/production.yaml \
             --set blockGateway.enabled=true --set monitoring.enabled=true > /tmp/production.yaml
           for f in /tmp/default.yaml /tmp/kind.yaml /tmp/production.yaml; do
             echo "$f: $(grep -c '^kind:' "$f") resources"
@@ -454,7 +454,7 @@ jobs:
             echo "::error::the default install runs the gateway without auth"; exit 1
           fi
           grep -q -- '--ec-m "2"' /tmp/default.yaml
-          if helm template objectio deploy/helm/objectio --set osd.replicas=5 > /dev/null 2>&1; then
+          if helm template iolake deploy/helm/iolake --set osd.replicas=5 > /dev/null 2>&1; then
             echo "::error::rendered 4+2 with 5 OSDs"; exit 1
           fi
 
@@ -468,7 +468,7 @@ jobs:
       # The check that matters: a default install must only ask for images
       # this project actually publishes. The release pushes exactly one —
       # the Dockerfile's `all` target — and the chart shipped asking for
-      # per-service images (objectio-gateway, objectio-meta, objectio-osd)
+      # per-service images (iolake-gateway, iolake-meta, iolake-osd)
       # that have never existed in any registry, so `helm install` from the
       # published chart sat in ImagePullBackOff.
       - name: every own-registry image is one we publish
@@ -478,7 +478,7 @@ jobs:
           bad=0
           while read -r img; do
             case "$img" in
-              ghcr.io/$OWNER/objectio:*) ;;
+              ghcr.io/$OWNER/iolake:*) ;;
               ghcr.io/$OWNER/*)
                 echo "::error::default install references $img, which the release does not publish"
                 bad=1 ;;
@@ -487,13 +487,13 @@ jobs:
           [ "$bad" -eq 0 ]
 
       - name: package
-        run: helm package deploy/helm/objectio --destination /tmp/chart && ls -lh /tmp/chart
+        run: helm package deploy/helm/iolake --destination /tmp/chart && ls -lh /tmp/chart
 
   aio-release-build:
     name: aio (release features)
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
-    # The release compiles objectio-aio with feature flags nothing else turns
+    # The release compiles iolake-aio with feature flags nothing else turns
     # on — io_uring, the PCRE2 and Hyperscan grep engines. A cfg-gated path that no longer compiles under those is
     # invisible until a release is half-done: the version bump and tag land in
     # `prepare`, and the binary build fails after.
@@ -514,7 +514,7 @@ jobs:
         env:
           PCRE2_SYS_STATIC: "1"
         run: |
-          cargo build --bin objectio-aio \
+          cargo build --bin iolake-aio \
             --features io-uring,grep-pcre2
 
       # The release binary is downloaded and run on machines that are not this
@@ -527,13 +527,13 @@ jobs:
       # release's check: this runner's glibc is not the release's (the
       # release builds in AlmaLinux 8 and checks the glibc there).
       - name: the binary links nothing exotic
-        run: scripts/release/check-portable.sh --needed-only target/debug/objectio-aio
+        run: scripts/release/check-portable.sh --needed-only target/debug/iolake-aio
 
   aio-macos:
     name: aio (macOS)
     if: github.event_name != 'pull_request'
     runs-on: macos-14
-    # The release builds objectio-aio for macOS too, and nothing else here
+    # The release builds iolake-aio for macOS too, and nothing else here
     # compiles for it: 0.1.0-rc.3's release stopped at that build, after
     # its tag, images and chart were out, on a libc type that is u64 on
     # Linux and u32 on macOS. A check is enough to catch that.
@@ -548,12 +548,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: check
-        run: cargo check --bin objectio-aio
+        run: cargo check --bin iolake-aio
 
   perf:
     name: performance
     # The tree that lands against main, on the same runner: release builds
-    # of both, run in turn (objectio-docs developer-guide/performance).
+    # of both, run in turn (iolake-docs developer-guide/performance).
     # In the merge queue, and on a pull request labelled `perf`.
     if: >-
       github.event_name == 'merge_group' ||
@@ -566,7 +566,6 @@ jobs:
     timeout-minutes: 60
     env:
       RUSTFLAGS: -C link-arg=-fuse-ld=mold
-      FEATURES: objectio-aio/io-uring
       BASE: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
     steps:
       - uses: actions/checkout@v4
@@ -588,10 +587,15 @@ jobs:
       - name: build the head and the base
         run: |
           set -euo pipefail
+          # A base from before the rename to IOLake names its binaries
+          # objectio-*: built under its own names, kept under this tree's.
           build() {
-            cargo build --release --features "$FEATURES" --bin objectio-aio --bin objectio-s3-bench
+            p=iolake
+            grep -q '^name = "iolake-aio"' bin/aio/Cargo.toml || p=objectio
+            cargo build --release --features "$p-aio/io-uring" --bin "$p-aio" --bin "$p-s3-bench"
             mkdir -p "$RUNNER_TEMP/$1"
-            cp target/release/objectio-aio target/release/objectio-s3-bench "$RUNNER_TEMP/$1/"
+            cp "target/release/$p-aio" "$RUNNER_TEMP/$1/iolake-aio"
+            cp "target/release/$p-s3-bench" "$RUNNER_TEMP/$1/iolake-s3-bench"
           }
           head=$(git rev-parse HEAD)
           build head

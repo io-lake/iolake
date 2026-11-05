@@ -4,12 +4,12 @@
 //! A managed policy's ARN says whose it is: `arn:aws:iam::<tenant>:policy/…`
 //! the tenant's own; `arn:aws:iam:::policy/…` a system one (a tenant sees
 //! and attaches only those the operator shares); `arn:aws:iam::aws:policy/…`
-//! an AWS managed one (`objectio_auth::managed`). A policy has one version,
+//! an AWS managed one (`iolake_auth::managed`). A policy has one version,
 //! `v1`.
 
 use axum::response::Response;
-use objectio_auth::managed;
-use objectio_proto::metadata::{
+use iolake_auth::managed;
+use iolake_proto::metadata::{
     AttachPolicyRequest, CreatePolicyRequest, DeleteInlinePolicyRequest, DeletePolicyRequest,
     DetachPolicyRequest, GetInlinePolicyRequest, GroupMeta, ListAttachedPoliciesRequest,
     ListInlinePoliciesRequest, ListPoliciesRequest, PolicyObject, PutInlinePolicyRequest,
@@ -91,7 +91,7 @@ pub(super) fn check_identity_policy(doc: &str, max: usize) -> IamResult<()> {
             return Err(malformed("Statement IDs (SID) in a policy must be unique."));
         }
     }
-    objectio_auth::BucketPolicy::from_json(doc).map_err(|e| malformed(e.to_string()))?;
+    iolake_auth::BucketPolicy::from_json(doc).map_err(|e| malformed(e.to_string()))?;
     Ok(())
 }
 
@@ -138,7 +138,7 @@ impl Managed {
     }
     /// The canonical ARN, to authorize against.
     fn resource(&self) -> String {
-        objectio_auth::policy::canonical_arn(&self.arn()).into_owned()
+        iolake_auth::policy::canonical_arn(&self.arn()).into_owned()
     }
     fn id(&self) -> String {
         match self {
@@ -197,7 +197,7 @@ async fn resolve(call: &Call<'_>, actor: &Actor, arn: &str) -> IamResult<Managed
             .filter(|_| path == "/")
             .ok_or_else(missing);
     }
-    let system = account.is_empty() || account == objectio_auth::policy::SYSTEM_ACCOUNT;
+    let system = account.is_empty() || account == iolake_auth::policy::SYSTEM_ACCOUNT;
     let policy = if !system && account == actor.tenant {
         stored_policy(call.app, &key(&actor.tenant, &name)).await
     } else if system {
@@ -461,7 +461,7 @@ impl Target {
         match self {
             Self::User(u) => user_resources(u),
             Self::Group(g) => vec![group_resource(g)],
-            Self::Role(r) => vec![objectio_auth::policy::canonical_arn(&r.arn).into_owned()],
+            Self::Role(r) => vec![iolake_auth::policy::canonical_arn(&r.arn).into_owned()],
         }
     }
 

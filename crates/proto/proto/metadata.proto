@@ -211,7 +211,7 @@ service MetadataService {
     rpc PutBucketVersioning(PutBucketVersioningRequest) returns (PutBucketVersioningResponse);
     rpc GetBucketVersioning(GetBucketVersioningRequest) returns (GetBucketVersioningResponse);
 
-    // Deduplication policy (objectio-docs architecture/design/dedup.md)
+    // Deduplication policy (iolake-docs architecture/design/dedup.md)
     rpc SetBucketDedup(SetBucketDedupRequest) returns (SetBucketDedupResponse);
     rpc GetDedupPolicy(GetDedupPolicyRequest) returns (GetDedupPolicyResponse);
     // Primary OSD of each chunk fingerprint, for dry-run accounting.
@@ -221,7 +221,7 @@ service MetadataService {
     // later block snapshots and dedup). Unshared stripes have no entry.
     rpc ShareStripes(ShareStripesRequest) returns (ShareStripesResponse);
     rpc ReleaseStripes(ReleaseStripesRequest) returns (ReleaseStripesResponse);
-    // Small-object packs (objectio-docs architecture/design/small-object-packing.md).
+    // Small-object packs (iolake-docs architecture/design/small-object-packing.md).
     rpc IntendPack(IntendPackRequest) returns (IntendPackResponse);
     rpc SealPack(SealPackRequest) returns (SealPackResponse);
     rpc AbortPack(AbortPackRequest) returns (AbortPackResponse);
@@ -267,15 +267,15 @@ service MetadataService {
     // A named lease held by one caller at a time, for cluster-wide
     // background work only one gateway should do (the lifecycle scan).
     rpc AcquireLease(AcquireLeaseRequest) returns (AcquireLeaseResponse);
-    // Rolling upgrades (objectio-docs core/upgrade-path.md): every node
+    // Rolling upgrades (iolake-docs core/upgrade-path.md): every node
     // reports its release and format level; the operator finalizes once all
     // run the new release, raising the level the cluster may write.
     rpc ReportVersion(ReportVersionRequest) returns (ReportVersionResponse);
     rpc GetUpgradeStatus(GetUpgradeStatusRequest) returns (GetUpgradeStatusResponse);
     rpc FinalizeUpgrade(FinalizeUpgradeRequest) returns (FinalizeUpgradeResponse);
-    // A backup of the whole state machine (objectio-docs core/meta.md,
+    // A backup of the whole state machine (iolake-docs core/meta.md,
     // "Backup, restore and losing a majority"): the leader's, from one read
-    // transaction, in `objectio_common::meta_backup`'s container, streamed
+    // transaction, in `iolake_common::meta_backup`'s container, streamed
     // as it is read.
     rpc ExportMeta(ExportMetaRequest) returns (stream ExportMetaChunk);
     rpc PutBucketSetting(PutBucketSettingRequest) returns (PutBucketSettingResponse);
@@ -325,7 +325,7 @@ service MetadataService {
 
     // Keys whose ObjectMeta copies may disagree: a write or delete that
     // reached the quorum but not every copy. Gateways heal them
-    // (objectio-docs core/object-metadata-quorum.md, healing).
+    // (iolake-docs core/object-metadata-quorum.md, healing).
     rpc HealEnqueue(HealEnqueueRequest) returns (HealEnqueueResponse);
     rpc HealList(HealListRequest) returns (HealListResponse);
     rpc HealClaim(HealClaimRequest) returns (HealClaimResponse);
@@ -350,7 +350,7 @@ message GetTimeResponse {
 message GetMetricsRequest {}
 message GetMetricsResponse {
     string text = 1;    // Prometheus text exposition format 0.0.4
-    // objectio_common::process_metrics::instance_id() of the responding
+    // iolake_common::process_metrics::instance_id() of the responding
     // process. The gateway drops `process_*` from a response that came
     // from its own process (the all-in-one binary) instead of repeating it.
     string process_instance = 2;
@@ -462,12 +462,12 @@ message ObjectMeta {
     string replica_of = 27;
 
     // The format level a reader needs to read this version correctly
-    // (objectio-docs core/upgrade-path.md): set by a writer that uses a
+    // (iolake-docs core/upgrade-path.md): set by a writer that uses a
     // feature a lower level would misread. A reader below it refuses the
     // object instead of serving wrong bytes. 0: nothing beyond the base.
     uint32 required_level = 28;
     // Order of writes to this object's metadata copies: a hybrid logical
-    // clock value (objectio_common::stamp). An OSD keeps the highest; a
+    // clock value (iolake_common::stamp). An OSD keeps the highest; a
     // read takes the newest of a read quorum. 0 = unstamped.
     uint64 stamp = 29;
     // Order of updates of this same object (tagging, retention, legal
@@ -516,7 +516,7 @@ message StripeMeta {
 
     // This object's bytes are [slice_offset, slice_offset + slice_length)
     // of the stripe's data: the stripe is a pack shared by several small
-    // objects (see objectio-docs architecture/design/small-object-packing.md).
+    // objects (see iolake-docs architecture/design/small-object-packing.md).
     // slice_length 0: the whole stripe is this object's.
     uint64 slice_offset = 14;
     uint64 slice_length = 15;
@@ -2526,7 +2526,7 @@ message PoolConfig {
     uint32 pg_count = 15;
     string tier = 16;
 
-    // Placement rule (B31 phase 1b, objectio-docs core/pg-recovery.md): a
+    // Placement rule (B31 phase 1b, iolake-docs core/pg-recovery.md): a
     // PG's copies over `spread_domains` domains at `failure_domain`, at
     // most `per_domain` in one, on distinct hosts above the host level.
     // 0 and 0: one copy per domain, as many domains as copies. With
@@ -2538,7 +2538,7 @@ message PoolConfig {
     bool lrc_groups_per_domain = 19;
 }
 
-// One placement group (B31, objectio-docs core/pg-recovery.md). A key maps
+// One placement group (B31, iolake-docs core/pg-recovery.md). A key maps
 // to its PG by jump-hash(xxh64("{bucket}/{key}"), pg_count); its copies are
 // the PG's acting set. Every change of `acting` is one Raft commit that
 // raises `epoch`, made before any write uses it; OSDs refuse a request
@@ -2626,7 +2626,7 @@ message PgScrub {
     bool requested = 11;
 }
 
-// What peering found of a placement group (B31 phase 2, objectio-docs
+// What peering found of a placement group (B31 phase 2, iolake-docs
 // core/pg-recovery.md): computed by the leader from its members' summaries
 // and, when they differ, their listings, and recovery's progress through it
 // (phase 3a). Kept in the Raft table `pg_state`, keyed
@@ -3122,7 +3122,7 @@ enum KmsKeyStatus {
 
 // A KMS key entry. The gateway never sends plaintext key material over
 // the wire — `wrapped_key_material` is always encrypted by the gateway's
-// service master key (env `OBJECTIO_MASTER_KEY`). Meta stores the blob
+// service master key (env `IOLAKE_MASTER_KEY`). Meta stores the blob
 // verbatim and returns it on read; the gateway unwraps in-process.
 message KmsKey {
     string key_id = 1;                 // Short id, e.g. "obj-2026-04-17-abc"
@@ -3159,7 +3159,7 @@ message DeleteKmsKeyRequest { string key_id = 1; }
 message DeleteKmsKeyResponse { bool success = 1; }
 
 
-// ---- Deduplication (objectio-docs architecture/design/dedup.md) ----
+// ---- Deduplication (iolake-docs architecture/design/dedup.md) ----
 
 enum DedupMode {
     DEDUP_MODE_UNSET = 0;     // inherit

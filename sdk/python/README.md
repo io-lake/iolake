@@ -1,19 +1,18 @@
-# objectio-sdk
+# iolake-sdk
 
-Python client for the **ObjectIO management API** — the `/_admin/*` surface
+Python client for the **IOLake management API** — the `/_admin/*` surface
 for tenants, users, access keys, buckets and bucket policies, IAM policies,
 groups and roles, identity providers, Block Public Access, pools, KMS and
 cluster status — plus STS `AssumeRoleWithWebIdentity`.
 
 ```bash
-pip install objectio-sdk
+pip install iolake-sdk
 ```
 ```python
-from objectio import Client
+from iolake import Client
 ```
 
-> The distribution is `objectio-sdk` because `objectio` is taken on PyPI by an
-> unrelated package. The import is still `objectio`.
+> The distribution is `iolake-sdk`; the import is `iolake`.
 
 It deliberately does **not** do S3 data operations. Use boto3 (or
 mountpoint-s3, s3fs, rclone) for those, pointed at the same endpoint with a
@@ -30,11 +29,11 @@ app = Client.from_env()
 
 | | |
 |---|---|
-| `OBJECTIO_ENDPOINT` or `OBJECTIO_URL` | gateway base URL — **required** |
-| `OBJECTIO_ACCESS_KEY_FILE` · `OBJECTIO_ACCESS_KEY` · `AWS_ACCESS_KEY_ID` | the first set |
-| `OBJECTIO_SECRET_KEY_FILE` · `OBJECTIO_SECRET_KEY` · `AWS_SECRET_ACCESS_KEY` | the first set |
-| `OBJECTIO_REGION` · `AWS_REGION` · `AWS_DEFAULT_REGION` | the first set; default `us-east-1` |
-| `OBJECTIO_PROVISIONER_USER_ID` | the user bucket-scoped keys are minted on |
+| `IOLAKE_ENDPOINT` or `IOLAKE_URL` | gateway base URL — **required** |
+| `IOLAKE_ACCESS_KEY_FILE` · `IOLAKE_ACCESS_KEY` · `AWS_ACCESS_KEY_ID` | the first set |
+| `IOLAKE_SECRET_KEY_FILE` · `IOLAKE_SECRET_KEY` · `AWS_SECRET_ACCESS_KEY` | the first set |
+| `IOLAKE_REGION` · `AWS_REGION` · `AWS_DEFAULT_REGION` | the first set; default `us-east-1` |
+| `IOLAKE_PROVISIONER_USER_ID` | the user bucket-scoped keys are minted on |
 
 Prefer the `_FILE` forms in Kubernetes — that is how a Secret is projected, and
 a secret in the environment is readable from `/proc` and lands in crash dumps.
@@ -59,7 +58,7 @@ s3.put_object(Bucket=access.bucket, Key="hello.txt", Body=b"hi")
 ```
 
 Two calls, no bucket policy and no extra user: the provisioner owns the bucket
-it just created — with no policy attached ObjectIO authorizes on ownership —
+it just created — with no policy attached IOLake authorizes on ownership —
 and the scope narrows that to the one bucket.
 
 `rotate_bucket_key` mints a replacement while the old key still works;
@@ -102,7 +101,7 @@ reset everything it leaves out — for a tenant, its list of admins.
 
 `AssumeRoleWithWebIdentity` is unsigned — the token is the proof — so a client
 built with only an endpoint can call it; every other method on such a client
-raises `ObjectIOError` before sending anything:
+raises `IOLakeError` before sending anything:
 
 ```python
 sts = Client(endpoint="https://s3.example.com")
@@ -116,7 +115,7 @@ A refusal raises `APIError` with the STS error code in `e.code`
 ## Errors
 
 ```python
-from objectio import APIError
+from iolake import APIError
 
 try:
     app.create_bucket("ws-1")
@@ -137,17 +136,17 @@ python -m pytest tests -q
 ```
 
 The signature tests need no server; they are pinned to the same vectors as the
-[Go SDK](https://github.com/object-io/objectio-go-sdk), because two
+[Go SDK](https://github.com/io-lake/iolake-go-sdk), because two
 implementations of one algorithm drift silently. The request-shape tests run
 against a local stub.
 
 `tests/test_integration.py` runs against a real gateway, and is skipped unless
-`OBJECTIO_ENDPOINT`, `OBJECTIO_ACCESS_KEY` and `OBJECTIO_SECRET_KEY` (a system
-admin) are set. `objectio-aio --auth` is enough; it writes the admin
+`IOLAKE_ENDPOINT`, `IOLAKE_ACCESS_KEY` and `IOLAKE_SECRET_KEY` (a system
+admin) are set. `iolake-aio --auth` is enough; it writes the admin
 credential to `<data>/meta/admin-creds.env`.
 
 ---
 
 **This repository is generated.** It is mirrored from `sdk/python/` in
-[object-io/objectio](https://github.com/object-io/objectio) on every push to
+[io-lake/iolake](https://github.com/io-lake/iolake) on every push to
 `main`. Open issues and pull requests there — changes made here are overwritten.

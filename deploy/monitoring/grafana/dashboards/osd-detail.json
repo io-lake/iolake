@@ -10,9 +10,9 @@
       "icon": "external link",
       "includeVars": true,
       "keepTime": true,
-      "tags": ["objectio"],
+      "tags": ["iolake"],
       "targetBlank": false,
-      "title": "ObjectIO Dashboards",
+      "title": "IOLake Dashboards",
       "type": "dashboards"
     }
   ],
@@ -53,7 +53,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_osd_uptime_seconds{osd_id=~\"$osd\"}",
+          "expr": "iolake_osd_uptime_seconds{osd_id=~\"$osd\"}",
           "legendFormat": "Uptime",
           "refId": "A"
         }
@@ -88,7 +88,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_osd_capacity_bytes{osd_id=~\"$osd\"}",
+          "expr": "iolake_osd_capacity_bytes{osd_id=~\"$osd\"}",
           "legendFormat": "Capacity",
           "refId": "A"
         }
@@ -127,7 +127,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "100 * objectio_osd_used_bytes{osd_id=~\"$osd\"} / objectio_osd_capacity_bytes{osd_id=~\"$osd\"}",
+          "expr": "100 * iolake_osd_used_bytes{osd_id=~\"$osd\"} / iolake_osd_capacity_bytes{osd_id=~\"$osd\"}",
           "legendFormat": "Used",
           "refId": "A"
         }
@@ -162,7 +162,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_osd_shards_total{osd_id=~\"$osd\"}",
+          "expr": "iolake_osd_shards_total{osd_id=~\"$osd\"}",
           "legendFormat": "Shards",
           "refId": "A"
         }
@@ -201,7 +201,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_osd_info{osd_id=~\"$osd\"}",
+          "expr": "iolake_osd_info{osd_id=~\"$osd\"}",
           "format": "table",
           "instant": true,
           "legendFormat": "",
@@ -246,7 +246,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_disk_shards_total{osd_id=~\"$osd\"}",
+          "expr": "iolake_disk_shards_total{osd_id=~\"$osd\"}",
           "legendFormat": "{{disk}}",
           "refId": "A"
         }
@@ -286,7 +286,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "100 * objectio_disk_used_bytes{osd_id=~\"$osd\"} / objectio_disk_capacity_bytes{osd_id=~\"$osd\"}",
+          "expr": "100 * iolake_disk_used_bytes{osd_id=~\"$osd\"} / iolake_disk_capacity_bytes{osd_id=~\"$osd\"}",
           "legendFormat": "{{disk}}",
           "refId": "A"
         }
@@ -327,7 +327,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_disk_healthy{osd_id=~\"$osd\"}",
+          "expr": "iolake_disk_healthy{osd_id=~\"$osd\"}",
           "legendFormat": "{{disk}}",
           "refId": "A"
         }
@@ -382,7 +382,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (method) (rate(objectio_osd_grpc_requests_total{osd_id=~\"$osd\",code=\"OK\"}[5m]))",
+          "expr": "sum by (method) (rate(iolake_osd_grpc_requests_total{osd_id=~\"$osd\",code=\"OK\"}[5m]))",
           "legendFormat": "{{method}}",
           "refId": "A"
         }
@@ -429,7 +429,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.99, sum by (method, le) (rate(objectio_osd_grpc_latency_seconds_bucket{osd_id=~\"$osd\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (method, le) (rate(iolake_osd_grpc_latency_seconds_bucket{osd_id=~\"$osd\"}[5m])))",
           "legendFormat": "{{method}}",
           "refId": "A"
         }
@@ -476,13 +476,13 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "rate(objectio_osd_grpc_bytes_sent_total{osd_id=~\"$osd\"}[5m])",
+          "expr": "rate(iolake_osd_grpc_bytes_sent_total{osd_id=~\"$osd\"}[5m])",
           "legendFormat": "{{method}} sent",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "rate(objectio_osd_grpc_bytes_received_total{osd_id=~\"$osd\"}[5m])",
+          "expr": "rate(iolake_osd_grpc_bytes_received_total{osd_id=~\"$osd\"}[5m])",
           "legendFormat": "{{method}} received",
           "refId": "B"
         }
@@ -529,7 +529,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (method) (increase(objectio_osd_grpc_requests_total{osd_id=~\"$osd\",code!=\"OK\"}[5m]))",
+          "expr": "sum by (method) (increase(iolake_osd_grpc_requests_total{osd_id=~\"$osd\",code!=\"OK\"}[5m]))",
           "legendFormat": "{{method}} errors",
           "refId": "A"
         }
@@ -541,7 +541,7 @@
   "refresh": "10s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["objectio", "osd", "storage"],
+  "tags": ["iolake", "osd", "storage"],
   "templating": {
     "list": [
       {
@@ -562,14 +562,14 @@
       {
         "current": {},
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "definition": "label_values(objectio_osd_info, osd_id)",
+        "definition": "label_values(iolake_osd_info, osd_id)",
         "hide": 0,
         "includeAll": true,
         "label": "OSD",
         "multi": true,
         "name": "osd",
         "options": [],
-        "query": { "query": "label_values(objectio_osd_info, osd_id)", "refId": "StandardVariableQuery" },
+        "query": { "query": "label_values(iolake_osd_info, osd_id)", "refId": "StandardVariableQuery" },
         "refresh": 2,
         "regex": "",
         "skipUrlSync": false,
@@ -581,8 +581,8 @@
   "time": { "from": "now-1h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "ObjectIO - OSD Detail",
-  "uid": "objectio-osd-detail",
+  "title": "IOLake - OSD Detail",
+  "uid": "iolake-osd-detail",
   "version": 1,
   "weekStart": ""
 }

@@ -1,4 +1,4 @@
-# ObjectIO Prometheus Configuration
+# IOLake Prometheus Configuration
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -25,21 +25,21 @@ scrape_configs:
   # default it re-exports every OSD's and meta node's metrics, and
   # scraping those directly as well counts everything twice.
 
-  # ObjectIO Gateway (S3 API metrics)
-  - job_name: 'objectio-gateway'
+  # IOLake Gateway (S3 API metrics)
+  - job_name: 'iolake-gateway'
     static_configs:
       - targets: ['gateway:9000']
     metrics_path: /metrics
     scrape_interval: 10s
 
-  # ObjectIO Metadata Services (3-node Raft cluster)
-  - job_name: 'objectio-meta'
+  # IOLake Metadata Services (3-node Raft cluster)
+  - job_name: 'iolake-meta'
     static_configs:
       - targets: ['meta1:9101', 'meta2:9101', 'meta3:9101']
     scrape_interval: 15s
 
-  # ObjectIO OSDs (5 nodes for 3+2 EC)
-  - job_name: 'objectio-osd'
+  # IOLake OSDs (5 nodes for 3+2 EC)
+  - job_name: 'iolake-osd'
     static_configs:
       - targets: ['osd1:9201', 'osd2:9201', 'osd3:9201', 'osd4:9201', 'osd5:9201']
     scrape_interval: 15s

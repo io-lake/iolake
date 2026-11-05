@@ -39,9 +39,9 @@ use axum::extract::{Request, State};
 use axum::http::{Method, StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use objectio_auth::AuthResult;
-use objectio_auth::policy::{PolicyDecision, RequestContext, SYSTEM_ACCOUNT, canonical_arn};
-use objectio_proto::metadata::{
+use iolake_auth::AuthResult;
+use iolake_auth::policy::{PolicyDecision, RequestContext, SYSTEM_ACCOUNT, canonical_arn};
+use iolake_proto::metadata::{
     ListGroupsRequest, ListRolesRequest, ListUsersRequest, RoleObject, UserMeta, UserStatus,
 };
 use tracing::debug;
@@ -105,7 +105,7 @@ impl IamError {
     pub(crate) fn from_status(e: &tonic::Status) -> Self {
         let message = e.message().to_string();
         match e.code() {
-            _ if objectio_proto::is_no_room(e) => {
+            _ if iolake_proto::is_no_room(e) => {
                 Self::new(StatusCode::INSUFFICIENT_STORAGE, "ServiceFailure", message)
             }
             tonic::Code::NotFound => Self::no_such_entity(message),
@@ -499,7 +499,7 @@ pub(crate) struct Actor {
 
 impl Actor {
     pub(crate) async fn of(app: &AppState, auth: &AuthResult) -> IamResult<Self> {
-        use objectio_auth::AuthMode;
+        use iolake_auth::AuthMode;
         if auth.scope.as_ref().is_some_and(|s| !s.scope.is_empty()) {
             return Err(IamError::access_denied(
                 "a key scoped to a bucket can't make IAM calls",
@@ -807,7 +807,7 @@ pub(crate) async fn find_user(call: &Call<'_>, actor: &Actor, name: &str) -> Iam
 
 /// The caller's own user, for a call that names none.
 pub(crate) async fn own_user(call: &Call<'_>) -> IamResult<UserMeta> {
-    use objectio_auth::AuthMode;
+    use iolake_auth::AuthMode;
     if !matches!(
         call.auth.auth_mode,
         AuthMode::Permanent | AuthMode::SessionToken
@@ -819,7 +819,7 @@ pub(crate) async fn own_user(call: &Call<'_>) -> IamResult<UserMeta> {
     call.app
         .meta_client
         .clone()
-        .get_user(objectio_proto::metadata::GetUserRequest {
+        .get_user(iolake_proto::metadata::GetUserRequest {
             user_id: call.auth.user_id.clone(),
         })
         .await
@@ -850,7 +850,7 @@ pub(crate) async fn find_group(
     call: &Call<'_>,
     actor: &Actor,
     name: &str,
-) -> IamResult<objectio_proto::metadata::GroupMeta> {
+) -> IamResult<iolake_proto::metadata::GroupMeta> {
     match all_groups(call.app)
         .await?
         .into_iter()
@@ -864,7 +864,7 @@ pub(crate) async fn find_group(
 /// Every group, all tenants.
 pub(crate) async fn all_groups(
     app: &AppState,
-) -> IamResult<Vec<objectio_proto::metadata::GroupMeta>> {
+) -> IamResult<Vec<iolake_proto::metadata::GroupMeta>> {
     let mut out = Vec::new();
     let mut marker = String::new();
     loop {

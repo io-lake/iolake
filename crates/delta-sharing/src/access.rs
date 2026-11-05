@@ -7,7 +7,7 @@
 use crate::catalog::DeltaCatalog;
 use crate::error::DeltaError;
 use axum::http::HeaderMap;
-use objectio_proto::metadata::DeltaShareEntry;
+use iolake_proto::metadata::DeltaShareEntry;
 use sha2::{Digest, Sha256};
 use tracing::warn;
 
@@ -123,12 +123,12 @@ pub async fn open_shares(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
+    use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
 
     /// A request without a bearer token is 401, as the protocol has it.
     #[tokio::test]
     async fn no_bearer_token_is_unauthenticated() {
-        let channel = objectio_proto::transport::connect_lazy(
+        let channel = iolake_proto::transport::connect_lazy(
             &tonic::transport::Endpoint::from_static("http://127.0.0.1:1"),
         );
         let catalog = DeltaCatalog::new(MetadataServiceClient::new(channel));
@@ -142,7 +142,7 @@ mod tests {
     /// once meta says its tenant is (here meta can't be reached).
     #[tokio::test]
     async fn only_a_tenants_shares_wait_on_its_tenant() {
-        let channel = objectio_proto::transport::connect_lazy(
+        let channel = iolake_proto::transport::connect_lazy(
             &tonic::transport::Endpoint::from_static("http://127.0.0.1:1"),
         );
         let catalog = DeltaCatalog::new(MetadataServiceClient::new(channel));

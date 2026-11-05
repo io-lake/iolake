@@ -8,7 +8,7 @@
 //! Each of those is a gate disagreeing with the gate next to it, which is
 //! exactly what a per-handler unit test cannot see.
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 /// Create a tenant with an admin user and return
@@ -125,7 +125,7 @@ fn a_tenant_admin_lists_its_own_warehouses() {
         )
         .expect_ok();
     }
-    let names = |r: &objectio_e2e::Response| -> Vec<String> {
+    let names = |r: &iolake_e2e::Response| -> Vec<String> {
         r.expect(200);
         let mut names: Vec<String> = r.json()["warehouses"]
             .as_array()

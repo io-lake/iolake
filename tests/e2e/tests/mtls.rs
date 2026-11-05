@@ -10,16 +10,16 @@
 use std::io::Read;
 use std::time::{Duration, Instant};
 
-use objectio_e2e::Cluster;
-use objectio_e2e::ha::HaCluster;
-use objectio_e2e::tls;
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
-use objectio_proto::metadata::{
+use iolake_e2e::Cluster;
+use iolake_e2e::ha::HaCluster;
+use iolake_e2e::tls;
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_proto::metadata::{
     GetAccessKeyForAuthRequest, GetMetricsRequest, GetStsSigningKeyRequest,
 };
-use objectio_proto::storage::storage_service_client::StorageServiceClient;
-use objectio_proto::storage::{ListPgRequest, PurgeRequest};
-use objectio_proto::transport::HANDSHAKE_TIMEOUT;
+use iolake_proto::storage::storage_service_client::StorageServiceClient;
+use iolake_proto::storage::{ListPgRequest, PurgeRequest};
+use iolake_proto::transport::HANDSHAKE_TIMEOUT;
 use tonic::Code;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig, Endpoint, Identity};
 
@@ -48,10 +48,10 @@ fn call(
         // As the current release: meta refuses a client too old for the
         // cluster, which would look like a refusal for another reason.
         let ep = ep?
-            .user_agent(objectio_common::version::user_agent())
+            .user_agent(iolake_common::version::user_agent())
             .map_err(|e| e.to_string())?;
         let attempt = async {
-            let channel = objectio_proto::transport::connect(&ep)
+            let channel = iolake_proto::transport::connect(&ep)
                 .await
                 .map_err(|e| e.to_string())?;
             MetadataServiceClient::new(channel)
@@ -92,8 +92,8 @@ fn held_silent(addr: &str) -> Duration {
 
 #[test]
 fn a_node_refuses_a_client_without_the_clusters_certificate() {
-    let files = objectio_e2e::tls::files().expect(
-        "OBJECTIO_E2E_PLAIN is set: the cluster runs plain gRPC, and this test is about mTLS",
+    let files = iolake_e2e::tls::files().expect(
+        "IOLAKE_E2E_PLAIN is set: the cluster runs plain gRPC, and this test is about mTLS",
     );
     let ha = HaCluster::start(1, 6, 1);
     let addr = ha
@@ -167,11 +167,11 @@ fn a_node_refuses_a_client_without_the_clusters_certificate() {
     );
 
     // The cluster's certificate: served, all of the above notwithstanding.
-    objectio_e2e::tls::client();
+    iolake_e2e::tls::client();
     call(
         &rt,
         "a client with the cluster's certificate",
-        objectio_proto::transport::endpoint(&addr),
+        iolake_proto::transport::endpoint(&addr),
     )
     .expect("the cluster's own certificate");
 }
@@ -191,11 +191,11 @@ fn channel_as(rt: &tokio::runtime::Runtime, addr: &str, identity: &str) -> Chann
                 .identity(Identity::from_pem(pem(cert), pem(key))),
         )
         .unwrap()
-        .user_agent(objectio_common::version::user_agent())
+        .user_agent(iolake_common::version::user_agent())
         .unwrap()
         .connect_timeout(WITHIN)
         .timeout(WITHIN);
-    rt.block_on(objectio_proto::transport::connect(&endpoint))
+    rt.block_on(iolake_proto::transport::connect(&endpoint))
         .unwrap_or_else(|e| panic!("{addr} as {identity}: {e}"))
 }
 
@@ -281,7 +281,7 @@ fn each_call_between_the_services_is_checked_against_the_callers_role() {
 #[test]
 fn meta_admin_port_changes_membership_only_for_an_admin() {
     tls::files().expect(
-        "OBJECTIO_E2E_PLAIN is set: the cluster runs plain gRPC, and this test is about mTLS",
+        "IOLAKE_E2E_PLAIN is set: the cluster runs plain gRPC, and this test is about mTLS",
     );
     let ha = HaCluster::start(1, 6, 1);
     let init = serde_json::json!({});

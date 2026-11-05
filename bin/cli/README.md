@@ -1,6 +1,6 @@
-# obioctl
+# iolakectl
 
-The ObjectIO management CLI. It is a client of the gateway's admin HTTP API
+The IOLake management CLI. It is a client of the gateway's admin HTTP API
 (`/_admin/*`), signed with SigV4 exactly like the SDKs in `sdk/go` and
 `sdk/python`. Every command passes through the gateway's authentication,
 tenant scoping, validation, Block Public Access, audit events and cache
@@ -19,13 +19,13 @@ The exceptions:
 ## Configure
 
 ```sh
-obioctl configure                      # prompts; writes profile "default"
-obioctl --profile acme configure \
+iolakectl configure                      # prompts; writes profile "default"
+iolakectl --profile acme configure \
   --endpoint https://s3.example.com --access-key AKIA... --secret-key ... --non-interactive
-obioctl configure --list               # secrets masked
+iolakectl configure --list               # secrets masked
 ```
 
-Profiles are stored in `~/.objectio/config` (or `$OBJECTIO_CONFIG_FILE`) with
+Profiles are stored in `~/.objectio/config` (or `$IOLAKE_CONFIG_FILE`) with
 mode 0600:
 
 ```toml
@@ -42,11 +42,11 @@ wins:
 1. Flags: `--endpoint`, `--access-key`/`--secret-key`, `--region`.
 2. The profile named with `--profile`.
 3. The environment, read the same way the SDKs read it:
-   - `OBJECTIO_ENDPOINT` or `OBJECTIO_URL`
-   - `OBJECTIO_ACCESS_KEY_FILE`, `OBJECTIO_ACCESS_KEY` or `AWS_ACCESS_KEY_ID`
-   - `OBJECTIO_SECRET_KEY_FILE`, `OBJECTIO_SECRET_KEY` or `AWS_SECRET_ACCESS_KEY`
-   - `OBJECTIO_REGION`, `AWS_REGION` or `AWS_DEFAULT_REGION`
-4. The profile named by `OBJECTIO_PROFILE`, else `default`.
+   - `IOLAKE_ENDPOINT` or `IOLAKE_URL`
+   - `IOLAKE_ACCESS_KEY_FILE`, `IOLAKE_ACCESS_KEY` or `AWS_ACCESS_KEY_ID`
+   - `IOLAKE_SECRET_KEY_FILE`, `IOLAKE_SECRET_KEY` or `AWS_SECRET_ACCESS_KEY`
+   - `IOLAKE_REGION`, `AWS_REGION` or `AWS_DEFAULT_REGION`
+4. The profile named by `IOLAKE_PROFILE`, else `default`.
 
 The region defaults to `us-east-1`. The access key and secret are always
 taken from the same source. Prefer the `_FILE` variables or a profile:
@@ -72,7 +72,7 @@ json`), the CLI prints the API's own JSON document, pretty-printed, so
 scripts read the same shapes the SDKs do:
 
 ```sh
-obioctl -o json user create alice | jq -r .user_id
+iolakectl -o json user create alice | jq -r .user_id
 ```
 
 Commands that get no response body (HTTP 204), such as deletes, print
@@ -154,42 +154,42 @@ Secrets are printed only once, when they are created: by `key create`,
 | `volume attach ID [--read-only]` / `detach ID [--force]` / `attachments [--volume-id]` | gRPC: exports the volume over NBD (export name = volume id); detach disconnects its clients first |
 | `snapshot list VOL` / `create VOL --name` / `show ID` / `delete ID` / `clone ID --name` | gRPC `BlockService` |
 
-For `provision`, `--user` defaults to `$OBJECTIO_PROVISIONER_USER_ID`.
+For `provision`, `--user` defaults to `$IOLAKE_PROVISIONER_USER_ID`.
 
 ## Examples
 
 Onboard a tenant as the system admin:
 
 ```sh
-obioctl tenant create acme --display-name "Acme Corp" --quota-bytes 2T
-ADMIN=$(obioctl -o json user create acme-admin --tenant acme | jq -r .user_id)
-obioctl tenant admin add acme "$ADMIN"
-obioctl key create "$ADMIN"            # hand this key to the tenant admin
+iolakectl tenant create acme --display-name "Acme Corp" --quota-bytes 2T
+ADMIN=$(iolakectl -o json user create acme-admin --tenant acme | jq -r .user_id)
+iolakectl tenant admin add acme "$ADMIN"
+iolakectl key create "$ADMIN"            # hand this key to the tenant admin
 ```
 
 Then, as the tenant admin (no `--tenant` needed):
 
 ```sh
-obioctl user create alice
-obioctl policy create read-logs --file read-logs.json
-obioctl policy attach read-logs --user <alice-id>
-obioctl public-access-block put --all
-obioctl bucket create logs
-obioctl bucket lifecycle put logs --file lifecycle.xml
-obioctl provision bucket ws-1 --user "$ADMIN"   # bucket + key scoped to it
+iolakectl user create alice
+iolakectl policy create read-logs --file read-logs.json
+iolakectl policy attach read-logs --user <alice-id>
+iolakectl public-access-block put --all
+iolakectl bucket create logs
+iolakectl bucket lifecycle put logs --file lifecycle.xml
+iolakectl provision bucket ws-1 --user "$ADMIN"   # bucket + key scoped to it
 ```
 
 Get temporary credentials from an OIDC token (no key needed):
 
 ```sh
-eval "$(obioctl sts assume-role-with-web-identity \
+eval "$(iolakectl sts assume-role-with-web-identity \
   --role-arn arn:obio:iam::acme:role/etl --token-file /var/run/secrets/token --env)"
 ```
 
 ## Agent skills
 
-`obioctl skills list` shows the skills this binary carries, and
-`obioctl skills install` copies them where coding agents read skills
+`iolakectl skills list` shows the skills this binary carries, and
+`iolakectl skills install` copies them where coding agents read skills
 (`--agent`, `--all`, `--dir`, `--audience ops|dev`, `--force`). They need
 no endpoint or credentials. What they are and how they're maintained:
 [skills/README.md](../../skills/README.md).

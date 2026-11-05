@@ -16,8 +16,8 @@ version = "0.1.0-dev"
 edition = "2024"
 rust-version = "1.93"
 license = "Apache-2.0"
-repository = "https://github.com/objectio/objectio"
-authors = ["ObjectIO Contributors"]
+repository = "https://github.com/iolake/iolake"
+authors = ["IOLake Contributors"]
 
 [workspace.dependencies]
 # The services' allocator: returns freed memory to the OS, where glibc's
@@ -112,23 +112,23 @@ tempfile = "3.14"
 rand = "0.8"
 
 # Internal crates
-objectio-common = { path = "crates/common" }
-objectio-proto = { path = "crates/proto" }
-objectio-erasure = { path = "crates/erasure" }
-objectio-placement = { path = "crates/placement" }
-objectio-storage = { path = "crates/storage" }
-objectio-meta-store = { path = "crates/meta-store" }
-objectio-auth = { path = "crates/auth" }
-objectio-block = { path = "crates/block" }
-objectio-iceberg = { path = "crates/iceberg" }
-objectio-delta-sharing = { path = "crates/delta-sharing" }
-objectio-unity-catalog = { path = "crates/unity-catalog" }
-objectio-kms = { path = "crates/kms" }
-objectio-transport-te = { path = "crates/transport-te" }
-objectio-gateway = { path = "crates/gateway" }
-objectio-meta = { path = "crates/meta" }
-objectio-osd = { path = "crates/osd" }
-objectio-block-gateway = { path = "crates/block-gateway" }
+iolake-common = { path = "crates/common" }
+iolake-proto = { path = "crates/proto" }
+iolake-erasure = { path = "crates/erasure" }
+iolake-placement = { path = "crates/placement" }
+iolake-storage = { path = "crates/storage" }
+iolake-meta-store = { path = "crates/meta-store" }
+iolake-auth = { path = "crates/auth" }
+iolake-block = { path = "crates/block" }
+iolake-iceberg = { path = "crates/iceberg" }
+iolake-delta-sharing = { path = "crates/delta-sharing" }
+iolake-unity-catalog = { path = "crates/unity-catalog" }
+iolake-kms = { path = "crates/kms" }
+iolake-transport-te = { path = "crates/transport-te" }
+iolake-gateway = { path = "crates/gateway" }
+iolake-meta = { path = "crates/meta" }
+iolake-osd = { path = "crates/osd" }
+iolake-block-gateway = { path = "crates/block-gateway" }
 
 [workspace.lints.rust]
 unsafe_code = "warn"

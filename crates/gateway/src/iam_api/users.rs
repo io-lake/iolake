@@ -1,7 +1,7 @@
 //! Users and their access keys.
 
 use axum::response::Response;
-use objectio_proto::metadata::{
+use iolake_proto::metadata::{
     AccessKeyMeta, CreateAccessKeyRequest, CreateUserRequest, DeleteAccessKeyRequest,
     DeleteUserRequest, GetAccessKeyRequest, KeyStatus, ListAccessKeysRequest,
     ListAttachedPoliciesRequest, ListInlinePoliciesRequest, UpdateAccessKeyRequest,

@@ -40,7 +40,7 @@
 //! node's state and take any client, with a certificate or none: kubelet's
 //! probes present none. Every other call, the three that change membership
 //! first, takes only a client presenting a certificate of role `admin`
-//! (the Helm bootstrap Job's, `objectio-install cluster init`'s, an
+//! (the Helm bootstrap Job's, `iolake-install cluster init`'s, an
 //! operator's) and is refused 403 otherwise. With mTLS off it is plain HTTP and unauthenticated, like
 //! the rest of the internal network: it binds the host meta listens on
 //! (loopback in the all-in-one) and the node says at startup that the
@@ -58,8 +58,8 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use objectio_meta_store::MetaTypeConfig;
-use objectio_proto::peer_auth::Roles;
+use iolake_meta_store::MetaTypeConfig;
+use iolake_proto::peer_auth::Roles;
 use openraft::{BasicNode, Raft, RaftMetrics, ServerState};
 use serde::{Deserialize, Serialize};
 use tokio::net::{TcpListener, TcpStream};
@@ -71,7 +71,7 @@ pub struct RaftAdminState {
     pub self_id: u64,
     pub self_addr: String,
     /// Room on the filesystem under this node's data.
-    pub space: Arc<objectio_meta_store::DiskSpace>,
+    pub space: Arc<iolake_meta_store::DiskSpace>,
 }
 
 impl RaftAdminState {
@@ -111,7 +111,7 @@ fn open_to_anyone(method: &Method, path: &str) -> bool {
 /// Under mTLS, every call but the open ones (those that change membership,
 /// and any other) needs a client certificate of role `admin`.
 async fn require_admin(req: Request, next: Next) -> Response {
-    if !objectio_proto::transport::tls_enabled() || open_to_anyone(req.method(), req.uri().path()) {
+    if !iolake_proto::transport::tls_enabled() || open_to_anyone(req.method(), req.uri().path()) {
         return next.run(req).await;
     }
     let peer = req.extensions().get::<ConnectInfo<Peer>>().map(|c| &c.0);
@@ -146,14 +146,14 @@ async fn require_admin(req: Request, next: Next) -> Response {
 pub async fn serve(state: Arc<RaftAdminState>, listener: TcpListener) -> anyhow::Result<()> {
     let addr = listener.local_addr()?;
     let router = state.router();
-    match objectio_proto::transport::https_server_config().map_err(anyhow::Error::msg)? {
+    match iolake_proto::transport::https_server_config().map_err(anyhow::Error::msg)? {
         Some(config) => {
             info!("Raft admin API on https://{addr}/ (membership changes: role admin)");
             let tls = TlsListener::spawn(listener, tokio_rustls::TlsAcceptor::from(config));
             axum::serve(tls, router.into_make_service_with_connect_info::<Peer>()).await?;
         }
         None => {
-            objectio_proto::transport::warn_unauthenticated();
+            iolake_proto::transport::warn_unauthenticated();
             info!("Raft admin API on http://{addr}/ (unauthenticated: mTLS is off)");
             axum::serve(listener, router).await?;
         }
@@ -162,7 +162,7 @@ pub async fn serve(state: Arc<RaftAdminState>, listener: TcpListener) -> anyhow:
 }
 
 /// How long a client has to finish its TLS handshake: as on the gRPC port.
-const HANDSHAKE_TIMEOUT: Duration = objectio_proto::transport::HANDSHAKE_TIMEOUT;
+const HANDSHAKE_TIMEOUT: Duration = iolake_proto::transport::HANDSHAKE_TIMEOUT;
 
 /// Connections that completed their TLS handshake, each with its peer.
 /// Handshakes run on tasks of their own, so a slow one holds up no other.
@@ -199,7 +199,7 @@ impl TlsListener {
                             Err(_) => return,
                         };
                     let roles =
-                        objectio_proto::peer_auth::peer_roles(tls.get_ref().1.peer_certificates());
+                        iolake_proto::peer_auth::peer_roles(tls.get_ref().1.peer_certificates());
                     let _ = tx.send((tls, Peer { addr, roles })).await;
                 });
             }
@@ -259,7 +259,7 @@ async fn init(State(s): State<Arc<RaftAdminState>>) -> impl IntoResponse {
         Err(e) => {
             let msg = e.to_string();
             // Idempotent restart: cluster is already initialized. Treat as 409 so
-            // callers (notably objectio-aio) don't have to distinguish cold boot
+            // callers (notably iolake-aio) don't have to distinguish cold boot
             // from warm boot.
             let already =
                 msg.contains("not allowed to initialize") || msg.contains("already initialized");
@@ -426,7 +426,7 @@ async fn status(State(s): State<Arc<RaftAdminState>>) -> impl IntoResponse {
         fatal: m.running_state.as_ref().err().map(ToString::to_string),
         voters,
         learners,
-        open_repair: objectio_meta_store::commit_metrics::open_repaired(),
+        open_repair: iolake_meta_store::commit_metrics::open_repaired(),
         disk_free: s.space.free(),
         disk_reserve: s.space.reserve(),
         disk_full: s.space.has_room_for_writes().err().map(|e| e.to_string()),

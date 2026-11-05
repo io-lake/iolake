@@ -1,6 +1,6 @@
-//! ObjectIO Storage Engine - Raw disk storage
+//! IOLake Storage Engine - Raw disk storage
 //!
-//! This crate implements the storage engine for ObjectIO including:
+//! This crate implements the storage engine for IOLake including:
 //! - Raw disk access (O_DIRECT / F_NOCACHE)
 //! - Write-ahead logging
 //! - Block allocation and management

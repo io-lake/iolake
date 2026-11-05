@@ -1,11 +1,11 @@
-//! Dedup policy and the phase-1 dry-run (objectio-docs
+//! Dedup policy and the phase-1 dry-run (iolake-docs
 //! `architecture/design/core/dedup.md`): the policy resolves bucket → tenant →
 //! cluster, and dry-run counts how much written data was already stored in
 //! its domain, without changing how anything is stored.
 
 use std::time::{Duration, Instant};
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 /// Sum of every sample of `name` whose labels contain all of `labels`.
@@ -46,7 +46,7 @@ fn noise(len: usize, seed: u64) -> Vec<u8> {
         .collect()
 }
 
-const DUP: &str = "objectio_dedup_dryrun_bytes_total";
+const DUP: &str = "iolake_dedup_dryrun_bytes_total";
 
 fn duplicate_bytes(c: &Cluster, bucket: &str) -> u64 {
     metric(
@@ -283,7 +283,7 @@ fn encrypted_writes_are_skipped_and_a_reset_starts_over() {
     assert!(
         metric(
             &c,
-            "objectio_dedup_dryrun_skipped_total",
+            "iolake_dedup_dryrun_skipped_total",
             &["reason=\"encrypted\""]
         ) >= 1
     );

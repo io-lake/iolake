@@ -6,19 +6,19 @@ use super::*;
 impl MetadataService for MetaService {
     async fn get_metrics(
         &self,
-        _request: Request<objectio_proto::metadata::GetMetricsRequest>,
-    ) -> Result<Response<objectio_proto::metadata::GetMetricsResponse>, Status> {
+        _request: Request<iolake_proto::metadata::GetMetricsRequest>,
+    ) -> Result<Response<iolake_proto::metadata::GetMetricsResponse>, Status> {
         Self::get_metrics(self, _request).await
     }
 
     async fn get_time(
         &self,
-        _request: Request<objectio_proto::metadata::GetTimeRequest>,
-    ) -> Result<Response<objectio_proto::metadata::GetTimeResponse>, Status> {
+        _request: Request<iolake_proto::metadata::GetTimeRequest>,
+    ) -> Result<Response<iolake_proto::metadata::GetTimeResponse>, Status> {
         let unix_millis = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
-        Ok(Response::new(objectio_proto::metadata::GetTimeResponse {
+        Ok(Response::new(iolake_proto::metadata::GetTimeResponse {
             unix_millis,
         }))
     }
@@ -60,8 +60,8 @@ impl MetadataService for MetaService {
 
     async fn report_degraded(
         &self,
-        request: Request<objectio_proto::metadata::ReportDegradedRequest>,
-    ) -> Result<Response<objectio_proto::metadata::ReportDegradedResponse>, Status> {
+        request: Request<iolake_proto::metadata::ReportDegradedRequest>,
+    ) -> Result<Response<iolake_proto::metadata::ReportDegradedResponse>, Status> {
         Self::report_degraded(self, request).await
     }
 
@@ -247,8 +247,8 @@ impl MetadataService for MetaService {
 
     async fn get_access_key(
         &self,
-        request: Request<objectio_proto::metadata::GetAccessKeyRequest>,
-    ) -> Result<Response<objectio_proto::metadata::GetAccessKeyResponse>, Status> {
+        request: Request<iolake_proto::metadata::GetAccessKeyRequest>,
+    ) -> Result<Response<iolake_proto::metadata::GetAccessKeyResponse>, Status> {
         Self::get_access_key(self, request).await
     }
 
@@ -611,12 +611,12 @@ impl MetadataService for MetaService {
 
     async fn request_pg_scrub(
         &self,
-        request: Request<objectio_proto::metadata::RequestPgScrubRequest>,
-    ) -> Result<Response<objectio_proto::metadata::RequestPgScrubResponse>, Status> {
+        request: Request<iolake_proto::metadata::RequestPgScrubRequest>,
+    ) -> Result<Response<iolake_proto::metadata::RequestPgScrubResponse>, Status> {
         let r = request.into_inner();
         self.request_pg_scrub(&r.pool, r.pg_id).await?;
         Ok(Response::new(
-            objectio_proto::metadata::RequestPgScrubResponse {},
+            iolake_proto::metadata::RequestPgScrubResponse {},
         ))
     }
 
@@ -958,169 +958,169 @@ impl MetadataService for MetaService {
 
     async fn share_stripes(
         &self,
-        request: Request<objectio_proto::metadata::ShareStripesRequest>,
-    ) -> Result<Response<objectio_proto::metadata::ShareStripesResponse>, Status> {
+        request: Request<iolake_proto::metadata::ShareStripesRequest>,
+    ) -> Result<Response<iolake_proto::metadata::ShareStripesResponse>, Status> {
         Self::share_stripes(self, request).await
     }
 
     async fn release_stripes(
         &self,
-        request: Request<objectio_proto::metadata::ReleaseStripesRequest>,
-    ) -> Result<Response<objectio_proto::metadata::ReleaseStripesResponse>, Status> {
+        request: Request<iolake_proto::metadata::ReleaseStripesRequest>,
+    ) -> Result<Response<iolake_proto::metadata::ReleaseStripesResponse>, Status> {
         Self::release_stripes(self, request).await
     }
 
     async fn intend_pack(
         &self,
-        request: Request<objectio_proto::metadata::IntendPackRequest>,
-    ) -> Result<Response<objectio_proto::metadata::IntendPackResponse>, Status> {
+        request: Request<iolake_proto::metadata::IntendPackRequest>,
+    ) -> Result<Response<iolake_proto::metadata::IntendPackResponse>, Status> {
         Self::intend_pack(self, request).await
     }
 
     async fn seal_pack(
         &self,
-        request: Request<objectio_proto::metadata::SealPackRequest>,
-    ) -> Result<Response<objectio_proto::metadata::SealPackResponse>, Status> {
+        request: Request<iolake_proto::metadata::SealPackRequest>,
+    ) -> Result<Response<iolake_proto::metadata::SealPackResponse>, Status> {
         Self::seal_pack(self, request).await
     }
 
     async fn abort_pack(
         &self,
-        request: Request<objectio_proto::metadata::AbortPackRequest>,
-    ) -> Result<Response<objectio_proto::metadata::AbortPackResponse>, Status> {
+        request: Request<iolake_proto::metadata::AbortPackRequest>,
+    ) -> Result<Response<iolake_proto::metadata::AbortPackResponse>, Status> {
         Self::abort_pack(self, request).await
     }
 
     async fn get_pack(
         &self,
-        request: Request<objectio_proto::metadata::GetPackRequest>,
-    ) -> Result<Response<objectio_proto::metadata::GetPackResponse>, Status> {
+        request: Request<iolake_proto::metadata::GetPackRequest>,
+    ) -> Result<Response<iolake_proto::metadata::GetPackResponse>, Status> {
         Self::get_pack(self, request).await
     }
 
     async fn list_packs(
         &self,
-        request: Request<objectio_proto::metadata::ListPacksRequest>,
-    ) -> Result<Response<objectio_proto::metadata::ListPacksResponse>, Status> {
+        request: Request<iolake_proto::metadata::ListPacksRequest>,
+    ) -> Result<Response<iolake_proto::metadata::ListPacksResponse>, Status> {
         Self::list_packs(self, request).await
     }
 
     async fn pack_move_shard(
         &self,
-        request: Request<objectio_proto::metadata::PackMoveShardRequest>,
-    ) -> Result<Response<objectio_proto::metadata::PackMoveShardResponse>, Status> {
+        request: Request<iolake_proto::metadata::PackMoveShardRequest>,
+    ) -> Result<Response<iolake_proto::metadata::PackMoveShardResponse>, Status> {
         Self::pack_move_shard(self, request).await
     }
 
     async fn pack_settle(
         &self,
-        request: Request<objectio_proto::metadata::PackSettleRequest>,
-    ) -> Result<Response<objectio_proto::metadata::PackSettleResponse>, Status> {
+        request: Request<iolake_proto::metadata::PackSettleRequest>,
+    ) -> Result<Response<iolake_proto::metadata::PackSettleResponse>, Status> {
         Self::pack_settle(self, request).await
     }
 
     async fn block_create_volume(
         &self,
-        request: Request<objectio_proto::metadata::BlockCreateVolumeRequest>,
-    ) -> Result<Response<objectio_proto::metadata::BlockVolumeResponse>, Status> {
+        request: Request<iolake_proto::metadata::BlockCreateVolumeRequest>,
+    ) -> Result<Response<iolake_proto::metadata::BlockVolumeResponse>, Status> {
         Self::block_create_volume(self, request).await
     }
 
     async fn block_get_volume(
         &self,
-        request: Request<objectio_proto::metadata::BlockGetVolumeRequest>,
-    ) -> Result<Response<objectio_proto::metadata::BlockVolumeResponse>, Status> {
+        request: Request<iolake_proto::metadata::BlockGetVolumeRequest>,
+    ) -> Result<Response<iolake_proto::metadata::BlockVolumeResponse>, Status> {
         Self::block_get_volume(self, request).await
     }
 
     async fn block_list_volumes(
         &self,
-        _request: Request<objectio_proto::metadata::BlockListVolumesRequest>,
-    ) -> Result<Response<objectio_proto::metadata::BlockListVolumesResponse>, Status> {
+        _request: Request<iolake_proto::metadata::BlockListVolumesRequest>,
+    ) -> Result<Response<iolake_proto::metadata::BlockListVolumesResponse>, Status> {
         Self::block_list_volumes(self, _request).await
     }
 
     async fn block_update_volume(
         &self,
-        request: Request<objectio_proto::metadata::BlockUpdateVolumeRequest>,
-    ) -> Result<Response<objectio_proto::metadata::BlockVolumeResponse>, Status> {
+        request: Request<iolake_proto::metadata::BlockUpdateVolumeRequest>,
+    ) -> Result<Response<iolake_proto::metadata::BlockVolumeResponse>, Status> {
         Self::block_update_volume(self, request).await
     }
 
     async fn block_delete_volume(
         &self,
-        request: Request<objectio_proto::metadata::BlockDeleteVolumeRequest>,
-    ) -> Result<Response<objectio_proto::metadata::BlockReleaseResponse>, Status> {
+        request: Request<iolake_proto::metadata::BlockDeleteVolumeRequest>,
+    ) -> Result<Response<iolake_proto::metadata::BlockReleaseResponse>, Status> {
         Self::block_delete_volume(self, request).await
     }
 
     async fn block_get_chunks(
         &self,
-        request: Request<objectio_proto::metadata::BlockGetChunksRequest>,
-    ) -> Result<Response<objectio_proto::metadata::BlockGetChunksResponse>, Status> {
+        request: Request<iolake_proto::metadata::BlockGetChunksRequest>,
+    ) -> Result<Response<iolake_proto::metadata::BlockGetChunksResponse>, Status> {
         Self::block_get_chunks(self, request).await
     }
 
     async fn block_commit_chunks(
         &self,
-        request: Request<objectio_proto::metadata::BlockCommitChunksRequest>,
-    ) -> Result<Response<objectio_proto::metadata::BlockReleaseResponse>, Status> {
+        request: Request<iolake_proto::metadata::BlockCommitChunksRequest>,
+    ) -> Result<Response<iolake_proto::metadata::BlockReleaseResponse>, Status> {
         Self::block_commit_chunks(self, request).await
     }
 
     async fn block_create_snapshot(
         &self,
-        request: Request<objectio_proto::metadata::BlockCreateSnapshotRequest>,
-    ) -> Result<Response<objectio_proto::metadata::BlockSnapshotResponse>, Status> {
+        request: Request<iolake_proto::metadata::BlockCreateSnapshotRequest>,
+    ) -> Result<Response<iolake_proto::metadata::BlockSnapshotResponse>, Status> {
         Self::block_create_snapshot(self, request).await
     }
 
     async fn block_get_snapshot(
         &self,
-        request: Request<objectio_proto::metadata::BlockGetSnapshotRequest>,
-    ) -> Result<Response<objectio_proto::metadata::BlockSnapshotResponse>, Status> {
+        request: Request<iolake_proto::metadata::BlockGetSnapshotRequest>,
+    ) -> Result<Response<iolake_proto::metadata::BlockSnapshotResponse>, Status> {
         Self::block_get_snapshot(self, request).await
     }
 
     async fn block_list_snapshots(
         &self,
-        request: Request<objectio_proto::metadata::BlockListSnapshotsRequest>,
-    ) -> Result<Response<objectio_proto::metadata::BlockListSnapshotsResponse>, Status> {
+        request: Request<iolake_proto::metadata::BlockListSnapshotsRequest>,
+    ) -> Result<Response<iolake_proto::metadata::BlockListSnapshotsResponse>, Status> {
         Self::block_list_snapshots(self, request).await
     }
 
     async fn block_delete_snapshot(
         &self,
-        request: Request<objectio_proto::metadata::BlockDeleteSnapshotRequest>,
-    ) -> Result<Response<objectio_proto::metadata::BlockReleaseResponse>, Status> {
+        request: Request<iolake_proto::metadata::BlockDeleteSnapshotRequest>,
+    ) -> Result<Response<iolake_proto::metadata::BlockReleaseResponse>, Status> {
         Self::block_delete_snapshot(self, request).await
     }
 
     async fn block_clone_volume(
         &self,
-        request: Request<objectio_proto::metadata::BlockCloneVolumeRequest>,
-    ) -> Result<Response<objectio_proto::metadata::BlockVolumeResponse>, Status> {
+        request: Request<iolake_proto::metadata::BlockCloneVolumeRequest>,
+    ) -> Result<Response<iolake_proto::metadata::BlockVolumeResponse>, Status> {
         Self::block_clone_volume(self, request).await
     }
 
     async fn set_bucket_dedup(
         &self,
-        request: Request<objectio_proto::metadata::SetBucketDedupRequest>,
-    ) -> Result<Response<objectio_proto::metadata::SetBucketDedupResponse>, Status> {
+        request: Request<iolake_proto::metadata::SetBucketDedupRequest>,
+    ) -> Result<Response<iolake_proto::metadata::SetBucketDedupResponse>, Status> {
         Self::set_bucket_dedup(self, request).await
     }
 
     async fn get_dedup_policy(
         &self,
-        request: Request<objectio_proto::metadata::GetDedupPolicyRequest>,
-    ) -> Result<Response<objectio_proto::metadata::GetDedupPolicyResponse>, Status> {
+        request: Request<iolake_proto::metadata::GetDedupPolicyRequest>,
+    ) -> Result<Response<iolake_proto::metadata::GetDedupPolicyResponse>, Status> {
         Self::get_dedup_policy(self, request).await
     }
 
     async fn locate_chunks(
         &self,
-        request: Request<objectio_proto::metadata::LocateChunksRequest>,
-    ) -> Result<Response<objectio_proto::metadata::LocateChunksResponse>, Status> {
+        request: Request<iolake_proto::metadata::LocateChunksRequest>,
+    ) -> Result<Response<iolake_proto::metadata::LocateChunksResponse>, Status> {
         Self::locate_chunks(self, request).await
     }
 
@@ -1196,22 +1196,22 @@ impl MetadataService for MetaService {
 
     async fn report_version(
         &self,
-        request: Request<objectio_proto::metadata::ReportVersionRequest>,
-    ) -> Result<Response<objectio_proto::metadata::ReportVersionResponse>, Status> {
+        request: Request<iolake_proto::metadata::ReportVersionRequest>,
+    ) -> Result<Response<iolake_proto::metadata::ReportVersionResponse>, Status> {
         Self::report_version(self, request).await
     }
 
     async fn get_upgrade_status(
         &self,
-        _request: Request<objectio_proto::metadata::GetUpgradeStatusRequest>,
-    ) -> Result<Response<objectio_proto::metadata::GetUpgradeStatusResponse>, Status> {
+        _request: Request<iolake_proto::metadata::GetUpgradeStatusRequest>,
+    ) -> Result<Response<iolake_proto::metadata::GetUpgradeStatusResponse>, Status> {
         Self::get_upgrade_status(self, _request).await
     }
 
     async fn finalize_upgrade(
         &self,
-        request: Request<objectio_proto::metadata::FinalizeUpgradeRequest>,
-    ) -> Result<Response<objectio_proto::metadata::FinalizeUpgradeResponse>, Status> {
+        request: Request<iolake_proto::metadata::FinalizeUpgradeRequest>,
+    ) -> Result<Response<iolake_proto::metadata::FinalizeUpgradeResponse>, Status> {
         Self::finalize_upgrade(self, request).await
     }
 
@@ -1219,29 +1219,29 @@ impl MetadataService for MetaService {
 
     async fn export_meta(
         &self,
-        request: Request<objectio_proto::metadata::ExportMetaRequest>,
+        request: Request<iolake_proto::metadata::ExportMetaRequest>,
     ) -> Result<Response<Self::ExportMetaStream>, Status> {
         Self::export_meta(self, request).await
     }
 
     async fn acquire_lease(
         &self,
-        request: Request<objectio_proto::metadata::AcquireLeaseRequest>,
-    ) -> Result<Response<objectio_proto::metadata::AcquireLeaseResponse>, Status> {
+        request: Request<iolake_proto::metadata::AcquireLeaseRequest>,
+    ) -> Result<Response<iolake_proto::metadata::AcquireLeaseResponse>, Status> {
         Self::acquire_lease(self, request).await
     }
 
     async fn get_bucket_setting(
         &self,
-        request: Request<objectio_proto::metadata::GetBucketSettingRequest>,
-    ) -> Result<Response<objectio_proto::metadata::GetBucketSettingResponse>, Status> {
+        request: Request<iolake_proto::metadata::GetBucketSettingRequest>,
+    ) -> Result<Response<iolake_proto::metadata::GetBucketSettingResponse>, Status> {
         Self::get_bucket_setting(self, request).await
     }
 
     async fn put_bucket_setting(
         &self,
-        request: Request<objectio_proto::metadata::PutBucketSettingRequest>,
-    ) -> Result<Response<objectio_proto::metadata::PutBucketSettingResponse>, Status> {
+        request: Request<iolake_proto::metadata::PutBucketSettingRequest>,
+    ) -> Result<Response<iolake_proto::metadata::PutBucketSettingResponse>, Status> {
         Self::put_bucket_setting(self, request).await
     }
 
@@ -1345,8 +1345,8 @@ impl MetadataService for MetaService {
 
     async fn get_sts_signing_key(
         &self,
-        _request: Request<objectio_proto::metadata::GetStsSigningKeyRequest>,
-    ) -> Result<Response<objectio_proto::metadata::GetStsSigningKeyResponse>, Status> {
+        _request: Request<iolake_proto::metadata::GetStsSigningKeyRequest>,
+    ) -> Result<Response<iolake_proto::metadata::GetStsSigningKeyResponse>, Status> {
         Self::get_sts_signing_key(self, _request).await
     }
 
@@ -1422,29 +1422,29 @@ impl MetadataService for MetaService {
 
     async fn heal_enqueue(
         &self,
-        request: Request<objectio_proto::metadata::HealEnqueueRequest>,
-    ) -> Result<Response<objectio_proto::metadata::HealEnqueueResponse>, Status> {
+        request: Request<iolake_proto::metadata::HealEnqueueRequest>,
+    ) -> Result<Response<iolake_proto::metadata::HealEnqueueResponse>, Status> {
         Self::heal_enqueue(self, request).await
     }
 
     async fn heal_list(
         &self,
-        request: Request<objectio_proto::metadata::HealListRequest>,
-    ) -> Result<Response<objectio_proto::metadata::HealListResponse>, Status> {
+        request: Request<iolake_proto::metadata::HealListRequest>,
+    ) -> Result<Response<iolake_proto::metadata::HealListResponse>, Status> {
         Self::heal_list(self, request).await
     }
 
     async fn heal_claim(
         &self,
-        request: Request<objectio_proto::metadata::HealClaimRequest>,
-    ) -> Result<Response<objectio_proto::metadata::HealClaimResponse>, Status> {
+        request: Request<iolake_proto::metadata::HealClaimRequest>,
+    ) -> Result<Response<iolake_proto::metadata::HealClaimResponse>, Status> {
         Self::heal_claim(self, request).await
     }
 
     async fn heal_done(
         &self,
-        request: Request<objectio_proto::metadata::HealDoneRequest>,
-    ) -> Result<Response<objectio_proto::metadata::HealDoneResponse>, Status> {
+        request: Request<iolake_proto::metadata::HealDoneRequest>,
+    ) -> Result<Response<iolake_proto::metadata::HealDoneResponse>, Status> {
         Self::heal_done(self, request).await
     }
 

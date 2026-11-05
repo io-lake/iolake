@@ -9,7 +9,7 @@ Then prove the scope guardrails actually fire:
   * READ-only creds can list/get but cannot PUT
 
 Usage:
-    OBJECTIO_HOST=http://127.0.0.1:9000 \
+    IOLAKE_HOST=http://127.0.0.1:9000 \
       .venv-dbx/bin/python demo_volume_governed.py
 """
 
@@ -28,8 +28,8 @@ from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import VolumeType
 
 
-HOST = os.environ.get("OBJECTIO_HOST", "http://127.0.0.1:9000")
-TOKEN = os.environ.get("OBJECTIO_TOKEN", "dummy")
+HOST = os.environ.get("IOLAKE_HOST", "http://127.0.0.1:9000")
+TOKEN = os.environ.get("IOLAKE_TOKEN", "dummy")
 RUN = str(int(time.time()))
 CATALOG = f"vol_demo_{RUN}"
 SCHEMA = "raw"

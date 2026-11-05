@@ -1,8 +1,8 @@
-//! `obioctl skills`: the agent skills this CLI carries, and installing them
+//! `iolakectl skills`: the agent skills this CLI carries, and installing them
 //! where coding agents read skills.
 //!
 //! The skills are markdown in the repository's `skills/` directory, the one
-//! copy; they are compiled into the binary, so anywhere `obioctl` is
+//! copy; they are compiled into the binary, so anywhere `iolakectl` is
 //! installed can install them, with nothing to fetch.
 //!
 //! Doc comments on the commands are `--help` text, written for a terminal.
@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 pub enum Audience {
     /// Operators: deploying and running a cluster
     Ops,
-    /// Application developers: building on ObjectIO's APIs
+    /// Application developers: building on IOLake's APIs
     Dev,
 }
 
@@ -49,9 +49,9 @@ macro_rules! skill {
 
 /// Every skill in `skills/`; a test fails if one is missing here.
 pub const SKILLS: &[Skill] = &[
-    skill!("objectio-deploy", Ops),
-    skill!("objectio-admin", Ops),
-    skill!("objectio-sdk", Dev),
+    skill!("iolake-deploy", Ops),
+    skill!("iolake-admin", Ops),
+    skill!("iolake-sdk", Dev),
 ];
 
 /// The coding agents whose skills directory we know, under `$HOME`: the
@@ -84,7 +84,7 @@ pub enum SkillsCmd {
         /// Only the skills for operators (ops) or developers (dev)
         #[arg(long, value_enum)]
         audience: Option<Audience>,
-        /// Replace skills already there, e.g. after upgrading obioctl
+        /// Replace skills already there, e.g. after upgrading iolakectl
         #[arg(long)]
         force: bool,
     },

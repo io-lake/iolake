@@ -1,10 +1,10 @@
 //go:build integration
 
-package objectio
+package iolake
 
 // Runs against a live gateway with the system admin's credential:
 //
-//	OBJECTIO_ENDPOINT=http://127.0.0.1:9000 OBJECTIO_ACCESS_KEY=… OBJECTIO_SECRET_KEY=… \
+//	IOLAKE_ENDPOINT=http://127.0.0.1:9000 IOLAKE_ACCESS_KEY=… IOLAKE_SECRET_KEY=… \
 //	  go test -tags integration -run Integration -v ./...
 //
 // Everything it creates is named with a per-run suffix and removed at the
@@ -399,7 +399,7 @@ func TestIntegration(t *testing.T) {
 
 		name := TenantOIDCProviderName(tenant)
 		_, err := admin.PutOIDCProvider(ctx, name, OIDCProvider{
-			IssuerURL: "https://idp.invalid", ClientID: "objectio", ClientSecret: "s3cret",
+			IssuerURL: "https://idp.invalid", ClientID: "iolake", ClientSecret: "s3cret",
 			Enabled: Bool(true), Extra: map[string]json.RawMessage{"vendor": json.RawMessage(`"keycloak"`)}})
 		ok(t, err)
 		defer func() { _ = root.DeleteOIDCProvider(ctx, name) }()

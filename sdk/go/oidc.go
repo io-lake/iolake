@@ -1,4 +1,4 @@
-package objectio
+package iolake
 
 import (
 	"context"
@@ -53,7 +53,7 @@ func (c *Client) GetConfig(ctx context.Context, key string) (*ConfigEntry, error
 // Key, Value and Version.
 func (c *Client) SetConfig(ctx context.Context, key string, value json.RawMessage) (*ConfigEntry, error) {
 	if !json.Valid(value) {
-		return nil, fmt.Errorf("objectio: config value for %q is not valid JSON", key)
+		return nil, fmt.Errorf("iolake: config value for %q is not valid JSON", key)
 	}
 	var out ConfigEntry
 	if err := c.do(ctx, "PUT", "/_admin/config/"+key, nil, value, &out); err != nil {
@@ -186,7 +186,7 @@ func (p *OIDCProvider) UnmarshalJSON(b []byte) error {
 func providerFromEntry(e ConfigEntry) (OIDCProvider, error) {
 	var p OIDCProvider
 	if err := json.Unmarshal(e.Value, &p); err != nil {
-		return OIDCProvider{}, fmt.Errorf("objectio: provider %s: %w", e.Key, err)
+		return OIDCProvider{}, fmt.Errorf("iolake: provider %s: %w", e.Key, err)
 	}
 	p.Name = strings.TrimPrefix(e.Key, oidcPrefix)
 	return p, nil
@@ -233,14 +233,14 @@ func (c *Client) GetOIDCProvider(ctx context.Context, name string) (*OIDCProvide
 // refuses the redacted placeholder rather than store it as the secret.
 func (c *Client) PutOIDCProvider(ctx context.Context, name string, p OIDCProvider) (*OIDCProvider, error) {
 	if name == "" {
-		return nil, fmt.Errorf("objectio: provider name is required")
+		return nil, fmt.Errorf("iolake: provider name is required")
 	}
 	if p.ClientSecret == redacted {
-		return nil, fmt.Errorf("objectio: ClientSecret is the redacted placeholder %q; set the real secret (or \"\" for a public client)", redacted)
+		return nil, fmt.Errorf("iolake: ClientSecret is the redacted placeholder %q; set the real secret (or \"\" for a public client)", redacted)
 	}
 	body, err := json.Marshal(p)
 	if err != nil {
-		return nil, fmt.Errorf("objectio: encoding provider: %w", err)
+		return nil, fmt.Errorf("iolake: encoding provider: %w", err)
 	}
 	e, err := c.SetConfig(ctx, oidcPrefix+name, body)
 	if err != nil {

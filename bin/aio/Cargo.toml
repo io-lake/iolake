@@ -1,6 +1,6 @@
 [package]
-name = "objectio-aio"
-description = "ObjectIO all-in-one — single-command supervisor for meta + OSD + gateway"
+name = "iolake-aio"
+description = "IOLake all-in-one — single-command supervisor for meta + OSD + gateway"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,19 +8,19 @@ license.workspace = true
 build = "build.rs"
 
 [[bin]]
-name = "objectio-aio"
+name = "iolake-aio"
 path = "src/main.rs"
 
 [dependencies]
 # aio links directly against each service crate's lib — they run as
 # tokio tasks in the same process, not as child processes. One
 # tracing subscriber, one signal handler, one memory space.
-objectio-meta = { workspace = true }
-objectio-osd = { workspace = true }
-objectio-gateway = { workspace = true }
-objectio-block-gateway = { workspace = true }
-objectio-proto = { workspace = true }
-objectio-common = { workspace = true }
+iolake-meta = { workspace = true }
+iolake-osd = { workspace = true }
+iolake-gateway = { workspace = true }
+iolake-block-gateway = { workspace = true }
+iolake-proto = { workspace = true }
+iolake-common = { workspace = true }
 
 anyhow = { workspace = true }
 base64 = { workspace = true }
@@ -39,18 +39,18 @@ tikv-jemallocator = { workspace = true }
 
 [features]
 default = []
-# Propagates to objectio-osd → objectio-storage. Linux-only win; safe
+# Propagates to iolake-osd → iolake-storage. Linux-only win; safe
 # no-op elsewhere. Enable on Linux release builds to get +25%
 # throughput + -43% p99.9 on 4 MiB object stripes.
-io-uring = ["objectio-osd/io-uring"]
+io-uring = ["iolake-osd/io-uring"]
 # The OSDs' metadata index on RocksDB, with --meta-engine rocksdb.
-rocksdb = ["objectio-osd/rocksdb"]
+rocksdb = ["iolake-osd/rocksdb"]
 # Shard transfers over Mooncake Transfer Engine between the embedded gateway
 # and OSDs, turned on with `--rdma`. Linux only; needs a Mooncake build.
-rdma = ["objectio-gateway/rdma", "objectio-osd/rdma"]
+rdma = ["iolake-gateway/rdma", "iolake-osd/rdma"]
 # Pluggable grep engines — propagate into the embedded gateway.
 # pcre2 needs libpcre2-dev at build time; hyperscan needs
 # libhyperscan-dev (Linux x86_64 primary). Off by default so
 # macOS / Windows builds stay pure-Rust.
-grep-pcre2 = ["objectio-gateway/pcre2"]
-grep-hyperscan = ["objectio-gateway/hyperscan"]
+grep-pcre2 = ["iolake-gateway/pcre2"]
+grep-hyperscan = ["iolake-gateway/hyperscan"]

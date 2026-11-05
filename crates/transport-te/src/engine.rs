@@ -411,10 +411,10 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     //! Run in TCP mode by default, so they need a Mooncake build but no RDMA
-    //! hardware: `cargo test -p objectio-transport-te --features te`.
+    //! hardware: `cargo test -p iolake-transport-te --features te`.
     //!
     //! To run them over RDMA (a real RNIC, or `SoftRoCE`), set
-    //! `OBJECTIO_TE_TEST_PROTOCOL=rdma` and `OBJECTIO_TE_TEST_HOST` to an
+    //! `IOLAKE_TE_TEST_PROTOCOL=rdma` and `IOLAKE_TE_TEST_HOST` to an
     //! address on the RDMA device's interface.
 
     use super::*;
@@ -422,12 +422,12 @@ mod tests {
     const MIB: usize = 1024 * 1024;
 
     fn test_engine() -> Arc<Engine> {
-        let protocol = match std::env::var("OBJECTIO_TE_TEST_PROTOCOL").as_deref() {
+        let protocol = match std::env::var("IOLAKE_TE_TEST_PROTOCOL").as_deref() {
             Ok("rdma") => Protocol::Rdma,
             Ok("tcp") | Err(_) => Protocol::Tcp,
-            Ok(other) => panic!("OBJECTIO_TE_TEST_PROTOCOL={other}: expected tcp or rdma"),
+            Ok(other) => panic!("IOLAKE_TE_TEST_PROTOCOL={other}: expected tcp or rdma"),
         };
-        let host = std::env::var("OBJECTIO_TE_TEST_HOST").unwrap_or_else(|_| "127.0.0.1".into());
+        let host = std::env::var("IOLAKE_TE_TEST_HOST").unwrap_or_else(|_| "127.0.0.1".into());
         Engine::start(&EngineConfig { protocol, host }).expect("start transfer engine")
     }
 

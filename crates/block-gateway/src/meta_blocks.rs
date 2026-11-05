@@ -10,8 +10,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
-use objectio_proto::metadata::{
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_proto::metadata::{
     BlockChunkUpdate, BlockCommitChunksRequest, BlockGetChunksRequest, GetListingNodesRequest,
     StripeMeta,
 };

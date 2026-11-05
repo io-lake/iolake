@@ -2,11 +2,11 @@
 
 Skipped unless pointed at one with a **system admin** credential:
 
-    OBJECTIO_ENDPOINT=http://127.0.0.1:9000 \\
-    OBJECTIO_ACCESS_KEY=... OBJECTIO_SECRET_KEY=... \\
+    IOLAKE_ENDPOINT=http://127.0.0.1:9000 \\
+    IOLAKE_ACCESS_KEY=... IOLAKE_SECRET_KEY=... \\
     python -m pytest tests/test_integration.py -q
 
-``objectio-aio --auth`` is enough: it writes the admin credential to
+``iolake-aio --auth`` is enough: it writes the admin credential to
 ``<data>/meta/admin-creds.env``. Every test creates what it uses under a
 unique name and removes it afterwards, so it can run against a shared
 cluster. The tests that wait for a revocation take ~15 s each: that is the
@@ -21,7 +21,7 @@ import uuid
 
 import pytest
 
-from objectio import (
+from iolake import (
     APIError,
     Client,
     OIDCProvider,
@@ -29,13 +29,13 @@ from objectio import (
     tenant_oidc_provider_name,
 )
 
-ENDPOINT = os.environ.get("OBJECTIO_ENDPOINT", "")
-ACCESS_KEY = os.environ.get("OBJECTIO_ACCESS_KEY", "")
-SECRET_KEY = os.environ.get("OBJECTIO_SECRET_KEY", "")
+ENDPOINT = os.environ.get("IOLAKE_ENDPOINT", "")
+ACCESS_KEY = os.environ.get("IOLAKE_ACCESS_KEY", "")
+SECRET_KEY = os.environ.get("IOLAKE_SECRET_KEY", "")
 
 pytestmark = pytest.mark.skipif(
     not (ENDPOINT and ACCESS_KEY and SECRET_KEY),
-    reason="OBJECTIO_ENDPOINT, OBJECTIO_ACCESS_KEY and OBJECTIO_SECRET_KEY not set",
+    reason="IOLAKE_ENDPOINT, IOLAKE_ACCESS_KEY and IOLAKE_SECRET_KEY not set",
 )
 
 # Longer than the gateways' 15 s credential cache.
@@ -436,7 +436,7 @@ def test_tenant_oidc_provider(admin, tenant):
     name = tenant_oidc_provider_name(tenant["name"])
     cfg = OIDCProvider(
         issuer_url="https://idp.example.com/realms/x",
-        client_id="objectio",
+        client_id="iolake",
         client_secret="s3cret",
         scopes="openid email",
     )

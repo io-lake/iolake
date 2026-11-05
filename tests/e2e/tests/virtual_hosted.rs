@@ -9,7 +9,7 @@
 //! `GET /?list-type=2` answered with the caller's buckets (an empty or wrong
 //! listing, no error) and `PUT /` taken for nothing in particular.
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 const DOMAIN: &str = "s3.test";

@@ -1,5 +1,5 @@
 //! Packed objects: an object whose bytes are a slice of a pack, one stripe
-//! shared by many small objects (objectio-docs
+//! shared by many small objects (iolake-docs
 //! architecture/design/core/small-object-packing.md).
 //!
 //! The object's `StripeMeta` names the pack (`pack_id`) and its slice; the
@@ -18,8 +18,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use bytes::Bytes;
-use objectio_auth::AuthResult;
-use objectio_proto::metadata::{
+use iolake_auth::AuthResult;
+use iolake_proto::metadata::{
     AbortPackRequest, GetBucketVersioningRequest, GetPackRequest, GetPlacementRequest,
     IntendPackRequest, ListPacksRequest, NodePlacement, ObjectMeta, PackMember, PackRecord,
     PackSettleRequest, SealPackRequest, ShardLocation, SseAlgorithm, StripeMeta, VersioningState,
@@ -1162,7 +1162,7 @@ async fn abort(state: &Arc<AppState>, pack_id: &[u8]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use objectio_proto::metadata::ShardLocation;
+    use iolake_proto::metadata::ShardLocation;
 
     fn record(pack_id: &[u8], node: u8) -> PackRecord {
         PackRecord {

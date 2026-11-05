@@ -1,5 +1,5 @@
 //! The epochs of placement groups, as this OSD knows them (B31,
-//! objectio-docs `core/pg-recovery.md`).
+//! iolake-docs `core/pg-recovery.md`).
 //!
 //! Every change of a placement group's acting set is a Raft commit that
 //! raises its epoch, made before any write uses it. A gateway sends the
@@ -15,10 +15,10 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 use std::time::Duration;
 
-use objectio_proto::STALE_EPOCH_HEADER;
-use objectio_proto::metadata::GetPlacementGroupRequest;
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
-use objectio_proto::storage::PgRef;
+use iolake_proto::STALE_EPOCH_HEADER;
+use iolake_proto::metadata::GetPlacementGroupRequest;
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_proto::storage::PgRef;
 use parking_lot::RwLock;
 use tonic::Status;
 use tonic::transport::Channel;
@@ -130,7 +130,7 @@ impl PgEpochs {
         let ask = async {
             let channel = self
                 .meta
-                .get_or_try_init(|| objectio_proto::transport::meta_channel(endpoint))
+                .get_or_try_init(|| iolake_proto::transport::meta_channel(endpoint))
                 .await?
                 .clone();
             MetadataServiceClient::new(channel)
@@ -151,8 +151,8 @@ impl PgEpochs {
 #[cfg(test)]
 mod tests {
     use super::{Decision, PgEpochs, decide};
-    use objectio_proto::STALE_EPOCH_HEADER;
-    use objectio_proto::storage::PgRef;
+    use iolake_proto::STALE_EPOCH_HEADER;
+    use iolake_proto::storage::PgRef;
 
     #[test]
     fn a_request_under_an_older_epoch_is_refused_with_the_current_one() {

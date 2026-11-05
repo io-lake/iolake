@@ -13,7 +13,7 @@
 //! 09:05:01  ERROR Failed to read any replica for stripe 0 of users/admin/test1.ipynb
 //! ```
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 fn copy(c: &Cluster, from: &str, to: &str, extra: &[(&str, &str)]) {
@@ -133,7 +133,7 @@ fn a_copy_keeps_the_source_metadata_unless_told_to_replace_it() {
 /// deleting the source freed the shards the copy, readable, pointed at.
 #[test]
 fn a_refused_copy_that_lands_keeps_its_data() {
-    use objectio_e2e::ha::HaCluster;
+    use iolake_e2e::ha::HaCluster;
     let mut ha = HaCluster::start(1, 6, 1);
     let _ = ha.await_leader(std::time::Duration::from_secs(30));
     let c = &ha.clients[0];

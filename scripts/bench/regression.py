@@ -3,7 +3,7 @@
 
     scripts/bench/regression.py --base <dir> --head <dir> [--rounds 5]
 
-Each directory holds an `objectio-aio` (the head's also `objectio-s3-bench`,
+Each directory holds an `iolake-aio` (the head's also `iolake-s3-bench`,
 the one client both are measured with). Each run starts a fresh aio (six
 OSDs, 4+2) and puts, then gets, 64 KiB and 4 MiB objects through it.
 
@@ -164,8 +164,8 @@ def main():
     ap.add_argument("--json", type=Path, help="also write every run's numbers here")
     args = ap.parse_args()
 
-    builds = {"base": args.base / "objectio-aio", "head": args.head / "objectio-aio"}
-    client = args.head / "objectio-s3-bench"
+    builds = {"base": args.base / "iolake-aio", "head": args.head / "iolake-aio"}
+    client = args.head / "iolake-s3-bench"
     for b in [*builds.values(), client]:
         if not os.access(b, os.X_OK):
             sys.exit(f"not an executable: {b}")

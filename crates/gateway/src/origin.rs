@@ -80,7 +80,7 @@ impl TrustedProxies {
     fn contains(&self, ip: &IpAddr) -> bool {
         self.0
             .iter()
-            .any(|cidr| objectio_auth::policy::cidr_contains(cidr, ip))
+            .any(|cidr| iolake_auth::policy::cidr_contains(cidr, ip))
     }
 
     /// The client's address: the peer, or — when the peer is a trusted

@@ -1,6 +1,6 @@
 [package]
-name = "objectio-osd"
-description = "Object Storage Daemon for ObjectIO"
+name = "iolake-osd"
+description = "Object Storage Daemon for IOLake"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,11 +10,11 @@ path = "src/lib.rs"
 
 
 [dependencies]
-objectio-common = { workspace = true }
-objectio-storage = { workspace = true }
-objectio-erasure = { workspace = true }
-objectio-proto = { workspace = true }
-objectio-transport-te = { workspace = true }
+iolake-common = { workspace = true }
+iolake-storage = { workspace = true }
+iolake-erasure = { workspace = true }
+iolake-proto = { workspace = true }
+iolake-transport-te = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { version = "0.1", features = ["net"] }
 tonic = { workspace = true }
@@ -42,14 +42,14 @@ sys-info = "0.9"
 default = []
 # Opt-in: route shard I/O through io_uring instead of spawn_blocking
 # + pread. Linux 5.6+ only; no-op on macOS / Windows. Measured +25%
-# throughput on 4 MiB stripes (see objectio-docs storage-io-levels).
-io-uring = ["objectio-storage/io-uring"]
+# throughput on 4 MiB stripes (see iolake-docs storage-io-levels).
+io-uring = ["iolake-storage/io-uring"]
 # Accept shard transfers over Mooncake Transfer Engine (RDMA, or TCP in
 # development). Linux only, and needs a Mooncake build — see
 # crates/transport-te. Enabled at run time with `--rdma`.
-rdma = ["objectio-transport-te/te"]
+rdma = ["iolake-transport-te/te"]
 # The metadata index on RocksDB (B27), selected with --meta-engine rocksdb.
-rocksdb = ["objectio-storage/rocksdb"]
+rocksdb = ["iolake-storage/rocksdb"]
 
 [dev-dependencies]
 redb = { workspace = true }

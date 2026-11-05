@@ -27,8 +27,8 @@ use axum::Extension;
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use objectio_auth::AuthResult;
-use objectio_auth::policy::{BucketPolicy, PolicyDecision, PolicyEvaluator, RequestContext};
+use iolake_auth::AuthResult;
+use iolake_auth::policy::{BucketPolicy, PolicyDecision, PolicyEvaluator, RequestContext};
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -65,7 +65,7 @@ pub struct IcebergState {
     /// The builtin `user/admin` check is always active in addition to these.
     pub admin_principals: Vec<String>,
     /// STS provider for vended credentials in `LoadTable` responses.
-    pub sts_provider: Option<objectio_auth::sts::StsProvider>,
+    pub sts_provider: Option<iolake_auth::sts::StsProvider>,
     /// S3 endpoint URL for vended credential config.
     pub s3_endpoint: String,
     /// Authentication is on (the gateway runs without `--no-auth`): a
@@ -86,7 +86,7 @@ enum Caller<'a> {
 /// anything.
 fn caller<'a>(state: &IcebergState, auth: Option<&'a Extension<AuthResult>>) -> Result<Caller<'a>> {
     match auth {
-        Some(Extension(a)) if a.auth_mode != objectio_auth::AuthMode::Anonymous => {
+        Some(Extension(a)) if a.auth_mode != iolake_auth::AuthMode::Anonymous => {
             Ok(Caller::Identity(a))
         }
         _ if state.auth_required => Err(IcebergError::unauthorized("Authentication required")),
@@ -111,7 +111,7 @@ async fn is_tenant_admin(state: &IcebergState, tenant: &str, auth: &AuthResult) 
     let resp = state
         .catalog
         .meta_client()
-        .get_tenant(objectio_proto::metadata::GetTenantRequest {
+        .get_tenant(iolake_proto::metadata::GetTenantRequest {
             name: tenant.to_string(),
         })
         .await
@@ -127,7 +127,7 @@ async fn is_tenant_admin(state: &IcebergState, tenant: &str, auth: &AuthResult) 
 /// A request's warehouse, resolved for its caller.
 struct Scope<'a> {
     caller: Caller<'a>,
-    warehouse: objectio_proto::metadata::IcebergWarehouse,
+    warehouse: iolake_proto::metadata::IcebergWarehouse,
     /// The catalog, scoped to this warehouse.
     catalog: IcebergCatalog,
     /// The caller administers this warehouse: a catalog admin, or an admin
@@ -159,7 +159,7 @@ async fn scope<'a>(
     let resp = state
         .catalog
         .meta_client()
-        .iceberg_list_warehouses(objectio_proto::metadata::IcebergListWarehousesRequest {
+        .iceberg_list_warehouses(iolake_proto::metadata::IcebergListWarehousesRequest {
             tenant: String::new(),
         })
         .await
@@ -420,7 +420,7 @@ impl Scope<'_> {
     /// credentials are scoped to it, so a table pointed at another bucket
     /// would hand out credentials for that bucket.
     fn confine(&self, location: &str) -> Result<()> {
-        if objectio_common::location::within(location, self.location()) {
+        if iolake_common::location::within(location, self.location()) {
             Ok(())
         } else {
             Err(IcebergError::bad_request(format!(
@@ -849,9 +849,9 @@ pub async fn load_table(
             .may_on_table(&state, &levels, &table, "iceberg:UpdateTable", &arn)
             .await?
         {
-            objectio_auth::sts::Operation::ReadWrite
+            iolake_auth::sts::Operation::ReadWrite
         } else {
-            objectio_auth::sts::Operation::Read
+            iolake_auth::sts::Operation::Read
         };
         let user_arn = match scope.caller {
             Caller::Identity(a) => a.user_arn.as_str(),
@@ -1002,11 +1002,11 @@ pub async fn commit_transaction(
         return Err(IcebergError::bad_request("table-changes is empty"));
     }
     // Meta commits a transaction as one command, of one write per table.
-    if req.table_changes.len() > objectio_common::META_MAX_OPS {
+    if req.table_changes.len() > iolake_common::META_MAX_OPS {
         return Err(IcebergError::bad_request(format!(
             "{} table changes in one transaction; at most {}",
             req.table_changes.len(),
-            objectio_common::META_MAX_OPS
+            iolake_common::META_MAX_OPS
         )));
     }
 
@@ -1447,7 +1447,7 @@ pub async fn simulate_policy(
         let explanation = state
             .policy_evaluator
             .evaluate_with_explanation(&policy, &context, "catalog");
-        if explanation.decision == objectio_auth::policy::PolicyDecision::Deny {
+        if explanation.decision == iolake_auth::policy::PolicyDecision::Deny {
             return Ok(Json(explanation_to_response(explanation)));
         }
     }
@@ -1465,8 +1465,8 @@ pub async fn simulate_policy(
             let explanation = state
                 .policy_evaluator
                 .evaluate_with_explanation(&policy, &context, &ns_label);
-            if explanation.decision == objectio_auth::policy::PolicyDecision::Deny
-                || explanation.decision == objectio_auth::policy::PolicyDecision::Allow
+            if explanation.decision == iolake_auth::policy::PolicyDecision::Deny
+                || explanation.decision == iolake_auth::policy::PolicyDecision::Allow
             {
                 return Ok(Json(explanation_to_response(explanation)));
             }
@@ -1489,7 +1489,7 @@ pub async fn simulate_policy(
             let explanation = state
                 .policy_evaluator
                 .evaluate_with_explanation(&policy, &context, &source);
-            if explanation.decision != objectio_auth::policy::PolicyDecision::ImplicitDeny {
+            if explanation.decision != iolake_auth::policy::PolicyDecision::ImplicitDeny {
                 return Ok(Json(explanation_to_response(explanation)));
             }
         }
@@ -1503,12 +1503,12 @@ pub async fn simulate_policy(
 }
 
 fn explanation_to_response(
-    explanation: objectio_auth::policy::PolicyExplanation,
+    explanation: iolake_auth::policy::PolicyExplanation,
 ) -> SimulatePolicyResponse {
     let decision = match explanation.decision {
-        objectio_auth::policy::PolicyDecision::Allow => "allow",
-        objectio_auth::policy::PolicyDecision::Deny => "deny",
-        objectio_auth::policy::PolicyDecision::ImplicitDeny => "implicit_deny",
+        iolake_auth::policy::PolicyDecision::Allow => "allow",
+        iolake_auth::policy::PolicyDecision::Deny => "deny",
+        iolake_auth::policy::PolicyDecision::ImplicitDeny => "implicit_deny",
     };
     SimulatePolicyResponse {
         decision: decision.to_string(),
@@ -1517,8 +1517,8 @@ fn explanation_to_response(
             .map(|ms| SimulateMatchedStatement {
                 sid: ms.sid,
                 effect: match ms.effect {
-                    objectio_auth::policy::Effect::Allow => "Allow".to_string(),
-                    objectio_auth::policy::Effect::Deny => "Deny".to_string(),
+                    iolake_auth::policy::Effect::Allow => "Allow".to_string(),
+                    iolake_auth::policy::Effect::Deny => "Deny".to_string(),
                 },
                 source: ms.source,
             }),
@@ -2060,7 +2060,7 @@ mod tests {
     fn catalog_admins_are_the_operator_and_the_configured_principals() {
         let principals = vec!["arn:obio:iam::oidc:group/lake-admins".to_string()];
         assert!(is_catalog_admin(
-            &auth(objectio_auth::SYSTEM_ADMIN_USER_ARN, &[]),
+            &auth(iolake_auth::SYSTEM_ADMIN_USER_ARN, &[]),
             &principals
         ));
         assert!(is_catalog_admin(

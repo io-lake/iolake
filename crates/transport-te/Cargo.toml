@@ -1,5 +1,5 @@
 [package]
-name = "objectio-transport-te"
+name = "iolake-transport-te"
 description = "Shard transport over Mooncake Transfer Engine (RDMA, with a TCP mode)"
 version.workspace = true
 edition.workspace = true

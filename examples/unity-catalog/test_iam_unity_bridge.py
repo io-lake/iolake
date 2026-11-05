@@ -18,7 +18,7 @@ Flow:
   9. alice can now delete the catalog (no policy in the way).
 
 Usage:
-    OBJECTIO_HOST=http://127.0.0.1:9000 \
+    IOLAKE_HOST=http://127.0.0.1:9000 \
       AWS_ACCESS_KEY_ID=<admin-ak> AWS_SECRET_ACCESS_KEY=<admin-sk> \
       .venv-dbx/bin/python test_iam_unity_bridge.py
 """
@@ -36,10 +36,10 @@ import botocore.credentials
 import requests
 
 
-HOST = os.environ.get("OBJECTIO_HOST", "http://127.0.0.1:9000")
+HOST = os.environ.get("IOLAKE_HOST", "http://127.0.0.1:9000")
 ADMIN_AK = os.environ["AWS_ACCESS_KEY_ID"]
 ADMIN_SK = os.environ["AWS_SECRET_ACCESS_KEY"]
-REGION = os.environ.get("OBJECTIO_REGION", "us-east-1")
+REGION = os.environ.get("IOLAKE_REGION", "us-east-1")
 RUN = str(int(time.time()))
 CATALOG = f"iam_bridge_{RUN}"
 USER_NAME = f"alice_{RUN}"

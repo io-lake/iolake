@@ -3,7 +3,7 @@
 //! read can be written back, and a revocation holds at once on the gateway
 //! that made it.
 
-use objectio_e2e::{Cluster, Response};
+use iolake_e2e::{Cluster, Response};
 use serde_json::{Value, json};
 
 fn tenant_admin(c: &Cluster, tenant: &str) -> (String, String, String) {
@@ -184,16 +184,16 @@ fn a_provider_read_and_written_back_keeps_its_secret() {
     c.json(
         "PUT",
         path,
-        json!({"issuer_url": "https://idp.example", "client_id": "objectio", "client_secret": "s3cret"}),
+        json!({"issuer_url": "https://idp.example", "client_id": "iolake", "client_secret": "s3cret"}),
     )
     .expect_ok();
     let read = c.request("GET", path, &[]).json();
     assert_eq!(read["value"]["client_secret"], "********");
     let mut value = read["value"].clone();
-    value["client_id"] = json!("objectio-2");
+    value["client_id"] = json!("iolake-2");
     c.json("PUT", path, value).expect_ok();
     let stored = c.request("GET", path, &[]).json();
-    assert_eq!(stored["value"]["client_id"], "objectio-2");
+    assert_eq!(stored["value"]["client_id"], "iolake-2");
     assert_eq!(stored["value"]["client_secret"], "********");
 }
 
@@ -216,7 +216,7 @@ fn a_provider_a_tenant_names_is_not_deleted_from_under_it() {
     c.json(
         "PUT",
         path,
-        json!({"issuer_url": "https://idp.example", "client_id": "objectio"}),
+        json!({"issuer_url": "https://idp.example", "client_id": "iolake"}),
     )
     .expect_ok();
     for tenant in ["acme", "globex"] {
@@ -272,7 +272,7 @@ fn a_tenant_admin_deletes_its_own_provider() {
     let c = Cluster::start();
     let (_, ak, sk) = tenant_admin(&c, "acme");
     let path = "/_admin/config/identity/openid/t-acme";
-    let provider = json!({"issuer_url": "https://idp.example", "client_id": "objectio"});
+    let provider = json!({"issuer_url": "https://idp.example", "client_id": "iolake"});
     as_user(&c, &ak, &sk, "PUT", path, &provider).expect(200);
     let t = c.request("GET", "/_admin/tenants/acme", &[]).json();
     assert_eq!(t["oidc_provider"], "t-acme", "{t}");

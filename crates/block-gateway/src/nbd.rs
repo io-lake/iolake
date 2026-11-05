@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use objectio_proto::block::Attachment;
+use iolake_proto::block::Attachment;
 use parking_lot::RwLock;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -150,7 +150,7 @@ where
 pub struct NbdServer {
     exports: RwLock<HashMap<String, Registered>>,
     /// Keep a reference to the shared gateway state for I/O
-    cache: Arc<objectio_block::WriteCache>,
+    cache: Arc<iolake_block::WriteCache>,
     resolver: Arc<Resolver>,
 }
 
@@ -243,7 +243,7 @@ const fn in_bounds(offset: u64, length: u32, size: u64) -> bool {
 }
 
 impl NbdServer {
-    pub fn new(cache: Arc<objectio_block::WriteCache>, resolver: Arc<Resolver>) -> Self {
+    pub fn new(cache: Arc<iolake_block::WriteCache>, resolver: Arc<Resolver>) -> Self {
         Self {
             exports: RwLock::new(HashMap::new()),
             cache,
@@ -749,8 +749,8 @@ mod tests {
     //! in-memory stream.
 
     use super::*;
-    use objectio_block::WriteCache;
-    use objectio_block::chunk::ChunkMapper;
+    use iolake_block::WriteCache;
+    use iolake_block::chunk::ChunkMapper;
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
 
@@ -765,12 +765,12 @@ mod tests {
         cache.init_volume("vol");
         cache.init_volume("ro");
         // Never connected: the handshake does no I/O.
-        let channel = objectio_proto::transport::connect_lazy(
+        let channel = iolake_proto::transport::connect_lazy(
             &tonic::transport::Endpoint::from_static("http://127.0.0.1:1"),
         );
         let meta = Arc::new(crate::meta_blocks::MetaBlocks::new(Arc::new(
             tokio::sync::Mutex::new(
-                objectio_proto::metadata::metadata_service_client::MetadataServiceClient::new(
+                iolake_proto::metadata::metadata_service_client::MetadataServiceClient::new(
                     channel,
                 ),
             ),

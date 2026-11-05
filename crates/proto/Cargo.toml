@@ -1,12 +1,12 @@
 [package]
-name = "objectio-proto"
-description = "Protocol buffer definitions for ObjectIO"
+name = "iolake-proto"
+description = "Protocol buffer definitions for IOLake"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-objectio-common = { workspace = true }
+iolake-common = { workspace = true }
 tower = { workspace = true }
 tonic = { workspace = true }
 tokio = { workspace = true }

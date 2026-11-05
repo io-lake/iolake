@@ -50,7 +50,7 @@ impl Osd {
             .append(true)
             .open(self.log())
             .expect("log");
-        let mut cmd = Command::new(objectio_e2e::binary("objectio-osd"));
+        let mut cmd = Command::new(iolake_e2e::binary("iolake-osd"));
         cmd.args([
             "--config",
             &self.dir.path().join("none.toml").display().to_string(),
@@ -69,7 +69,7 @@ impl Osd {
         cmd.stdout(Stdio::from(log.try_clone().expect("log")))
             .stderr(Stdio::from(log))
             .spawn()
-            .expect("spawn objectio-osd")
+            .expect("spawn iolake-osd")
     }
 
     /// Start on `disks` and wait until the store is open and the OSD

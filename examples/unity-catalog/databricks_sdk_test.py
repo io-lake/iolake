@@ -1,6 +1,6 @@
 """Real-world Unity Catalog test using the Databricks Python SDK.
 
-Talks to ObjectIO's `/api/2.1/unity-catalog/*` REST surface using the same
+Talks to IOLake's `/api/2.1/unity-catalog/*` REST surface using the same
 client Databricks customers use against Unity. Proves the wire shape is
 SDK-compatible end-to-end.
 
@@ -8,10 +8,10 @@ Auth: aio's session-cookie path doesn't fit the SDK, but the SDK sends a
 Bearer token. With OIDC unconfigured, our auth chain falls through to "no
 auth" and the handlers (which take Option<Extension<AuthResult>>) accept
 the request — exactly the behaviour we want from this kind of smoke test.
-For tightly authenticated runs, set OBJECTIO_OIDC_* and pass a real PAT.
+For tightly authenticated runs, set IOLAKE_OIDC_* and pass a real PAT.
 
 Usage:
-    OBJECTIO_HOST=http://127.0.0.1:9000 \
+    IOLAKE_HOST=http://127.0.0.1:9000 \
       ./.venv-dbx/bin/python databricks_sdk_test.py
 """
 
@@ -35,8 +35,8 @@ from databricks.sdk.service.catalog import (
 from databricks.sdk.errors import DatabricksError, ResourceAlreadyExists
 
 
-HOST = os.environ.get("OBJECTIO_HOST", "http://127.0.0.1:9000")
-TOKEN = os.environ.get("OBJECTIO_TOKEN", "dummy-bearer-token-no-oidc")
+HOST = os.environ.get("IOLAKE_HOST", "http://127.0.0.1:9000")
+TOKEN = os.environ.get("IOLAKE_TOKEN", "dummy-bearer-token-no-oidc")
 RUN_ID = str(int(time.time()))
 CATALOG = f"sdk_test_{RUN_ID}"
 SCHEMA = "default"
@@ -61,7 +61,7 @@ def main() -> None:
     print(f"Catalog: {CATALOG}")
 
     # The Databricks SDK is workspace-aware and expects /api/2.1/unity-catalog
-    # to live at <host>/api/2.1/unity-catalog — exactly where ObjectIO hosts
+    # to live at <host>/api/2.1/unity-catalog — exactly where IOLake hosts
     # it. No `auth_type` override needed; pat → Authorization: Bearer header.
     w = WorkspaceClient(host=HOST, token=TOKEN, auth_type="pat")
 
@@ -253,7 +253,7 @@ def main() -> None:
     w.catalogs.delete(CATALOG, force=True)
     ok("catalog deleted (force=true)")
 
-    print("\n[PASS] Databricks SDK round-trip green against ObjectIO Unity Catalog")
+    print("\n[PASS] Databricks SDK round-trip green against IOLake Unity Catalog")
 
 
 if __name__ == "__main__":

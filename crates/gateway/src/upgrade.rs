@@ -1,4 +1,4 @@
-//! Rolling upgrades, for the operator (objectio-docs core/upgrade-path.md):
+//! Rolling upgrades, for the operator (iolake-docs core/upgrade-path.md):
 //!
 //! - `GET /_admin/upgrade`: every node's release and format level, the
 //!   cluster's active level, and what finalize would do (or why not);
@@ -13,8 +13,8 @@ use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use objectio_auth::AuthResult;
-use objectio_proto::metadata::{FinalizeUpgradeRequest, GetUpgradeStatusRequest};
+use iolake_auth::AuthResult;
+use iolake_proto::metadata::{FinalizeUpgradeRequest, GetUpgradeStatusRequest};
 use serde_json::json;
 
 use crate::s3::AppState;
@@ -38,7 +38,7 @@ pub(crate) fn system_admin(
 
 pub(crate) fn meta_error(e: &tonic::Status) -> Response {
     let status = match e.code() {
-        _ if objectio_proto::is_no_room(e) => StatusCode::INSUFFICIENT_STORAGE,
+        _ if iolake_proto::is_no_room(e) => StatusCode::INSUFFICIENT_STORAGE,
         tonic::Code::FailedPrecondition => StatusCode::CONFLICT,
         tonic::Code::Aborted => StatusCode::CONFLICT,
         _ if crate::s3::S3Error::is_unavailable(e) => StatusCode::SERVICE_UNAVAILABLE,

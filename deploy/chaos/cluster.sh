@@ -6,8 +6,8 @@
 #   deploy/chaos/cluster.sh status
 #   deploy/chaos/cluster.sh down           # delete the VMs and their disks
 #
-# <bin-dir> holds Linux x86_64 objectio-meta, objectio-osd and
-# objectio-gateway. Six VMs, chaos-1 .. chaos-6: each runs one OSD on its
+# <bin-dir> holds Linux x86_64 iolake-meta, iolake-osd and
+# iolake-gateway. Six VMs, chaos-1 .. chaos-6: each runs one OSD on its
 # own block device (an Incus volume, so it can be pulled), chaos-1..3 run
 # meta (one Raft group), chaos-1..2 run a gateway. Needs incus (through
 # sudo -n) and an Ubuntu 24.04 VM image (IMAGE).
@@ -53,7 +53,7 @@ unit() { # vm name exec-line
 Description=$2
 After=network-online.target
 [Service]
-Environment=OBJECTIO_MASTER_KEY=$MASTER_KEY
+Environment=IOLAKE_MASTER_KEY=$MASTER_KEY
 ExecStart=$3
 Restart=always
 RestartSec=2
@@ -70,7 +70,7 @@ admin() { # ip path json
 
 up() {
     local bins=$1
-    for b in objectio-meta objectio-osd objectio-gateway; do
+    for b in iolake-meta iolake-osd iolake-gateway; do
         [ -x "$bins/$b" ] || { echo "missing $bins/$b" >&2; exit 1; }
     done
     for i in $(seq 1 "$N"); do
@@ -102,7 +102,7 @@ up() {
     # under faults writes ~300 MB/h of it, which fills the 12 GiB root
     # (and meta's and the OSD's metadata with it) within a day.
     for i in $(seq 1 "$N"); do
-        incus exec "chaos-$i" -- sh -c 'mkdir -p /etc/systemd/journald.conf.d && printf "[Journal]\nSystemMaxUse=3G\n" > /etc/systemd/journald.conf.d/objectio.conf && systemctl restart systemd-journald'
+        incus exec "chaos-$i" -- sh -c 'mkdir -p /etc/systemd/journald.conf.d && printf "[Journal]\nSystemMaxUse=3G\n" > /etc/systemd/journald.conf.d/iolake.conf && systemctl restart systemd-journald'
         incus exec "chaos-$i" -- sh -c 'systemctl disable --now rsyslog.service syslog.socket >/dev/null 2>&1; rm -f /var/log/syslog*'
     done
 
@@ -114,14 +114,14 @@ up() {
     for i in $(seq 1 "$N"); do
         local vm=chaos-$i
         say "installing $vm (${IP[$i]})"
-        for b in objectio-meta objectio-osd objectio-gateway; do
+        for b in iolake-meta iolake-osd iolake-gateway; do
             incus file push "$bins/$b" "$vm/usr/local/bin/$b" --mode 0755
         done
         incus exec "$vm" -- mkdir -p /var/lib/objectio/meta /var/lib/objectio/osd
     done
 
     for i in $(seq 1 "$METAS"); do
-        unit "chaos-$i" objectio-meta "/usr/local/bin/objectio-meta --node-id $i \
+        unit "chaos-$i" iolake-meta "/usr/local/bin/iolake-meta --node-id $i \
 --listen 0.0.0.0:9100 --raft-advertise ${IP[$i]}:9100 --data-dir /var/lib/objectio/meta \
 --metrics-port 9101 --admin-port 9102 --ec-k 4 --ec-m 2 --repair-interval-secs 60"
     done
@@ -140,12 +140,12 @@ up() {
 
     for i in $(seq 1 "$N"); do
         local disk; disk=$(osd_disk "chaos-$i")
-        unit "chaos-$i" objectio-osd "/usr/local/bin/objectio-osd --listen 0.0.0.0:9200 \
+        unit "chaos-$i" iolake-osd "/usr/local/bin/iolake-osd --listen 0.0.0.0:9200 \
 --advertise-addr http://${IP[$i]}:9200 --meta-endpoint $metas \
 --data-dir /var/lib/objectio/osd --disks $disk --init-blank-disks --metrics-port 9201"
     done
     for i in $(seq 1 "$GATEWAYS"); do
-        unit "chaos-$i" objectio-gateway "/usr/local/bin/objectio-gateway --listen 0.0.0.0:9000 \
+        unit "chaos-$i" iolake-gateway "/usr/local/bin/iolake-gateway --listen 0.0.0.0:9000 \
 --meta-endpoint $metas --external-endpoint http://${IP[$i]}:9000 --no-auth"
     done
     for i in $(seq 1 "$GATEWAYS"); do
@@ -158,8 +158,8 @@ status() {
     for i in $(seq 1 "$N"); do
         local vm=chaos-$i ip; ip=$(ip_of "$vm" || true)
         printf '%s %s ' "$vm" "${ip:--}"
-        incus exec "$vm" -- sh -c 'for s in objectio-meta objectio-osd objectio-gateway; do
-            [ -f /etc/systemd/system/$s.service ] && printf "%s=%s " "${s#objectio-}" "$(systemctl is-active $s)"; done; echo' 2>/dev/null || echo "(down)"
+        incus exec "$vm" -- sh -c 'for s in iolake-meta iolake-osd iolake-gateway; do
+            [ -f /etc/systemd/system/$s.service ] && printf "%s=%s " "${s#iolake-}" "$(systemctl is-active $s)"; done; echo' 2>/dev/null || echo "(down)"
     done
 }
 

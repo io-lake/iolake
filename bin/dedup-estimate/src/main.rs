@@ -4,13 +4,13 @@
 //! directory's files in name order). For every way of uploading it — in
 //! one piece, or in multipart parts of a given size — and every chunking
 //! the dry-run measures, the files are cut and fingerprinted exactly as the
-//! gateway would (`objectio_gateway::dedup`), and every chunk already seen
+//! gateway would (`iolake_gateway::dedup`), and every chunk already seen
 //! counts as duplicate bytes. One dedup domain covers all the files, as if
 //! they were in one bucket with bucket scope.
 //!
 //! ```text
-//! objectio-dedup-estimate checkpoints/        # parts: whole, 5, 8, 64 MiB
-//! objectio-dedup-estimate --parts 0,16 a.bin b.bin
+//! iolake-dedup-estimate checkpoints/        # parts: whole, 5, 8, 64 MiB
+//! iolake-dedup-estimate --parts 0,16 a.bin b.bin
 //! ```
 
 // Byte counts become MiB and percentages for display only.
@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use objectio_gateway::dedup::{CHUNKINGS, Chunking, chunks, fingerprint};
+use iolake_gateway::dedup::{CHUNKINGS, Chunking, chunks, fingerprint};
 
 #[derive(Parser)]
 #[command(about = "Estimate what deduplication would save on a set of files")]

@@ -1,4 +1,4 @@
-//! ObjectIO all-in-one — the real monolith.
+//! IOLake all-in-one — the real monolith.
 //!
 //! Runs meta + OSD(s) + gateway as tokio tasks inside **one**
 //! process. Shares a single tracing subscriber, a single signal
@@ -52,9 +52,9 @@ fn extract_embedded_console(dst: &Path) -> Result<()> {
 }
 
 #[derive(Parser, Debug)]
-#[command(name = "objectio-aio")]
+#[command(name = "iolake-aio")]
 #[command(version)]
-#[command(about = "ObjectIO all-in-one — single-process local cluster for testing.")]
+#[command(about = "IOLake all-in-one — single-process local cluster for testing.")]
 struct Args {
     /// Public port for the S3 / Iceberg / Delta Sharing / console
     /// endpoint. The only port the caller needs to know about.
@@ -209,7 +209,7 @@ struct Args {
 
     /// The OSDs' metadata index engine: `native`, or `rocksdb` (a build
     /// with the `rocksdb` feature).
-    #[arg(long, env = "OBJECTIO_OSD_META_ENGINE", default_value = "native")]
+    #[arg(long, env = "IOLAKE_OSD_META_ENGINE", default_value = "native")]
     meta_engine: String,
 
     /// Optional dedicated port for the admin API (`/_admin/*` + `/metrics`).
@@ -240,14 +240,14 @@ struct Args {
     /// Seed this on any deployment that is reachable by a name. Left empty it
     /// is derived from `--listen-addr`, which cannot produce a usable URL for
     /// a wildcard bind.
-    #[arg(long, env = "OBJECTIO_EXTERNAL_ENDPOINT", default_value = "")]
+    #[arg(long, env = "IOLAKE_EXTERNAL_ENDPOINT", default_value = "")]
     external_endpoint: String,
 
     /// A domain clients address buckets under by host name
     /// (virtual-hosted style), e.g. `s3.example.com`: `photos.s3.example.com`
     /// is bucket `photos`. Repeat or separate with commas. Path-style works
     /// with or without it.
-    #[arg(long = "s3-domain", env = "OBJECTIO_S3_DOMAIN", value_delimiter = ',')]
+    #[arg(long = "s3-domain", env = "IOLAKE_S3_DOMAIN", value_delimiter = ',')]
     s3_domains: Vec<String>,
 
     /// Base URL of a Prometheus that scrapes this server, e.g.
@@ -257,7 +257,7 @@ struct Args {
     /// Without it the console falls back to polling `/metrics` in the browser,
     /// which only knows what happened since the page opened — about five
     /// minutes — and carries no per-instance labels. Leave empty for that.
-    #[arg(long, env = "OBJECTIO_PROMETHEUS_URL", default_value = "")]
+    #[arg(long, env = "IOLAKE_PROMETHEUS_URL", default_value = "")]
     prometheus_url: String,
 
     /// Move shards between the gateway and the OSDs over Mooncake Transfer
@@ -312,7 +312,7 @@ struct Args {
     /// mTLS between the services (A8a): with these, even the all-in-one's
     /// own gRPC hops go over mutual TLS.
     #[command(flatten)]
-    tls: objectio_proto::transport::TlsArgs,
+    tls: iolake_proto::transport::TlsArgs,
 }
 
 /// Pick a free loopback port by binding to :0 and releasing.
@@ -352,7 +352,7 @@ fn port_free(addr: &str, port: u16) -> bool {
     StdTcpListener::bind((addr, port)).is_ok()
 }
 
-/// Wait for `signal` (see `objectio_common::shutdown_signal`) on the task
+/// Wait for `signal` (see `iolake_common::shutdown_signal`) on the task
 /// that owns main, then broadcast shutdown to every subsystem.
 async fn wait_signal(signal: impl std::future::Future<Output = ()>, tx: broadcast::Sender<()>) {
     signal.await;
@@ -426,16 +426,16 @@ async fn wait_listening(port: u16, label: &str, max: u64) -> Result<()> {
 /// Fail unless the block gateway's ports are its own: `BlockService`
 /// answers on `grpc_port` and the NBD handshake on `nbd_port`.
 async fn serves_block(grpc_port: u16, nbd_port: u16, max: u64) -> Result<()> {
-    use objectio_proto::block::ListVolumesRequest;
-    use objectio_proto::block::block_service_client::BlockServiceClient;
+    use iolake_proto::block::ListVolumesRequest;
+    use iolake_proto::block::block_service_client::BlockServiceClient;
     use tokio::io::AsyncReadExt;
 
     const NBD_MAGIC: &[u8; 8] = b"NBDMAGIC";
     let url = format!("127.0.0.1:{grpc_port}");
     let mut last = String::new();
     for _ in 0..(max * 10) {
-        let connected = match objectio_proto::transport::endpoint(&url) {
-            Ok(ep) => objectio_proto::transport::connect(&ep)
+        let connected = match iolake_proto::transport::endpoint(&url) {
+            Ok(ep) => iolake_proto::transport::connect(&ep)
                 .await
                 .map(BlockServiceClient::new)
                 .map_err(|e| e.to_string()),
@@ -603,7 +603,7 @@ async fn bootstrap_raft(port: u16) -> Result<()> {
     // "Can not initialize" ERROR log on every restart.
     // Under mTLS the admin port is HTTPS, and /init takes the admin role,
     // which aio's certificate carries with the others.
-    let tls = objectio_proto::transport::https_client_config().map_err(anyhow::Error::msg)?;
+    let tls = iolake_proto::transport::https_client_config().map_err(anyhow::Error::msg)?;
     if let Ok((status, body)) = http_oneshot(port, "GET", "/status", &[], tls.clone()).await
         && status.starts_with("HTTP/1.1 200")
         && body.contains("\"voters\"")
@@ -625,19 +625,19 @@ async fn bootstrap_raft(port: u16) -> Result<()> {
 
 // The gateway's runtime: its request handlers need its workers' stacks.
 fn main() -> Result<()> {
-    objectio_gateway::runtime()?.block_on(serve())
+    iolake_gateway::runtime()?.block_on(serve())
 }
 
 async fn serve() -> Result<()> {
     let args = Args::parse();
     // Once for the process: every service run below shares it.
-    objectio_proto::transport::configure_tls(&args.tls).map_err(anyhow::Error::msg)?;
+    iolake_proto::transport::configure_tls(&args.tls).map_err(anyhow::Error::msg)?;
 
     // Single tracing subscriber for everyone. Default: --log-level for
     // our own crates, warn for the noisy deps (hyper, h2, tower, tonic,
     // openraft internals). Override via RUST_LOG — e.g.
     //   RUST_LOG=debug          everything
-    //   RUST_LOG=objectio=debug just our crates
+    //   RUST_LOG=iolake=debug just our crates
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
@@ -728,22 +728,22 @@ async fn serve() -> Result<()> {
     // thread might be reading them concurrently. We're still on the
     // single main thread here — no other tasks have been spawned yet.
     unsafe {
-        std::env::set_var("OBJECTIO_MASTER_KEY", &master_key_b64);
+        std::env::set_var("IOLAKE_MASTER_KEY", &master_key_b64);
     }
 
     // ------------------------------------------------------------
     // Console SPA — embedded at build time. The gateway serves it from
-    // $OBJECTIO_CONSOLE_DIR (default /usr/share/objectio/console, not
+    // $IOLAKE_CONSOLE_DIR (default /usr/share/objectio/console, not
     // present on a developer laptop). Extract the embedded tree to a
     // per-run dir under the data root so the gateway's ServeDir finds
-    // it. Callers can override OBJECTIO_CONSOLE_DIR themselves if they
+    // it. Callers can override IOLAKE_CONSOLE_DIR themselves if they
     // want to serve a locally-built tree instead (e.g. during frontend
     // dev against this aio binary).
     //
     // The embedded tree contains both `ops/` and `tenant/` subdirs
     // (multi-page Vite output). The gateway resolves
-    // OBJECTIO_OPS_CONSOLE_DIR / OBJECTIO_TENANT_CONSOLE_DIR relative
-    // to OBJECTIO_CONSOLE_DIR by default, so a single extraction
+    // IOLAKE_OPS_CONSOLE_DIR / IOLAKE_TENANT_CONSOLE_DIR relative
+    // to IOLAKE_CONSOLE_DIR by default, so a single extraction
     // covers both split mode and single-port.
     // ------------------------------------------------------------
     {
@@ -756,11 +756,11 @@ async fn serve() -> Result<()> {
         let tenant_dir = console_dst.join("tenant");
         // SAFETY: no tasks have been spawned yet, so no concurrent reads.
         unsafe {
-            if std::env::var("OBJECTIO_OPS_CONSOLE_DIR").is_err() {
-                std::env::set_var("OBJECTIO_OPS_CONSOLE_DIR", &ops_dir);
+            if std::env::var("IOLAKE_OPS_CONSOLE_DIR").is_err() {
+                std::env::set_var("IOLAKE_OPS_CONSOLE_DIR", &ops_dir);
             }
-            if std::env::var("OBJECTIO_TENANT_CONSOLE_DIR").is_err() {
-                std::env::set_var("OBJECTIO_TENANT_CONSOLE_DIR", &tenant_dir);
+            if std::env::var("IOLAKE_TENANT_CONSOLE_DIR").is_err() {
+                std::env::set_var("IOLAKE_TENANT_CONSOLE_DIR", &tenant_dir);
             }
         }
     }
@@ -768,7 +768,7 @@ async fn serve() -> Result<()> {
     // Shutdown broadcast — every subsystem subscribes, SIGTERM or Ctrl-C
     // fans out. The handlers go in before anything starts: a signal while
     // starting is acted on once started, not lost.
-    let signal = objectio_common::shutdown_signal()?;
+    let signal = iolake_common::shutdown_signal()?;
     let (shutdown_tx, _) = broadcast::channel::<()>(4);
 
     // ------------------------------------------------------------
@@ -797,7 +797,7 @@ async fn serve() -> Result<()> {
         ));
     }
     let mut meta_argv: Vec<String> = vec![
-        "objectio-meta".into(),
+        "iolake-meta".into(),
         "--node-id".into(),
         "1".into(),
         "--listen".into(),
@@ -833,10 +833,10 @@ async fn serve() -> Result<()> {
         meta_argv.push("--replication".into());
         meta_argv.push("1".into());
     }
-    let meta_args = <objectio_meta::Args as clap::Parser>::parse_from(&meta_argv);
+    let meta_args = <iolake_meta::Args as clap::Parser>::parse_from(&meta_argv);
     let meta_handle: JoinHandle<Result<()>> = {
         let sd = sub_shutdown(&shutdown_tx);
-        tokio::spawn(async move { objectio_meta::run(meta_args, sd).await })
+        tokio::spawn(async move { iolake_meta::run(meta_args, sd).await })
     };
     wait_listening(meta_grpc, "meta gRPC", 20).await?;
     bootstrap_raft(meta_admin).await?;
@@ -870,7 +870,7 @@ async fn serve() -> Result<()> {
 
         #[allow(unused_mut)]
         let mut osd_argv: Vec<String> = [
-            "objectio-osd",
+            "iolake-osd",
             // Port 0: the OSD binds whatever the OS gives it and registers
             // that. Choosing a free port here and binding it later lost the
             // port to other sockets often enough to break startup.
@@ -906,11 +906,11 @@ async fn serve() -> Result<()> {
         if let Some(protocol) = &args.rdma {
             osd_argv.extend(["--rdma", protocol, "--rdma-host", "127.0.0.1"].map(str::to_string));
         }
-        let osd_args = <objectio_osd::Args as clap::Parser>::parse_from(&osd_argv);
+        let osd_args = <iolake_osd::Args as clap::Parser>::parse_from(&osd_argv);
         let sd = sub_shutdown(&shutdown_tx);
-        osd_handles.push(tokio::spawn(async move {
-            objectio_osd::run(osd_args, sd).await
-        }));
+        osd_handles.push(tokio::spawn(
+            async move { iolake_osd::run(osd_args, sd).await },
+        ));
         let port = wait_osd_addr(&addr_file, i, 20).await?;
         wait_listening(port, &format!("osd-{i}"), 20).await?;
         osd_ports.push(port);
@@ -951,7 +951,7 @@ async fn serve() -> Result<()> {
         format!("http://{host}:{gateway_port}")
     };
     let mut gw_argv: Vec<String> = vec![
-        "objectio-gateway".into(),
+        "iolake-gateway".into(),
         "--listen".into(),
         format!("{}:{}", args.listen_addr, gateway_port),
         "--meta-endpoint".into(),
@@ -1094,10 +1094,10 @@ async fn serve() -> Result<()> {
     }
     // No load balancer to leave: stop at once.
     gw_argv.extend(["--shutdown-delay-secs".to_string(), "0".to_string()]);
-    let gw_args = <objectio_gateway::Args as clap::Parser>::parse_from(&gw_argv);
+    let gw_args = <iolake_gateway::Args as clap::Parser>::parse_from(&gw_argv);
     let gw_handle: JoinHandle<Result<()>> = {
         let sd = sub_shutdown(&shutdown_tx);
-        tokio::spawn(async move { objectio_gateway::run(gw_args, sd).await })
+        tokio::spawn(async move { iolake_gateway::run(gw_args, sd).await })
     };
     wait_listening(gateway_port, "gateway", 20).await?;
     // Listening is not the same as able to write: the OSDs may not be
@@ -1107,8 +1107,8 @@ async fn serve() -> Result<()> {
     let mut block_handle: Option<JoinHandle<Result<()>>> = None;
     if args.block_port != 0 {
         let block_data = data_root.join("block");
-        let block_args = <objectio_block_gateway::Args as clap::Parser>::parse_from([
-            "objectio-block-gateway".to_string(),
+        let block_args = <iolake_block_gateway::Args as clap::Parser>::parse_from([
+            "iolake-block-gateway".to_string(),
             "--listen".into(),
             format!("{}:{}", args.block_listen_addr, args.block_port),
             "--nbd-listen".into(),
@@ -1125,7 +1125,7 @@ async fn serve() -> Result<()> {
         ]);
         let sd = sub_shutdown(&shutdown_tx);
         block_handle = Some(tokio::spawn(async move {
-            let stopped = objectio_block_gateway::run(block_args, sd).await;
+            let stopped = iolake_block_gateway::run(block_args, sd).await;
             if let Err(e) = &stopped {
                 tracing::error!("block gateway stopped: {e:#}");
             }
@@ -1163,7 +1163,7 @@ async fn serve() -> Result<()> {
         args.listen_addr.clone()
     };
     eprintln!();
-    eprintln!("━━━ ObjectIO ready ━━━");
+    eprintln!("━━━ IOLake ready ━━━");
     eprintln!("  S3 / Iceberg / Delta Sharing : http://{display_host}:{gateway_port}");
     if args.ops_console_port == 0 && args.tenant_console_port == 0 {
         eprintln!(
@@ -1204,7 +1204,7 @@ async fn serve() -> Result<()> {
         eprintln!("  Admin secret key              : {sk}");
     }
     eprintln!(
-        "  SSE master key                : persisted at {} (set OBJECTIO_MASTER_KEY \
+        "  SSE master key                : persisted at {} (set IOLAKE_MASTER_KEY \
          to override)",
         data_root.join("master_key").display()
     );
@@ -1305,23 +1305,21 @@ mod tests {
                     .chain(exec_form(rest))
                     .collect();
                 let serves = match bin.as_str() {
-                    "objectio-gateway" => port_of(
-                        &objectio_gateway::Args::try_parse_from(&argv)
-                            .unwrap()
-                            .listen,
-                    ),
-                    "objectio-meta" => {
-                        objectio_meta::Args::try_parse_from(&argv)
+                    "iolake-gateway" => {
+                        port_of(&iolake_gateway::Args::try_parse_from(&argv).unwrap().listen)
+                    }
+                    "iolake-meta" => {
+                        iolake_meta::Args::try_parse_from(&argv)
                             .unwrap()
                             .metrics_port
                     }
-                    "objectio-osd" => {
-                        objectio_osd::Args::try_parse_from(&argv)
+                    "iolake-osd" => {
+                        iolake_osd::Args::try_parse_from(&argv)
                             .unwrap()
                             .metrics_port
                     }
-                    "objectio-block-gateway" => port_of(
-                        &objectio_block_gateway::Args::try_parse_from(&argv)
+                    "iolake-block-gateway" => port_of(
+                        &iolake_block_gateway::Args::try_parse_from(&argv)
                             .unwrap()
                             .metrics_listen,
                     ),
@@ -1335,10 +1333,10 @@ mod tests {
         assert_eq!(
             checked,
             [
-                "objectio-block-gateway",
-                "objectio-gateway",
-                "objectio-meta",
-                "objectio-osd"
+                "iolake-block-gateway",
+                "iolake-gateway",
+                "iolake-meta",
+                "iolake-osd"
             ]
         );
     }

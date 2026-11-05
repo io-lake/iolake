@@ -10,7 +10,7 @@
 use std::fmt::Write as _;
 use std::process::Command;
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::{Value, json};
 
 fn payload(len: usize, seed: u8) -> Vec<u8> {
@@ -115,7 +115,7 @@ fn a_scheme_the_codecs_cannot_keep_is_refused() {
 #[test]
 fn a_default_scheme_with_no_parity_is_refused_at_start() {
     let dir = tempfile::tempdir().unwrap();
-    let out = Command::new(objectio_e2e::binary("objectio-meta"))
+    let out = Command::new(iolake_e2e::binary("iolake-meta"))
         .args([
             "--node-id",
             "1",
@@ -135,17 +135,17 @@ fn a_default_scheme_with_no_parity_is_refused_at_start() {
         ])
         .arg(dir.path())
         .output()
-        .expect("run objectio-meta");
+        .expect("run iolake-meta");
     assert!(!out.status.success(), "meta started with 1+0");
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.contains("1+0 has no parity"), "{err}");
     assert!(err.contains("--replication 1"), "{err}");
 
-    let out = Command::new(objectio_e2e::binary("objectio-aio"))
+    let out = Command::new(iolake_e2e::binary("iolake-aio"))
         .args(["--osds", "1", "--ec-k", "1", "--ec-m", "0", "--data"])
         .arg(dir.path())
         .output()
-        .expect("run objectio-aio");
+        .expect("run iolake-aio");
     assert!(!out.status.success(), "aio started with 1+0");
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.contains("--ec-k 1 --ec-m 0"), "{err}");
@@ -173,7 +173,7 @@ fn an_lrc_pool_takes_objects_of_every_length() {
     );
     assert!(r.status < 300, "{}", r.text());
     assert_eq!(r.json()["ec_m"], 3, "{}", r.text());
-    c.request_with_headers("PUT", "/lrc", &[], &[("x-objectio-pool", "lrc")])
+    c.request_with_headers("PUT", "/lrc", &[], &[("x-iolake-pool", "lrc")])
         .expect(200);
 
     let mut bodies: Vec<(String, Vec<u8>)> = LENGTHS
@@ -248,7 +248,7 @@ fn an_lrc_pool_takes_objects_of_every_length() {
         for s in stripes {
             assert_eq!(
                 s.ec_type,
-                objectio_proto::metadata::ErasureType::ErasureLrc as i32,
+                iolake_proto::metadata::ErasureType::ErasureLrc as i32,
                 "{key}: stripe {} coded {:?}",
                 s.stripe_id,
                 s.ec_type
@@ -263,15 +263,15 @@ fn an_lrc_pool_takes_objects_of_every_length() {
 }
 
 /// `bucket/key`'s stripes, from the first OSD holding its metadata.
-fn stripes_of(c: &Cluster, bucket: &str, key: &str) -> Vec<objectio_proto::metadata::StripeMeta> {
-    use objectio_proto::storage::GetObjectMetaRequest;
-    use objectio_proto::storage::storage_service_client::StorageServiceClient;
+fn stripes_of(c: &Cluster, bucket: &str, key: &str) -> Vec<iolake_proto::metadata::StripeMeta> {
+    use iolake_proto::storage::GetObjectMetaRequest;
+    use iolake_proto::storage::storage_service_client::StorageServiceClient;
     let rt = tokio::runtime::Runtime::new().unwrap();
     for i in 0..7 {
         let address = c.osd_address(i);
         let found = rt.block_on(async {
             let mut client = StorageServiceClient::new(
-                objectio_e2e::tls::channel(&address)
+                iolake_e2e::tls::channel(&address)
                     .await
                     .expect("connect OSD"),
             );
@@ -299,7 +299,7 @@ fn stripes_of(c: &Cluster, bucket: &str, key: &str) -> Vec<objectio_proto::metad
 /// could be missing shards no decode rebuilds.
 #[test]
 fn an_lrc_write_is_acknowledged_with_all_but_g_minus_one_shards() {
-    use objectio_e2e::ha::HaCluster;
+    use iolake_e2e::ha::HaCluster;
     use std::time::Duration;
 
     // Ten OSDs, all ten the pool's one placement group: none to stand in
@@ -314,7 +314,7 @@ fn an_lrc_write_is_acknowledged_with_all_but_g_minus_one_shards() {
             "ec_global_parity": 2, "pg_count": 1, "failure_domain": "osd", "enabled": true}),
     );
     assert!(r.status < 300, "pool: {}", r.text());
-    c.request_with_headers("PUT", "/lrcq", &[], &[("x-objectio-pool", "lrc622")])
+    c.request_with_headers("PUT", "/lrcq", &[], &[("x-iolake-pool", "lrc622")])
         .expect(200);
     let body = payload(5 * 1024 * 1024, 7);
     let r = c.request("POST", "/lrcq/parts?uploads", &[]);

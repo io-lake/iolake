@@ -4,12 +4,12 @@
 //!
 //! 1. flags: `--endpoint`, `--access-key`/`--secret-key`, `--region`;
 //! 2. the profile named by `--profile`, when given on the command line;
-//! 3. the environment, as the SDKs read it: `OBJECTIO_ENDPOINT` |
-//!    `OBJECTIO_URL`, `OBJECTIO_ACCESS_KEY(_FILE)` | `AWS_ACCESS_KEY_ID`,
-//!    `OBJECTIO_SECRET_KEY(_FILE)` | `AWS_SECRET_ACCESS_KEY`,
-//!    `OBJECTIO_REGION` | `AWS_REGION` | `AWS_DEFAULT_REGION`;
-//! 4. the profile named by `OBJECTIO_PROFILE`, else `default`, in the
-//!    profile file (`$OBJECTIO_CONFIG_FILE`, else `~/.objectio/config`).
+//! 3. the environment, as the SDKs read it: `IOLAKE_ENDPOINT` |
+//!    `IOLAKE_URL`, `IOLAKE_ACCESS_KEY(_FILE)` | `AWS_ACCESS_KEY_ID`,
+//!    `IOLAKE_SECRET_KEY(_FILE)` | `AWS_SECRET_ACCESS_KEY`,
+//!    `IOLAKE_REGION` | `AWS_REGION` | `AWS_DEFAULT_REGION`;
+//! 4. the profile named by `IOLAKE_PROFILE`, else `default`, in the
+//!    profile file (`$IOLAKE_CONFIG_FILE`, else `~/.objectio/config`).
 //!
 //! The access key and secret are taken as a pair from one source: a key
 //! from the environment never signs with a secret from a profile.
@@ -105,7 +105,7 @@ impl ProfileFile {
 
 /// Where the profile file lives.
 pub fn profile_path(env: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
-    if let Some(p) = env("OBJECTIO_CONFIG_FILE").filter(|p| !p.is_empty()) {
+    if let Some(p) = env("IOLAKE_CONFIG_FILE").filter(|p| !p.is_empty()) {
         return Some(PathBuf::from(p));
     }
     env("HOME")
@@ -222,32 +222,32 @@ pub fn resolve(
 
     sources.push(Source {
         name: "environment".into(),
-        endpoint: env_value(env, None, &["OBJECTIO_ENDPOINT", "OBJECTIO_URL"])?,
+        endpoint: env_value(env, None, &["IOLAKE_ENDPOINT", "IOLAKE_URL"])?,
         access_key: env_value(
             env,
-            Some("OBJECTIO_ACCESS_KEY_FILE"),
-            &["OBJECTIO_ACCESS_KEY", "AWS_ACCESS_KEY_ID"],
+            Some("IOLAKE_ACCESS_KEY_FILE"),
+            &["IOLAKE_ACCESS_KEY", "AWS_ACCESS_KEY_ID"],
         )?,
         secret_key: env_value(
             env,
-            Some("OBJECTIO_SECRET_KEY_FILE"),
-            &["OBJECTIO_SECRET_KEY", "AWS_SECRET_ACCESS_KEY"],
+            Some("IOLAKE_SECRET_KEY_FILE"),
+            &["IOLAKE_SECRET_KEY", "AWS_SECRET_ACCESS_KEY"],
         )?,
         region: env_value(
             env,
             None,
-            &["OBJECTIO_REGION", "AWS_REGION", "AWS_DEFAULT_REGION"],
+            &["IOLAKE_REGION", "AWS_REGION", "AWS_DEFAULT_REGION"],
         )?,
     });
 
     if explicit.is_none() {
-        let name = env("OBJECTIO_PROFILE")
+        let name = env("IOLAKE_PROFILE")
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| DEFAULT_PROFILE.to_string());
         if let Some(p) = file.profiles.get(&name) {
             sources.push(Source::from_profile(&name, p));
         } else if name != DEFAULT_PROFILE {
-            bail!("profile '{name}' (from OBJECTIO_PROFILE) not found in the profile file");
+            bail!("profile '{name}' (from IOLAKE_PROFILE) not found in the profile file");
         }
     }
 
@@ -256,7 +256,7 @@ pub fn resolve(
         .find_map(|s| s.endpoint.clone())
         .ok_or_else(|| {
             anyhow!(
-                "no endpoint: pass --endpoint, set OBJECTIO_ENDPOINT, or run `obioctl configure`"
+                "no endpoint: pass --endpoint, set IOLAKE_ENDPOINT, or run `iolakectl configure`"
             )
         })?;
     let region = sources
@@ -280,9 +280,9 @@ pub fn resolve(
     }
     if need_credentials && credentials.is_none() {
         bail!(
-            "no credentials: pass --access-key/--secret-key, set OBJECTIO_ACCESS_KEY and \
-             OBJECTIO_SECRET_KEY (or their _FILE forms, or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY), \
-             or run `obioctl configure`"
+            "no credentials: pass --access-key/--secret-key, set IOLAKE_ACCESS_KEY and \
+             IOLAKE_SECRET_KEY (or their _FILE forms, or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY), \
+             or run `iolakectl configure`"
         );
     }
 
@@ -336,9 +336,9 @@ region = "eu-west-1"
     #[test]
     fn the_environment_beats_the_default_profile() {
         let env = env_of(&[
-            ("OBJECTIO_URL", "http://env:9000"),
-            ("OBJECTIO_ACCESS_KEY", "AKENV"),
-            ("OBJECTIO_SECRET_KEY", "skenv"),
+            ("IOLAKE_URL", "http://env:9000"),
+            ("IOLAKE_ACCESS_KEY", "AKENV"),
+            ("IOLAKE_SECRET_KEY", "skenv"),
             ("AWS_REGION", "ap-south-1"),
         ]);
         let s = resolve(&Flags::default(), &env, &file(), true).unwrap();
@@ -351,9 +351,9 @@ region = "eu-west-1"
     #[test]
     fn an_explicit_profile_beats_the_environment() {
         let env = env_of(&[
-            ("OBJECTIO_ENDPOINT", "http://env:9000"),
-            ("OBJECTIO_ACCESS_KEY", "AKENV"),
-            ("OBJECTIO_SECRET_KEY", "skenv"),
+            ("IOLAKE_ENDPOINT", "http://env:9000"),
+            ("IOLAKE_ACCESS_KEY", "AKENV"),
+            ("IOLAKE_SECRET_KEY", "skenv"),
         ]);
         let flags = Flags {
             profile: Some("acme".into()),
@@ -367,11 +367,11 @@ region = "eu-west-1"
     }
 
     #[test]
-    fn objectio_profile_selects_a_profile_below_the_environment() {
-        let env = env_of(&[("OBJECTIO_PROFILE", "acme")]);
+    fn iolake_profile_selects_a_profile_below_the_environment() {
+        let env = env_of(&[("IOLAKE_PROFILE", "acme")]);
         let s = resolve(&Flags::default(), &env, &file(), true).unwrap();
         assert_eq!(s.credentials.unwrap().0, "AKACME");
-        let env = env_of(&[("OBJECTIO_PROFILE", "nope")]);
+        let env = env_of(&[("IOLAKE_PROFILE", "nope")]);
         assert!(resolve(&Flags::default(), &env, &file(), true).is_err());
     }
 
@@ -384,10 +384,7 @@ region = "eu-west-1"
             region: Some("r1".into()),
             profile: Some("acme".into()),
         };
-        let env = env_of(&[
-            ("OBJECTIO_ACCESS_KEY", "AKENV"),
-            ("OBJECTIO_SECRET_KEY", "x"),
-        ]);
+        let env = env_of(&[("IOLAKE_ACCESS_KEY", "AKENV"), ("IOLAKE_SECRET_KEY", "x")]);
         let s = resolve(&flags, &env, &file(), true).unwrap();
         assert_eq!(s.endpoint, "http://flag:1");
         assert_eq!(s.credentials.unwrap().0, "AKFLAG");
@@ -397,7 +394,7 @@ region = "eu-west-1"
     #[test]
     fn aws_names_are_fallbacks() {
         let env = env_of(&[
-            ("OBJECTIO_ENDPOINT", "http://e"),
+            ("IOLAKE_ENDPOINT", "http://e"),
             ("AWS_ACCESS_KEY_ID", "AKAWS"),
             ("AWS_SECRET_ACCESS_KEY", "skaws"),
             ("AWS_DEFAULT_REGION", "us-west-2"),
@@ -414,10 +411,10 @@ region = "eu-west-1"
         std::fs::write(&path, "fromfile\n").unwrap();
         let p = path.to_str().unwrap();
         let pairs = [
-            ("OBJECTIO_ENDPOINT", "http://e"),
-            ("OBJECTIO_ACCESS_KEY", "AK"),
-            ("OBJECTIO_SECRET_KEY", "ignored"),
-            ("OBJECTIO_SECRET_KEY_FILE", p),
+            ("IOLAKE_ENDPOINT", "http://e"),
+            ("IOLAKE_ACCESS_KEY", "AK"),
+            ("IOLAKE_SECRET_KEY", "ignored"),
+            ("IOLAKE_SECRET_KEY_FILE", p),
         ];
         let env = env_of(&pairs);
         let s = resolve(&Flags::default(), &env, &ProfileFile::default(), true).unwrap();
@@ -426,7 +423,7 @@ region = "eu-west-1"
 
     #[test]
     fn half_a_key_pair_is_an_error_not_a_mix() {
-        let env = env_of(&[("OBJECTIO_ACCESS_KEY", "AKENV")]);
+        let env = env_of(&[("IOLAKE_ACCESS_KEY", "AKENV")]);
         let err = resolve(&Flags::default(), &env, &file(), true).unwrap_err();
         assert!(err.to_string().contains("no secret key"), "{err}");
     }
@@ -442,7 +439,7 @@ region = "eu-west-1"
         .unwrap_err()
         .to_string();
         assert!(err.contains("no endpoint"), "{err}");
-        let env = env_of(&[("OBJECTIO_ENDPOINT", "http://e")]);
+        let env = env_of(&[("IOLAKE_ENDPOINT", "http://e")]);
         let err = resolve(&Flags::default(), &env, &ProfileFile::default(), true)
             .unwrap_err()
             .to_string();
@@ -468,7 +465,7 @@ region = "eu-west-1"
             profile_path(&env).unwrap(),
             PathBuf::from("/home/u/.objectio/config")
         );
-        let env = env_of(&[("HOME", "/home/u"), ("OBJECTIO_CONFIG_FILE", "/etc/o.toml")]);
+        let env = env_of(&[("HOME", "/home/u"), ("IOLAKE_CONFIG_FILE", "/etc/o.toml")]);
         assert_eq!(profile_path(&env).unwrap(), PathBuf::from("/etc/o.toml"));
     }
 

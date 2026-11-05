@@ -3,7 +3,7 @@
 //! or the cluster — keeps such grants from being made or from working. New
 //! buckets start blocked.
 
-use objectio_e2e::{Cluster, Response};
+use iolake_e2e::{Cluster, Response};
 use serde_json::{Value, json};
 
 const BLOCK_NONE: &[u8] = b"<PublicAccessBlockConfiguration>\

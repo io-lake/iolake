@@ -17,14 +17,14 @@ use crate::s3_metrics::metrics::NodeCapacity;
 use crate::s3_metrics::metrics_merge::{self, Source};
 use crate::s3_metrics::s3_metrics;
 use crate::s3_metrics::usage::OsdBucketUsage;
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
-use objectio_proto::metadata::{
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_proto::metadata::{
     DrainStatus, GetDrainStatusRequest, GetListingNodesRequest, GetMetricsRequest,
     GetMetricsResponse, GetRebalanceStatusRequest, GetRebalanceStatusResponse,
 };
-use objectio_proto::storage::storage_service_client::StorageServiceClient;
-use objectio_proto::storage::{GetStatusRequest, GetStatusResponse, ObjectSafety};
-use objectio_proto::stripe::Scheme;
+use iolake_proto::storage::storage_service_client::StorageServiceClient;
+use iolake_proto::storage::{GetStatusRequest, GetStatusResponse, ObjectSafety};
+use iolake_proto::stripe::Scheme;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::sync::{LazyLock, RwLock};
@@ -126,7 +126,7 @@ struct OsdPoll {
 
 /// A client of the OSD at `addr`, over mTLS when it is on.
 async fn connect(addr: &str) -> Result<StorageServiceClient<tonic::transport::Channel>, String> {
-    let channel = objectio_proto::transport::connect(&objectio_proto::transport::endpoint(addr)?)
+    let channel = iolake_proto::transport::connect(&iolake_proto::transport::endpoint(addr)?)
         .await
         .map_err(|e| e.to_string())?;
     Ok(StorageServiceClient::new(channel))
@@ -309,7 +309,7 @@ fn render_local(s: &Snapshot) -> String {
     if let Some(t) = s.last_success {
         gauge(
             &mut out,
-            "objectio_capacity_poll_last_success_timestamp_seconds",
+            "iolake_capacity_poll_last_success_timestamp_seconds",
             "gauge",
             "When the gateway last refreshed capacity, usage and cluster metrics",
             &one(t),
@@ -318,23 +318,23 @@ fn render_local(s: &Snapshot) -> String {
     if let Some(d) = s.last_duration {
         writeln!(
             out,
-            "# HELP objectio_capacity_poll_duration_seconds How long the last poll took\n\
-             # TYPE objectio_capacity_poll_duration_seconds gauge\n\
-             objectio_capacity_poll_duration_seconds {}",
+            "# HELP iolake_capacity_poll_duration_seconds How long the last poll took\n\
+             # TYPE iolake_capacity_poll_duration_seconds gauge\n\
+             iolake_capacity_poll_duration_seconds {}",
             d.as_secs_f64()
         )
         .unwrap();
     }
     gauge(
         &mut out,
-        "objectio_capacity_polls_total",
+        "iolake_capacity_polls_total",
         "counter",
         "Polls attempted",
         &one(s.polls_total),
     );
     gauge(
         &mut out,
-        "objectio_capacity_poll_failures_total",
+        "iolake_capacity_poll_failures_total",
         "counter",
         "Polls in which meta did not answer",
         &one(s.poll_failures_total),
@@ -343,37 +343,37 @@ fn render_local(s: &Snapshot) -> String {
     if let Some(t) = &s.safety {
         for (name, help, v) in [
             (
-                "objectio_objects_checked",
+                "iolake_objects_checked",
                 "Objects and versions whose shard availability was checked",
                 t.objects_checked,
             ),
             (
-                "objectio_objects_degraded",
+                "iolake_objects_degraded",
                 "Objects with a shard on an OSD that is down (still readable)",
                 t.objects_degraded,
             ),
             (
-                "objectio_objects_at_risk",
+                "iolake_objects_at_risk",
                 "Objects with fewer than k+1 reachable shards: one more loss makes them unreadable",
                 t.objects_at_risk,
             ),
             (
-                "objectio_objects_unreadable",
+                "iolake_objects_unreadable",
                 "Objects with fewer than k reachable shards",
                 t.objects_unreadable,
             ),
             (
-                "objectio_degraded_bytes",
+                "iolake_degraded_bytes",
                 "Logical bytes of degraded objects",
                 t.bytes_degraded,
             ),
             (
-                "objectio_at_risk_bytes",
+                "iolake_at_risk_bytes",
                 "Logical bytes of at-risk objects",
                 t.bytes_at_risk,
             ),
             (
-                "objectio_unreadable_bytes",
+                "iolake_unreadable_bytes",
                 "Logical bytes of unreadable objects",
                 t.bytes_unreadable,
             ),
@@ -382,7 +382,7 @@ fn render_local(s: &Snapshot) -> String {
         }
         gauge(
             &mut out,
-            "objectio_safety_osds_unreported",
+            "iolake_safety_osds_unreported",
             "gauge",
             "OSDs that did not answer, so objects only they hold metadata for were not checked",
             &one(s.safety_osds_missing),
@@ -398,28 +398,28 @@ fn render_local(s: &Snapshot) -> String {
         };
         gauge(
             &mut out,
-            "objectio_drain_shards_remaining",
+            "iolake_drain_shards_remaining",
             "gauge",
             "Shards still on a draining OSD",
             &by(|d| d.shards_remaining),
         );
         gauge(
             &mut out,
-            "objectio_drain_shards_initial",
+            "iolake_drain_shards_initial",
             "gauge",
             "Shards on the OSD when its drain started",
             &by(|d| d.initial_shards),
         );
         gauge(
             &mut out,
-            "objectio_drain_shards_migrated_total",
+            "iolake_drain_shards_migrated_total",
             "counter",
             "Shards moved off the draining OSD",
             &by(|d| d.shards_migrated),
         );
         gauge(
             &mut out,
-            "objectio_drain_errored",
+            "iolake_drain_errored",
             "gauge",
             "1 if the last drain sweep reported an error",
             &by(|d| u64::from(!d.last_error.is_empty())),
@@ -429,25 +429,25 @@ fn render_local(s: &Snapshot) -> String {
     if let Some(r) = &s.rebalance {
         for (name, kind, help, v) in [
             (
-                "objectio_rebalance_running",
+                "iolake_rebalance_running",
                 "gauge",
                 "1 if the balancer is started and not paused",
                 u64::from(r.started && !r.paused),
             ),
             (
-                "objectio_rebalance_pgs_moved_total",
+                "iolake_rebalance_pgs_moved_total",
                 "counter",
                 "Placement groups the balancer has moved",
                 r.pgs_moved_total,
             ),
             (
-                "objectio_rebalance_pg_candidates",
+                "iolake_rebalance_pg_candidates",
                 "gauge",
                 "Placement groups the balancer wanted to move on its last tick",
                 r.pg_candidates_last_tick,
             ),
             (
-                "objectio_rebalance_last_sweep_timestamp_seconds",
+                "iolake_rebalance_last_sweep_timestamp_seconds",
                 "gauge",
                 "When the balancer last ran",
                 r.last_sweep_at,
@@ -474,10 +474,10 @@ pub fn set_reexport(on: bool) {
 #[must_use]
 pub fn render_metrics() -> String {
     let mut base = s3_metrics().export_prometheus();
-    base.push_str(&objectio_common::process_metrics::render(""));
+    base.push_str(&iolake_common::process_metrics::render(""));
     base.push_str(&crate::gateway_metrics::render());
     // Components running in this process (aio's block gateway).
-    base.push_str(&objectio_common::metrics_registry::render_registered());
+    base.push_str(&iolake_common::metrics_registry::render_registered());
 
     let Ok(s) = SNAPSHOT.read() else {
         return base;
@@ -487,7 +487,7 @@ pub fn render_metrics() -> String {
         return base;
     }
 
-    let own = objectio_common::process_metrics::instance_id();
+    let own = iolake_common::process_metrics::instance_id();
     let mut sources: Vec<Source<'_>> = s
         .osd_metrics
         .iter()
@@ -509,7 +509,7 @@ pub fn render_metrics() -> String {
     metrics_merge::merge(&base, &sources, &|name| {
         // The block exporter's cluster-wide gauges are one OSD's view of
         // the cluster; next to the gateway's real totals they mislead.
-        name.starts_with("objectio_cluster_")
+        name.starts_with("iolake_cluster_")
     })
 }
 
@@ -632,8 +632,8 @@ async fn reachable_osds(mut meta: MetaClient) -> Option<(usize, usize)> {
 /// Latched on purpose: this is a startup gate. Were `/_ready` to drop when
 /// OSDs go away later, every gateway would leave the load balancer at
 /// once and reads that degraded EC could still serve would fail too.
-/// Losing OSDs after start is what `objectio_cluster_osds_up` and
-/// `objectio_objects_degraded` are for.
+/// Losing OSDs after start is what `iolake_cluster_osds_up` and
+/// `iolake_objects_degraded` are for.
 pub fn spawn_readiness(meta: MetaClient) {
     tokio::spawn(async move {
         let mut quorum_since: Option<Instant> = None;
@@ -718,7 +718,7 @@ pub async fn ready_handler() -> axum::response::Response {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use objectio_proto::storage::BucketUsage;
+    use iolake_proto::storage::BucketUsage;
 
     /// Ready waits for as many OSDs as a write of the default scheme
     /// needs: k + 1 for MDS, two copies, all but g − 1 for LRC.

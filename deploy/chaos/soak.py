@@ -181,10 +181,10 @@ def usage():
         got = {}
         for line in body.decode(errors="replace").splitlines():
             name = line.split(" ")[0]
-            if name in ("objectio_cluster_used_bytes", "objectio_cluster_capacity_bytes"):
+            if name in ("iolake_cluster_used_bytes", "iolake_cluster_capacity_bytes"):
                 got[name] = float(line.rsplit(" ", 1)[1])
         if len(got) == 2:
-            return got["objectio_cluster_used_bytes"], got["objectio_cluster_capacity_bytes"]
+            return got["iolake_cluster_used_bytes"], got["iolake_cluster_capacity_bytes"]
     return None
 
 
@@ -235,11 +235,11 @@ def incusd_mb():
 
 
 PG_GAUGES = {
-    "objectio_meta_pgs_not_clean": "not_clean",
-    "objectio_meta_pg_not_clean_oldest_seconds": "oldest",
-    "objectio_meta_osds_down": "osds_down",
-    "objectio_meta_pg_objects_unfound": "unfound",
-    "objectio_meta_lost_objects": "lost",
+    "iolake_meta_pgs_not_clean": "not_clean",
+    "iolake_meta_pg_not_clean_oldest_seconds": "oldest",
+    "iolake_meta_osds_down": "osds_down",
+    "iolake_meta_pg_objects_unfound": "unfound",
+    "iolake_meta_lost_objects": "lost",
 }
 
 
@@ -264,7 +264,7 @@ def pg_health():
 # The run fails on recovery that is stuck, not on recovery that is slow:
 # the pool's placement groups out of Clean while, for STALL_MAX_SECS with
 # every OSD up, neither their objects degraded fell below their lowest nor
-# meta's count of objects recovered moved (B31, objectio-docs
+# meta's count of objects recovered moved (B31, iolake-docs
 # core/pg-recovery.md). A PG's own counts only change when its pass ends,
 # and a pass can take an hour on these disks. Per
 # pool, not per PG: a lost drive's replacement is in every PG of the lab's
@@ -282,14 +282,14 @@ all_clean_since = [None]  # when the pool last left all Clean: None = all Clean
 
 
 def recovered_total():
-    """Meta's objectio_meta_pg_recovered_objects_total, through a gateway;
+    """Meta's iolake_meta_pg_recovered_objects_total, through a gateway;
     None if no gateway answers with it."""
     for url in GW:
         status, body = http("GET", f"{url}/metrics", timeout=10)
         if status != 200:
             continue
         for line in body.decode(errors="replace").splitlines():
-            if line.startswith("objectio_meta_pg_recovered_objects_total"):
+            if line.startswith("iolake_meta_pg_recovered_objects_total"):
                 return int(float(line.rsplit(" ", 1)[1]))
     return None
 
@@ -543,7 +543,7 @@ def main():
             "pg_count": 32, "failure_domain": "host", "enabled": True})
         if status not in (200, 201, 409):
             fail(f"pool {POOL}: {status} {reply[:300]!r}")
-        headers = {"x-objectio-pool": POOL}
+        headers = {"x-iolake-pool": POOL}
         say(f"bucket {BUCKET} in pool {POOL} (placement groups)")
     while http("PUT", f"{GW[0]}/{BUCKET}", headers=headers)[0] not in (200, 409):
         time.sleep(2)

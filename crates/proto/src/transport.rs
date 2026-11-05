@@ -52,14 +52,14 @@ pub const PENDING_RESETS: usize = 1024;
 pub struct TlsArgs {
     /// This node's certificate (PEM), presented to peers both as a server
     /// and as a client. It must name every address peers dial it by.
-    #[arg(long, env = "OBJECTIO_TLS_CERT", requires_all = ["tls_key", "tls_ca"])]
+    #[arg(long, env = "IOLAKE_TLS_CERT", requires_all = ["tls_key", "tls_ca"])]
     pub tls_cert: Option<std::path::PathBuf>,
     /// The certificate's private key (PEM).
-    #[arg(long, env = "OBJECTIO_TLS_KEY", requires_all = ["tls_cert", "tls_ca"])]
+    #[arg(long, env = "IOLAKE_TLS_KEY", requires_all = ["tls_cert", "tls_ca"])]
     pub tls_key: Option<std::path::PathBuf>,
     /// The CA (PEM) that signs every node's certificate: the only one
     /// trusted, for servers and clients alike.
-    #[arg(long, env = "OBJECTIO_TLS_CA", requires_all = ["tls_cert", "tls_key"])]
+    #[arg(long, env = "IOLAKE_TLS_CA", requires_all = ["tls_cert", "tls_key"])]
     pub tls_ca: Option<std::path::PathBuf>,
 }
 
@@ -429,7 +429,7 @@ pub const META_PROBE_NOT_SERVING: &str = "alive, not serving";
 /// milliseconds; a call cut off by this fails as retryable (503 to S3
 /// clients). A call a follower forwarded to a leader that stopped
 /// answering is given up sooner, as soon as the follower learns of a new
-/// leader (`objectio-meta`'s `forward`).
+/// leader (`iolake-meta`'s `forward`).
 ///
 /// It covers the wait for the answer's headers only: the rest of the answer
 /// is read after them. A node that stops between the two would still hold
@@ -491,7 +491,7 @@ pub async fn meta_channel(endpoints: &str) -> Result<tonic::transport::Channel, 
                 .and_then(|ep| {
                     // The user-agent carries this binary's format level:
                     // meta refuses a client too old for the cluster.
-                    ep.user_agent(objectio_common::version::user_agent())
+                    ep.user_agent(iolake_common::version::user_agent())
                         .map_err(|err| err.to_string())
                 })
                 .map_err(|err| format!("meta endpoint {e}: {err}"))
@@ -592,7 +592,7 @@ pub const VERSION_REPORT_RETRY: std::time::Duration = std::time::Duration::from_
 /// Report this process's release and format level to meta now and every
 /// [`VERSION_REPORT_EVERY`] (a failed report again after
 /// [`VERSION_REPORT_RETRY`]), and learn the cluster's active level from the
-/// answer (`objectio_common::version::set_active_level`). A process too old
+/// answer (`iolake_common::version::set_active_level`). A process too old
 /// or too new for the cluster stops here with a message that says which,
 /// rather than run and misread what the others write.
 ///
@@ -600,7 +600,7 @@ pub const VERSION_REPORT_RETRY: std::time::Duration = std::time::Duration::from_
 /// connected to with retries; `kind` is "meta", "osd", "gateway" or
 /// "block-gateway"; `id` names the node within its kind.
 pub fn spawn_version_reporter(endpoints: String, kind: &'static str, id: String, address: String) {
-    use objectio_common::version;
+    use iolake_common::version;
     tokio::spawn(async move {
         let channel = loop {
             match meta_channel(&endpoints).await {

@@ -7,8 +7,8 @@ use axum::Json;
 use axum::extract::{Extension, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use objectio_auth::AuthResult;
-use objectio_proto::metadata::{GetPlacementRequest, NodePlacement};
+use iolake_auth::AuthResult;
+use iolake_proto::metadata::{GetPlacementRequest, NodePlacement};
 use std::sync::Arc;
 
 #[derive(serde::Deserialize)]

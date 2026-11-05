@@ -15,12 +15,12 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
-use objectio_auth::AuthResult;
-use objectio_delta_sharing::handlers::delta_only;
-use objectio_delta_sharing::types::{
+use iolake_auth::AuthResult;
+use iolake_delta_sharing::handlers::delta_only;
+use iolake_delta_sharing::types::{
     AddTableRequest, CreateRecipientRequest, CreateRecipientResponse,
 };
-use objectio_proto::metadata::{
+use iolake_proto::metadata::{
     DeltaAddTableRequest, DeltaCreateRecipientRequest, DeltaDropRecipientRequest,
     DeltaDropShareRequest, DeltaGetShareRequest, DeltaListRecipientsRequest,
     DeltaListTablesRequest, DeltaRemoveTableRequest, GetBucketRequest,

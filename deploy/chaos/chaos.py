@@ -323,8 +323,8 @@ def settle(name):
 
 def meta_kill():
     vm = leader_vm()
-    say(f"meta-kill: SIGKILL objectio-meta on {vm} (the leader)")
-    vm_exec(vm, "kill -9 $(systemctl show -p MainPID --value objectio-meta)")
+    say(f"meta-kill: SIGKILL iolake-meta on {vm} (the leader)")
+    vm_exec(vm, "kill -9 $(systemctl show -p MainPID --value iolake-meta)")
     new = leader_vm()
     say(f"meta-kill: leader now {new}")
     settle("meta-kill")
@@ -404,7 +404,7 @@ def disk_pull(vm="chaos-5", new=None):
         fail(f"set out: {status} {data[:200]}")
     incus("storage", "volume", "create", "default", new, "--type=block", f"size={DISK_SIZE}")
     incus("config", "device", "add", vm, "osd", "disk", "pool=default", f"source={new}")
-    vm_exec(vm, "sleep 3; systemctl restart objectio-osd")
+    vm_exec(vm, "sleep 3; systemctl restart iolake-osd")
     # The documented replacement: the OSD comes back on the new disk under
     # its identity (its metadata lives in its state directory; the shards
     # the old disk held are dropped), still out until the operator sets it
@@ -436,12 +436,12 @@ def drive_lost(vm="chaos-5", new=None):
         fail(f"no OSD found on {vm}")
     await_clean("drive-lost")
     say(f"drive-lost: {vm}'s drive and its metadata gone (OSD {old['node_id']})")
-    vm_exec(vm, "systemctl stop objectio-osd")
+    vm_exec(vm, "systemctl stop iolake-osd")
     incus("config", "device", "remove", vm, "osd")
     vm_exec(vm, "rm -rf /var/lib/objectio/osd && mkdir -p /var/lib/objectio/osd")
     incus("storage", "volume", "create", "default", new, "--type=block", f"size={DISK_SIZE}")
     incus("config", "device", "add", vm, "osd", "disk", "pool=default", f"source={new}")
-    vm_exec(vm, "sleep 3; systemctl start objectio-osd")
+    vm_exec(vm, "sleep 3; systemctl start iolake-osd")
     deadline = time.monotonic() + 300
     while time.monotonic() < deadline:
         back = osd_of(vm)
@@ -486,9 +486,9 @@ def repair_counters():
     passes = work = 0
     for line in body.decode(errors="replace").splitlines():
         name = line.split("{")[0].split(" ")[0]
-        if name == "objectio_meta_repair_passes_total":
+        if name == "iolake_meta_repair_passes_total":
             passes += int(float(line.rsplit(" ", 1)[1]))
-        elif name == "objectio_meta_repair_shards_rebuilt_total":
+        elif name == "iolake_meta_repair_shards_rebuilt_total":
             work += int(float(line.rsplit(" ", 1)[1]))
     return passes, work
 
@@ -533,7 +533,7 @@ def redundancy_restored(keys=None, intact=None):
         ok = True
         for a, b in pairs:
             for vm in (a, b):
-                vm_exec(vm, "systemctl stop objectio-osd")
+                vm_exec(vm, "systemctl stop iolake-osd")
             try:
                 unreadable = 0
                 for key in random.sample(keys, min(len(keys), 400)):
@@ -542,7 +542,7 @@ def redundancy_restored(keys=None, intact=None):
                         unreadable += 1
             finally:
                 for vm in (a, b):
-                    vm_exec(vm, "systemctl start objectio-osd")
+                    vm_exec(vm, "systemctl start iolake-osd")
             await_osds_online(6)
             if unreadable:
                 say(f"redundancy: {unreadable} of 400 unreadable with {a},{b} stopped")

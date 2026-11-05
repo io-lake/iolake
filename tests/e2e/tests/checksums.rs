@@ -8,7 +8,7 @@
 //! computed once with Python's hashlib/zlib and a reference CRC32C. "hello
 //! world" values stand in as well-formed but wrong checksums.
 
-use objectio_e2e::{Cluster, Response};
+use iolake_e2e::{Cluster, Response};
 use serde_json::json;
 
 /// Larger than the inline limit, so the object goes through erasure coding.

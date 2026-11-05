@@ -1,4 +1,4 @@
-//! ObjectIO Authentication and Authorization
+//! IOLake Authentication and Authorization
 //!
 //! This crate provides:
 //! - User and access key types

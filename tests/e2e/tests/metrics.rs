@@ -4,9 +4,9 @@
 
 use std::time::{Duration, Instant};
 
-use objectio_e2e::Cluster;
-use objectio_proto::block::block_service_client::BlockServiceClient;
-use objectio_proto::block::{CreateVolumeRequest, FlushRequest, WriteRequest};
+use iolake_e2e::Cluster;
+use iolake_proto::block::block_service_client::BlockServiceClient;
+use iolake_proto::block::{CreateVolumeRequest, FlushRequest, WriteRequest};
 use serde_json::json;
 
 /// Object and block traffic of every kind the checks below look for.
@@ -26,7 +26,7 @@ fn serve_some_traffic(c: &Cluster, block_port: u16) {
     rt.block_on(async {
         let url = format!("127.0.0.1:{block_port}");
         let mut client = loop {
-            if let Ok(c) = objectio_e2e::tls::channel(&url).await {
+            if let Ok(c) = iolake_e2e::tls::channel(&url).await {
                 break BlockServiceClient::new(c);
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
@@ -58,48 +58,48 @@ fn serve_some_traffic(c: &Cluster, block_port: u16) {
 
 /// Families every service must export once it has served traffic.
 const EXPECTED: &[(&str, &str)] = &[
-    ("objectio_s3_requests_total", "counter"),
-    ("objectio_s3_request_duration_seconds", "histogram"),
-    ("objectio_gateway_shard_latency_seconds", "histogram"),
-    ("objectio_erasure_encode_seconds", "histogram"),
-    ("objectio_osd_grpc_requests_total", "counter"),
-    ("objectio_osd_grpc_latency_seconds", "histogram"),
-    ("objectio_osd_wal_fsync_seconds", "histogram"),
-    ("objectio_meta_grpc_requests_total", "counter"),
-    ("objectio_meta_grpc_latency_seconds", "histogram"),
-    ("objectio_meta_commit_seconds", "histogram"),
-    ("objectio_build_info", "gauge"),
+    ("iolake_s3_requests_total", "counter"),
+    ("iolake_s3_request_duration_seconds", "histogram"),
+    ("iolake_gateway_shard_latency_seconds", "histogram"),
+    ("iolake_erasure_encode_seconds", "histogram"),
+    ("iolake_osd_grpc_requests_total", "counter"),
+    ("iolake_osd_grpc_latency_seconds", "histogram"),
+    ("iolake_osd_wal_fsync_seconds", "histogram"),
+    ("iolake_meta_grpc_requests_total", "counter"),
+    ("iolake_meta_grpc_latency_seconds", "histogram"),
+    ("iolake_meta_commit_seconds", "histogram"),
+    ("iolake_build_info", "gauge"),
     // Admission: the memory budget and the request limit.
-    ("objectio_gateway_memory_budget_bytes", "gauge"),
-    ("objectio_gateway_memory_budget_in_use_bytes", "gauge"),
-    ("objectio_gateway_requests_limit", "gauge"),
-    ("objectio_gateway_requests_admitted", "gauge"),
+    ("iolake_gateway_memory_budget_bytes", "gauge"),
+    ("iolake_gateway_memory_budget_in_use_bytes", "gauge"),
+    ("iolake_gateway_requests_limit", "gauge"),
+    ("iolake_gateway_requests_admitted", "gauge"),
     // Block gateway, in this process under aio.
-    ("objectio_block_io_seconds", "histogram"),
-    ("objectio_block_io_bytes_total", "counter"),
-    ("objectio_block_journal_fsync_seconds", "histogram"),
-    ("objectio_block_chunks_flushed_total", "counter"),
-    ("objectio_block_chunk_flush_seconds", "histogram"),
-    ("objectio_block_cache_dirty_bytes", "gauge"),
+    ("iolake_block_io_seconds", "histogram"),
+    ("iolake_block_io_bytes_total", "counter"),
+    ("iolake_block_journal_fsync_seconds", "histogram"),
+    ("iolake_block_chunks_flushed_total", "counter"),
+    ("iolake_block_chunk_flush_seconds", "histogram"),
+    ("iolake_block_cache_dirty_bytes", "gauge"),
     // Meta: Raft, the block tables, the stripe registry.
-    ("objectio_meta_raft_is_leader", "gauge"),
-    ("objectio_meta_raft_term", "gauge"),
-    ("objectio_meta_raft_applied_index", "gauge"),
-    ("objectio_block_volumes_total", "gauge"),
-    ("objectio_block_volume_used_bytes", "gauge"),
-    ("objectio_meta_shared_stripes", "gauge"),
+    ("iolake_meta_raft_is_leader", "gauge"),
+    ("iolake_meta_raft_term", "gauge"),
+    ("iolake_meta_raft_applied_index", "gauge"),
+    ("iolake_block_volumes_total", "gauge"),
+    ("iolake_block_volume_used_bytes", "gauge"),
+    ("iolake_meta_shared_stripes", "gauge"),
     // OSD disks.
-    ("objectio_osd_disk_seconds", "histogram"),
+    ("iolake_osd_disk_seconds", "histogram"),
     // Gateway.
-    ("objectio_gateway_copies_total", "counter"),
-    ("objectio_gateway_inline_objects_total", "counter"),
+    ("iolake_gateway_copies_total", "counter"),
+    ("iolake_gateway_inline_objects_total", "counter"),
 ];
 
 /// Families nothing fed, which read as a healthy zero; removed.
 const GONE: &[&str] = &[
-    "objectio_gateway_active_connections",
-    "objectio_gateway_connections_total",
-    "objectio_cluster_read_iops",
+    "iolake_gateway_active_connections",
+    "iolake_gateway_connections_total",
+    "iolake_cluster_read_iops",
 ];
 
 /// `/metrics` once it reflects `serve_some_traffic`: OSD and meta metrics
@@ -113,8 +113,8 @@ fn scrape_after_traffic(c: &Cluster) -> String {
             text.lines()
                 .any(|l| l.starts_with(family) && l.contains(&format!("method=\"{method}\"")))
         };
-        if has("objectio_osd_grpc_requests_total", "WriteShard")
-            && has("objectio_meta_grpc_requests_total", "BlockCommitChunks")
+        if has("iolake_osd_grpc_requests_total", "WriteShard")
+            && has("iolake_meta_grpc_requests_total", "BlockCommitChunks")
         {
             return text;
         }
@@ -146,7 +146,7 @@ fn metrics_are_a_valid_exposition_and_cover_every_service() {
     serve_some_traffic(&c, block_port);
     let text = scrape_after_traffic(&c);
 
-    let families = objectio_common::exposition::check(&text)
+    let families = iolake_common::exposition::check(&text)
         .unwrap_or_else(|problems| panic!("/metrics is not a valid exposition:\n{problems}"));
     for (family, kind) in EXPECTED {
         let f = families
@@ -162,14 +162,14 @@ fn metrics_are_a_valid_exposition_and_cover_every_service() {
     // Requests are named as S3 names them.
     for op in ["CopyObject", "GetBucketConfig", "PutObject", "GetObject"] {
         assert!(
-            text.contains(&format!("objectio_s3_requests_total{{operation=\"{op}\"")),
-            "no {op} in objectio_s3_requests_total"
+            text.contains(&format!("iolake_s3_requests_total{{operation=\"{op}\"")),
+            "no {op} in iolake_s3_requests_total"
         );
     }
     // Every OSD method is counted, with its status code.
     assert!(
         text.lines()
-            .any(|l| l.starts_with("objectio_osd_grpc_requests_total")
+            .any(|l| l.starts_with("iolake_osd_grpc_requests_total")
                 && l.contains("method=\"WriteShard\"")
                 && l.contains("code=\"OK\"")),
         "WriteShard calls are not counted"
@@ -177,15 +177,15 @@ fn metrics_are_a_valid_exposition_and_cover_every_service() {
     // The traffic, as each side saw it.
     let v = |prefix: &str| value(&text, prefix);
     assert_eq!(
-        v("objectio_block_io_bytes_total{protocol=\"grpc\",op=\"write\"}"),
+        v("iolake_block_io_bytes_total{protocol=\"grpc\",op=\"write\"}"),
         4096
     );
-    assert!(v("objectio_block_chunks_flushed_total{result=\"stored\"}") >= 1);
-    assert_eq!(v("objectio_block_volumes_total{"), 1);
+    assert!(v("iolake_block_chunks_flushed_total{result=\"stored\"}") >= 1);
+    assert_eq!(v("iolake_block_volumes_total{"), 1);
     // One 4 MiB chunk written, as meta records it.
-    assert_eq!(v("objectio_block_volume_used_bytes{"), 4 << 20);
+    assert_eq!(v("iolake_block_volume_used_bytes{"), 4 << 20);
     // aio's meta is a single-node Raft cluster: its own leader.
-    assert_eq!(v("objectio_meta_raft_is_leader"), 1);
-    assert_eq!(v("objectio_gateway_copies_total{mode=\"reference\"}"), 1);
-    assert_eq!(v("objectio_gateway_inline_objects_total"), 1);
+    assert_eq!(v("iolake_meta_raft_is_leader"), 1);
+    assert_eq!(v("iolake_gateway_copies_total{mode=\"reference\"}"), 1);
+    assert_eq!(v("iolake_gateway_inline_objects_total"), 1);
 }

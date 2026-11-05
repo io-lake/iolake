@@ -1,7 +1,7 @@
 # ceph s3-tests
 
 Runs [ceph/s3-tests](https://github.com/ceph/s3-tests), the S3 compatibility
-suite, against a fresh single-process cluster (`objectio-aio`) and writes a
+suite, against a fresh single-process cluster (`iolake-aio`) and writes a
 report.
 
 ```bash
@@ -10,7 +10,7 @@ scripts/s3-tests/run.sh -- -k test_bucket_list   # a subset (pytest -k)
 scripts/s3-tests/run.sh --previous <old>/results.csv   # list what changed
 ```
 
-Needs Python 3, git, curl and a Rust toolchain (it builds `objectio-aio`).
+Needs Python 3, git, curl and a Rust toolchain (it builds `iolake-aio`).
 Everything goes in `target/s3-tests/` (`--work` to change it): the s3-tests
 checkout, pinned to a commit so runs compare, with its own venv; the
 cluster's data; and the results.
@@ -41,7 +41,7 @@ cluster's data; and the results.
   as s3-tests makes buckets public with policies.
 - KMS keys `testkey-1` and `testkey-2` for the SSE-KMS tests.
 - `--acl-shim` (off by default) turns canned bucket ACLs into the
-  equivalent bucket policies, since ObjectIO is BucketOwnerEnforced.
+  equivalent bucket policies, since IOLake is BucketOwnerEnforced.
 
 ## The report
 
@@ -58,7 +58,7 @@ Each failure's category and note come from `known-failures.csv`:
 | Category | Meaning |
 |---|---|
 | `not-implemented-by-design` | left out on purpose: ACL grants, SigV2, policies across tenants, torrents, RGW extensions |
-| `aws-compatible-already` | ObjectIO does what AWS does; the test expects RGW's behaviour |
+| `aws-compatible-already` | IOLake does what AWS does; the test expects RGW's behaviour |
 | `test-environment` | can't pass on this setup |
 | `gap` | a feature we lack and could add |
 | `bug` | wrong behaviour, to fix |
@@ -71,7 +71,7 @@ row.
 
 Run it on Linux, x86_64 and arm64 (on a Mac, in a Linux VM or container:
 native macOS syncs are far slower, and some tests time out there). Copy
-each `report/` to objectio-docs under
+each `report/` to iolake-docs under
 `developer-guide/s3-compatibility/<date>/<platform>/` (`linux-amd64`,
 `linux-arm64`), and update the latest numbers in
 `developer-guide/s3-compatibility/README.md`.

@@ -1,4 +1,4 @@
-//! Iceberg REST Catalog for `ObjectIO`.
+//! Iceberg REST Catalog for `IOLake`.
 //!
 //! Provides an Axum sub-router implementing the Apache Iceberg REST Catalog API.
 //! The router is nested at `/iceberg` in the gateway and delegates catalog state
@@ -17,8 +17,8 @@ use axum::Router;
 use axum::routing::{delete, get, head, post, put};
 use catalog::IcebergCatalog;
 use handlers::IcebergState;
-use objectio_auth::policy::PolicyEvaluator;
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_auth::policy::PolicyEvaluator;
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
 use std::sync::Arc;
 use tonic::transport::Channel;
 
@@ -35,7 +35,7 @@ pub fn router(
     meta_client: MetadataServiceClient<Channel>,
     policy_evaluator: PolicyEvaluator,
     admin_principals: Vec<String>,
-    sts_provider: Option<objectio_auth::sts::StsProvider>,
+    sts_provider: Option<iolake_auth::sts::StsProvider>,
     s3_endpoint: String,
     auth_required: bool,
 ) -> Router {

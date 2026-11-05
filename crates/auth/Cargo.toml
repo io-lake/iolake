@@ -1,6 +1,6 @@
 [package]
-name = "objectio-auth"
-description = "Authentication and authorization for ObjectIO"
+name = "iolake-auth"
+description = "Authentication and authorization for IOLake"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

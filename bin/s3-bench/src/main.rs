@@ -3,7 +3,7 @@
 //! Usage:
 //!
 //! ```text
-//! objectio-s3-bench \
+//! iolake-s3-bench \
 //!     --endpoint http://127.0.0.1:9000 \
 //!     --size 4MiB --objects 200 --concurrency 16 --op both
 //! ```
@@ -43,7 +43,7 @@ use rand::RngCore;
 use sha2::{Digest, Sha256};
 
 #[derive(Parser, Debug)]
-#[command(name = "objectio-s3-bench", about, version)]
+#[command(name = "iolake-s3-bench", about, version)]
 struct Args {
     /// Gateway S3 endpoint.
     #[arg(long, default_value = "http://127.0.0.1:9000")]
@@ -301,8 +301,8 @@ async fn scrape(http: &reqwest::Client, url: &str) -> Samples {
 /// shard call the gateway times is also counted by an OSD, so once the OSD
 /// counters reach the gateway's the two halves describe the same work.
 async fn settled_scrape(http: &reqwest::Client, url: &str, wait: Duration) -> Samples {
-    const GW: &str = "objectio_gateway_shard_latency_seconds_count";
-    const OSD: &str = "objectio_osd_grpc_requests_total";
+    const GW: &str = "iolake_gateway_shard_latency_seconds_count";
+    const OSD: &str = "iolake_osd_grpc_requests_total";
     let started = Instant::now();
     loop {
         let s = scrape(http, url).await;
@@ -352,32 +352,32 @@ struct Stage {
 const PUT_STAGES: &[Stage] = &[
     Stage {
         label: "S3 PutObject (server)",
-        sum: "objectio_s3_request_duration_seconds_sum",
-        count: "objectio_s3_request_duration_seconds_count",
+        sum: "iolake_s3_request_duration_seconds_sum",
+        count: "iolake_s3_request_duration_seconds_count",
         labels: &["operation=\"PutObject\""],
     },
     Stage {
         label: "erasure encode (per stripe)",
-        sum: "objectio_erasure_encode_seconds_sum",
-        count: "objectio_erasure_encode_seconds_count",
+        sum: "iolake_erasure_encode_seconds_sum",
+        count: "iolake_erasure_encode_seconds_count",
         labels: &[],
     },
     Stage {
         label: "shard write, gateway view",
-        sum: "objectio_gateway_shard_latency_seconds_sum",
-        count: "objectio_gateway_shard_latency_seconds_count",
+        sum: "iolake_gateway_shard_latency_seconds_sum",
+        count: "iolake_gateway_shard_latency_seconds_count",
         labels: &["direction=\"write\""],
     },
     Stage {
         label: "shard write, OSD handler",
-        sum: "objectio_osd_grpc_latency_seconds_sum",
-        count: "objectio_osd_grpc_requests_total",
+        sum: "iolake_osd_grpc_latency_seconds_sum",
+        count: "iolake_osd_grpc_requests_total",
         labels: &["method=\"WriteShard\""],
     },
     Stage {
         label: "WAL fsync",
-        sum: "objectio_osd_wal_fsync_seconds_sum",
-        count: "objectio_osd_wal_fsync_seconds_count",
+        sum: "iolake_osd_wal_fsync_seconds_sum",
+        count: "iolake_osd_wal_fsync_seconds_count",
         labels: &[],
     },
 ];
@@ -385,26 +385,26 @@ const PUT_STAGES: &[Stage] = &[
 const GET_STAGES: &[Stage] = &[
     Stage {
         label: "S3 GetObject (server)",
-        sum: "objectio_s3_request_duration_seconds_sum",
-        count: "objectio_s3_request_duration_seconds_count",
+        sum: "iolake_s3_request_duration_seconds_sum",
+        count: "iolake_s3_request_duration_seconds_count",
         labels: &["operation=\"GetObject\""],
     },
     Stage {
         label: "erasure decode (per stripe)",
-        sum: "objectio_erasure_decode_seconds_sum",
-        count: "objectio_erasure_decode_seconds_count",
+        sum: "iolake_erasure_decode_seconds_sum",
+        count: "iolake_erasure_decode_seconds_count",
         labels: &[],
     },
     Stage {
         label: "shard read, gateway view",
-        sum: "objectio_gateway_shard_latency_seconds_sum",
-        count: "objectio_gateway_shard_latency_seconds_count",
+        sum: "iolake_gateway_shard_latency_seconds_sum",
+        count: "iolake_gateway_shard_latency_seconds_count",
         labels: &["direction=\"read\""],
     },
     Stage {
         label: "shard read, OSD handler",
-        sum: "objectio_osd_grpc_latency_seconds_sum",
-        count: "objectio_osd_grpc_requests_total",
+        sum: "iolake_osd_grpc_latency_seconds_sum",
+        count: "iolake_osd_grpc_requests_total",
         labels: &["method=\"ReadShard\""],
     },
 ];
@@ -446,8 +446,8 @@ fn print_stages(stages: &[Stage], before: &Samples, after: &Samples) {
 
 /// The gateway's per-phase split of one operation, in handler order.
 fn print_phases(operation: &str, before: &Samples, after: &Samples) {
-    const SUM: &str = "objectio_gateway_request_phase_seconds_sum";
-    const COUNT: &str = "objectio_gateway_request_phase_seconds_count";
+    const SUM: &str = "iolake_gateway_request_phase_seconds_sum";
+    const COUNT: &str = "iolake_gateway_request_phase_seconds_count";
     // PutObject: sse, meta_lookup, shards, then waiting for the ETag (computed
     // alongside the shards), commit (ObjectMeta on the OSDs and the listing
     // entry in Meta, concurrently). GetObject: meta_lookup, object_meta, shards.
@@ -617,7 +617,7 @@ async fn main() -> Result<()> {
     let key = |i: usize| format!("/{}/bench-{run_id}/{i:06}", args.bucket);
 
     println!(
-        "objectio-s3-bench: {} objects of {} bytes, concurrency {}, {}",
+        "iolake-s3-bench: {} objects of {} bytes, concurrency {}, {}",
         args.objects,
         args.size,
         args.concurrency,

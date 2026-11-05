@@ -36,18 +36,18 @@ impl MetaService {
             }
         };
         gauge(
-            "objectio_multipart_uploads_open",
+            "iolake_multipart_uploads_open",
             "Multipart uploads started and neither completed nor aborted",
             &[("", ages.len() as u64)],
         );
         gauge(
-            "objectio_multipart_upload_oldest_age_seconds",
+            "iolake_multipart_upload_oldest_age_seconds",
             "Age of the oldest open multipart upload",
             &[("", ages.iter().copied().max().unwrap_or(0))],
         );
         let older = |secs: u64| ages.iter().filter(|a| **a > secs).count() as u64;
         gauge(
-            "objectio_multipart_uploads_older_than",
+            "iolake_multipart_uploads_older_than",
             "Open multipart uploads older than the given age",
             &[
                 ("age=\"1h\"", older(3600)),
@@ -56,7 +56,7 @@ impl MetaService {
             ],
         );
         gauge(
-            "objectio_multipart_upload_parts_bytes",
+            "iolake_multipart_upload_parts_bytes",
             "Bytes held by parts of open multipart uploads",
             &[("", bytes)],
         );
@@ -106,7 +106,7 @@ impl MetaService {
             let stored = store.read_named(MULTIPART_TABLE, upload_id);
             let current = match &stored {
                 Some(bytes) => Some(
-                    objectio_meta_store::record::deserialize::<MultipartUploadState>(bytes)
+                    iolake_meta_store::record::deserialize::<MultipartUploadState>(bytes)
                         .map_err(|e| Status::internal(format!("multipart decode: {e}")))?,
                 ),
                 None => None,
@@ -114,7 +114,7 @@ impl MetaService {
             let (new, out) = change(current)?;
             let new_bytes = match &new {
                 Some(u) => Some(
-                    objectio_meta_store::record::serialize(u)
+                    iolake_meta_store::record::serialize(u)
                         .map_err(|e| Status::internal(format!("multipart encode: {e}")))?,
                 ),
                 None => None,
@@ -124,7 +124,7 @@ impl MetaService {
             }
             let ok = self
                 .cas_many(
-                    vec![objectio_meta_store::CasOp {
+                    vec![iolake_meta_store::CasOp {
                         table: CasTable::Named(MULTIPART_TABLE.into()),
                         key: upload_id.to_string(),
                         expected: stored,
@@ -158,7 +158,7 @@ impl MetaService {
     pub(super) fn apply_multipart_event(&self, key: &str, new_value: Option<&[u8]>) {
         match new_value {
             Some(bytes) => {
-                match objectio_meta_store::record::deserialize::<MultipartUploadState>(bytes) {
+                match iolake_meta_store::record::deserialize::<MultipartUploadState>(bytes) {
                     Ok(u) => {
                         self.multipart_uploads.write().insert(key.to_string(), u);
                     }
@@ -365,7 +365,7 @@ impl MetaService {
                 last_modified: p.last_modified,
                 stripes: p.stripes.clone(), // Multiple stripes for large parts
                 checksum: (!p.checksum.is_empty()).then(|| {
-                    objectio_proto::metadata::ObjectChecksum {
+                    iolake_proto::metadata::ObjectChecksum {
                         algorithm: p.checksum_algorithm.clone(),
                         value: p.checksum.clone(),
                     }

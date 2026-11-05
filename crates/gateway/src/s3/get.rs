@@ -145,7 +145,7 @@ pub(crate) async fn read_packed_slice(
     to: u64,
 ) -> Option<Vec<u8>> {
     let k = stripe.ec_k as usize;
-    let shard = objectio_erasure::ErasureCodec::shard_size_for(stripe_data_size, k) as u64;
+    let shard = iolake_erasure::ErasureCodec::shard_size_for(stripe_data_size, k) as u64;
     if shard == 0 || to <= from {
         return Some(Vec::new());
     }
@@ -162,7 +162,7 @@ pub(crate) async fn read_packed_slice(
             .shards
             .iter()
             .find(|l| u64::from(l.position) == index)?;
-        let placement = objectio_proto::metadata::NodePlacement {
+        let placement = iolake_proto::metadata::NodePlacement {
             te_segment: String::new(),
             position: loc.position,
             node_id: loc.node_id.clone(),
@@ -712,7 +712,7 @@ pub(crate) async fn get_object_version_once(
     // and fills any gaps in node_address_map. Empty on older meta servers
     // that don't carry failure_domain in ListingNode — in that case every
     // node ranks as `Unknown` distance and the ranked sort is a no-op.
-    let mut node_topo_map: HashMap<Vec<u8>, objectio_placement::FailureDomainInfo> = HashMap::new();
+    let mut node_topo_map: HashMap<Vec<u8>, iolake_placement::FailureDomainInfo> = HashMap::new();
     // node_id → Transfer Engine segment, for shard reads over RDMA. The
     // listing is the more current source, so it wins over the placement.
     let mut node_te_map: HashMap<Vec<u8>, String> = placement
@@ -730,7 +730,7 @@ pub(crate) async fn get_object_version_once(
             let fd = n.failure_domain.unwrap_or_default();
             node_topo_map.insert(
                 n.node_id,
-                objectio_placement::FailureDomainInfo::new_full(
+                iolake_placement::FailureDomainInfo::new_full(
                     &fd.region,
                     &fd.zone,
                     &fd.datacenter,
@@ -848,7 +848,7 @@ pub(crate) async fn get_object_version_once(
     // when the object is SSE-S3/KMS. `sse_c_key_md5` is populated for SSE-C
     // and drives the `x-amz-server-side-encryption-customer-*` headers.
     let (get_sse_dek, sse_response_header, sse_c_key_md5): (
-        Option<[u8; objectio_kms::DEK_LEN]>,
+        Option<[u8; iolake_kms::DEK_LEN]>,
         Option<&'static str>,
         String,
     ) = match object_sse_algo {
@@ -890,7 +890,7 @@ pub(crate) async fn get_object_version_once(
                 .await
             {
                 Ok(dek) => (Some(dek), Some("aws:kms"), String::new()),
-                Err(objectio_kms::KmsError::KeyNotFound(_)) => {
+                Err(iolake_kms::KmsError::KeyNotFound(_)) => {
                     return S3Error::xml_response(
                         "KMS.NotFoundException",
                         "Object's KMS key no longer exists",
@@ -1237,7 +1237,7 @@ fn stream_stripes(
 pub(crate) fn inline_slice(
     object: &ObjectMeta,
     range: Option<&ByteRange>,
-    dek: Option<&[u8; objectio_kms::DEK_LEN]>,
+    dek: Option<&[u8; iolake_kms::DEK_LEN]>,
 ) -> Result<Vec<u8>, Response> {
     if object.inline_data.len() as u64 != object.size {
         error!(
@@ -1271,9 +1271,9 @@ pub(crate) struct StripeReader {
     key: String,
     object: ObjectMeta,
     range: Option<ByteRange>,
-    dek: Option<[u8; objectio_kms::DEK_LEN]>,
+    dek: Option<[u8; iolake_kms::DEK_LEN]>,
     node_address_map: HashMap<Vec<u8>, String>,
-    node_topo_map: HashMap<Vec<u8>, objectio_placement::FailureDomainInfo>,
+    node_topo_map: HashMap<Vec<u8>, iolake_placement::FailureDomainInfo>,
     node_te_map: HashMap<Vec<u8>, String>,
     meta_client: MetadataServiceClient<Channel>,
     small_shards: crate::osd_pool::SmallShards,
@@ -1332,7 +1332,7 @@ impl StripeReader {
             for shard_loc in &stripe.shards {
                 let node_addr =
                     resolve_node_address(node_address_map, meta_client, &shard_loc.node_id).await;
-                let node_placement = objectio_proto::metadata::NodePlacement {
+                let node_placement = iolake_proto::metadata::NodePlacement {
                     te_segment: String::new(),
                     position: shard_loc.position,
                     node_id: shard_loc.node_id.clone(),
@@ -1510,14 +1510,14 @@ impl StripeReader {
         // preserves the legacy "data shards before parity" preference
         // when topology info is absent or ties.
         let me = &state.self_topology;
-        let mut ranked_positions: Vec<(u32, objectio_placement::TopologyDistance)> = (0
+        let mut ranked_positions: Vec<(u32, iolake_placement::TopologyDistance)> = (0
             ..total_shards as u32)
             .filter_map(|pos| {
                 let shard_loc = shard_map.get(&pos)?;
                 let dist = node_topo_map
                     .get(&shard_loc.node_id)
-                    .map_or(objectio_placement::TopologyDistance::Unknown, |fd| {
-                        objectio_placement::distance(me, fd)
+                    .map_or(iolake_placement::TopologyDistance::Unknown, |fd| {
+                        iolake_placement::distance(me, fd)
                     });
                 Some((pos, dist))
             })
@@ -1580,7 +1580,7 @@ impl StripeReader {
                     let node_addr =
                         resolve_node_address(node_address_map, meta_client, &shard_loc.node_id)
                             .await;
-                    let node_placement = objectio_proto::metadata::NodePlacement {
+                    let node_placement = iolake_proto::metadata::NodePlacement {
                         te_segment: node_te_map
                             .get(&shard_loc.node_id)
                             .cloned()
@@ -1674,7 +1674,7 @@ impl StripeReader {
                 // not verify may from other shards: read one more, while
                 // there are any.
                 Err(e) if read_count > had && read_count < total_shards => {
-                    if matches!(e, objectio_erasure::ErasureError::Unverified(_)) {
+                    if matches!(e, iolake_erasure::ErasureError::Unverified(_)) {
                         warn!("stripe {stripe_idx} of {bucket}/{key}: {e}; reading one more shard");
                     } else {
                         debug!(
@@ -1686,7 +1686,7 @@ impl StripeReader {
                 }
                 Err(e) => {
                     error!("Failed to decode stripe {}: {}", stripe_idx, e);
-                    if matches!(e, objectio_erasure::ErasureError::Unverified(_)) {
+                    if matches!(e, iolake_erasure::ErasureError::Unverified(_)) {
                         crate::heal::report_degraded(
                             state,
                             bucket,
@@ -2013,7 +2013,7 @@ pub async fn get_object_with_params(
     if !overrides.is_empty() {
         let anonymous = auth
             .as_ref()
-            .is_some_and(|Extension(a)| a.auth_mode == objectio_auth::AuthMode::Anonymous);
+            .is_some_and(|Extension(a)| a.auth_mode == iolake_auth::AuthMode::Anonymous);
         if anonymous {
             return S3Error::xml_response(
                 "InvalidRequest",

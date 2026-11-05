@@ -69,7 +69,7 @@ impl IcebergOperation {
 
 /// Unity Catalog operation types — mirrors `IcebergOperation` for the
 /// Databricks-style REST surface (`/api/2.1/unity-catalog/*`). Reported
-/// under `objectio_unity_*` so dashboards can split Iceberg vs Unity
+/// under `iolake_unity_*` so dashboards can split Iceberg vs Unity
 /// traffic without label gymnastics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UnityOperation {
@@ -251,7 +251,7 @@ pub struct S3Metrics {
     unity_operations: RwLock<HashMap<UnityOperation, OperationMetrics>>,
     /// Bytes pulled during EC shard reads, partitioned by topological
     /// distance between the gateway and the serving OSD. Rendered as
-    /// `objectio_read_locality_bytes_total{locality="..."}` in the
+    /// `iolake_read_locality_bytes_total{locality="..."}` in the
     /// Prometheus scrape. Locality labels match
     /// `TopologyDistance::as_str()` (same-host, same-rack, same-datacenter,
     /// same-zone, same-region, remote, unknown).
@@ -276,7 +276,7 @@ pub struct S3Metrics {
     /// Most recent per-bucket / per-tenant usage, refreshed alongside
     /// capacity. `None` until the first refresh completes.
     usage: RwLock<Option<super::usage::UsageReport>>,
-    /// Whether to export `objectio_bucket_*` (one series per bucket).
+    /// Whether to export `iolake_bucket_*` (one series per bucket).
     per_bucket_usage: std::sync::atomic::AtomicBool,
 }
 
@@ -350,7 +350,7 @@ impl S3Metrics {
 
     /// Record bytes pulled during an EC shard read, partitioned by
     /// [`TopologyDistance`] label. Called from the gateway's read path;
-    /// feeds the `objectio_read_locality_bytes_total` Prometheus counter
+    /// feeds the `iolake_read_locality_bytes_total` Prometheus counter
     /// so operators can see at a glance how much traffic crosses zones
     /// or datacenters.
     pub fn record_locality_read_bytes(&self, locality: &str, bytes: u64) {
@@ -416,7 +416,7 @@ impl S3Metrics {
     /// Cluster totals count only OSDs that answered: summing a node that did
     /// not reply as zero would show capacity *dropping* when a disk goes
     /// unreachable, which reads as data loss rather than a reachability
-    /// problem. `objectio_osd_up` is what distinguishes the two.
+    /// problem. `iolake_osd_up` is what distinguishes the two.
     fn write_capacity(&self, output: &mut String) {
         let Ok(nodes) = self.capacity.read() else {
             return;
@@ -429,27 +429,27 @@ impl S3Metrics {
 
         for (name, help, value) in [
             (
-                "objectio_cluster_capacity_bytes",
+                "iolake_cluster_capacity_bytes",
                 "Raw capacity across OSDs that answered the last poll",
                 total,
             ),
             (
-                "objectio_cluster_used_bytes",
+                "iolake_cluster_used_bytes",
                 "Raw bytes allocated across OSDs that answered the last poll",
                 used,
             ),
             (
-                "objectio_cluster_available_bytes",
+                "iolake_cluster_available_bytes",
                 "Raw bytes free across OSDs that answered the last poll",
                 total.saturating_sub(used),
             ),
             (
-                "objectio_cluster_osds_total",
+                "iolake_cluster_osds_total",
                 "OSDs registered with the cluster",
                 nodes.len() as u64,
             ),
             (
-                "objectio_cluster_osds_up",
+                "iolake_cluster_osds_up",
                 "OSDs that answered the last poll",
                 up as u64,
             ),
@@ -462,10 +462,10 @@ impl S3Metrics {
         // Per-OSD, so a single disk filling up is visible rather than hidden
         // in a cluster total that still looks comfortable.
         for (name, help) in [
-            ("objectio_osd_capacity_bytes", "Raw capacity of one OSD"),
-            ("objectio_osd_used_bytes", "Raw bytes allocated on one OSD"),
-            ("objectio_osd_shards", "Shards stored on one OSD"),
-            ("objectio_osd_up", "1 if the OSD answered the last poll"),
+            ("iolake_osd_capacity_bytes", "Raw capacity of one OSD"),
+            ("iolake_osd_used_bytes", "Raw bytes allocated on one OSD"),
+            ("iolake_osd_shards", "Shards stored on one OSD"),
+            ("iolake_osd_up", "1 if the OSD answered the last poll"),
         ] {
             writeln!(output, "# HELP {name} {help}").unwrap();
             writeln!(output, "# TYPE {name} gauge").unwrap();
@@ -476,9 +476,9 @@ impl S3Metrics {
                     n.address.replace('"', "")
                 );
                 let v = match name {
-                    "objectio_osd_capacity_bytes" => n.total_bytes,
-                    "objectio_osd_used_bytes" => n.used_bytes,
-                    "objectio_osd_shards" => n.shard_count,
+                    "iolake_osd_capacity_bytes" => n.total_bytes,
+                    "iolake_osd_used_bytes" => n.used_bytes,
+                    "iolake_osd_shards" => n.shard_count,
                     _ => u64::from(n.reachable),
                 };
                 writeln!(output, "{name}{{{labels}}} {v}").unwrap();
@@ -499,11 +499,11 @@ impl S3Metrics {
         let uptime_secs = self.start_time.elapsed().as_secs();
         writeln!(
             output,
-            "# HELP objectio_gateway_uptime_seconds Gateway uptime in seconds"
+            "# HELP iolake_gateway_uptime_seconds Gateway uptime in seconds"
         )
         .unwrap();
-        writeln!(output, "# TYPE objectio_gateway_uptime_seconds counter").unwrap();
-        writeln!(output, "objectio_gateway_uptime_seconds {}", uptime_secs).unwrap();
+        writeln!(output, "# TYPE iolake_gateway_uptime_seconds counter").unwrap();
+        writeln!(output, "iolake_gateway_uptime_seconds {}", uptime_secs).unwrap();
 
         // Read locality — labeled counter of bytes pulled off OSDs broken
         // down by topological distance from this gateway. Stays at 0 when
@@ -513,14 +513,14 @@ impl S3Metrics {
             if !map.is_empty() {
                 writeln!(
                     output,
-                    "# HELP objectio_read_locality_bytes_total Bytes fetched from OSDs, by topology distance"
+                    "# HELP iolake_read_locality_bytes_total Bytes fetched from OSDs, by topology distance"
                 )
                 .unwrap();
-                writeln!(output, "# TYPE objectio_read_locality_bytes_total counter").unwrap();
+                writeln!(output, "# TYPE iolake_read_locality_bytes_total counter").unwrap();
                 for (locality, counter) in map.iter() {
                     writeln!(
                         output,
-                        "objectio_read_locality_bytes_total{{locality=\"{}\"}} {}",
+                        "iolake_read_locality_bytes_total{{locality=\"{}\"}} {}",
                         locality,
                         counter.load(Ordering::Relaxed)
                     )
@@ -533,64 +533,60 @@ impl S3Metrics {
         if let Some(ref prot) = *self.protection.read().unwrap() {
             writeln!(
                 output,
-                "# HELP objectio_gateway_protection_data_shards Number of data shards (k)"
+                "# HELP iolake_gateway_protection_data_shards Number of data shards (k)"
             )
             .unwrap();
+            writeln!(output, "# TYPE iolake_gateway_protection_data_shards gauge").unwrap();
             writeln!(
                 output,
-                "# TYPE objectio_gateway_protection_data_shards gauge"
-            )
-            .unwrap();
-            writeln!(
-                output,
-                "objectio_gateway_protection_data_shards{{scheme=\"{}\"}} {}",
+                "iolake_gateway_protection_data_shards{{scheme=\"{}\"}} {}",
                 prot.scheme, prot.data_shards
             )
             .unwrap();
 
             writeln!(
                 output,
-                "# HELP objectio_gateway_protection_parity_shards Number of parity shards (m)"
+                "# HELP iolake_gateway_protection_parity_shards Number of parity shards (m)"
             )
             .unwrap();
             writeln!(
                 output,
-                "# TYPE objectio_gateway_protection_parity_shards gauge"
+                "# TYPE iolake_gateway_protection_parity_shards gauge"
             )
             .unwrap();
             writeln!(
                 output,
-                "objectio_gateway_protection_parity_shards{{scheme=\"{}\"}} {}",
+                "iolake_gateway_protection_parity_shards{{scheme=\"{}\"}} {}",
                 prot.scheme, prot.parity_shards
             )
             .unwrap();
 
             writeln!(
                 output,
-                "# HELP objectio_gateway_protection_total_shards Total shards (data + parity)"
+                "# HELP iolake_gateway_protection_total_shards Total shards (data + parity)"
             )
             .unwrap();
             writeln!(
                 output,
-                "# TYPE objectio_gateway_protection_total_shards gauge"
+                "# TYPE iolake_gateway_protection_total_shards gauge"
             )
             .unwrap();
             writeln!(
                 output,
-                "objectio_gateway_protection_total_shards{{scheme=\"{}\"}} {}",
+                "iolake_gateway_protection_total_shards{{scheme=\"{}\"}} {}",
                 prot.scheme, prot.total_shards
             )
             .unwrap();
 
-            writeln!(output, "# HELP objectio_gateway_protection_efficiency Storage efficiency ratio (data/total)").unwrap();
             writeln!(
                 output,
-                "# TYPE objectio_gateway_protection_efficiency gauge"
+                "# HELP iolake_gateway_protection_efficiency Storage efficiency ratio (data/total)"
             )
             .unwrap();
+            writeln!(output, "# TYPE iolake_gateway_protection_efficiency gauge").unwrap();
             writeln!(
                 output,
-                "objectio_gateway_protection_efficiency{{scheme=\"{}\"}} {:.6}",
+                "iolake_gateway_protection_efficiency{{scheme=\"{}\"}} {:.6}",
                 prot.scheme, prot.efficiency
             )
             .unwrap();
@@ -598,34 +594,34 @@ impl S3Metrics {
             if prot.scheme == "lrc" {
                 writeln!(
                     output,
-                    "# HELP objectio_gateway_protection_lrc_local_parity LRC local parity shards"
+                    "# HELP iolake_gateway_protection_lrc_local_parity LRC local parity shards"
                 )
                 .unwrap();
                 writeln!(
                     output,
-                    "# TYPE objectio_gateway_protection_lrc_local_parity gauge"
+                    "# TYPE iolake_gateway_protection_lrc_local_parity gauge"
                 )
                 .unwrap();
                 writeln!(
                     output,
-                    "objectio_gateway_protection_lrc_local_parity {}",
+                    "iolake_gateway_protection_lrc_local_parity {}",
                     prot.lrc_local_parity
                 )
                 .unwrap();
 
                 writeln!(
                     output,
-                    "# HELP objectio_gateway_protection_lrc_global_parity LRC global parity shards"
+                    "# HELP iolake_gateway_protection_lrc_global_parity LRC global parity shards"
                 )
                 .unwrap();
                 writeln!(
                     output,
-                    "# TYPE objectio_gateway_protection_lrc_global_parity gauge"
+                    "# TYPE iolake_gateway_protection_lrc_global_parity gauge"
                 )
                 .unwrap();
                 writeln!(
                     output,
-                    "objectio_gateway_protection_lrc_global_parity {}",
+                    "iolake_gateway_protection_lrc_global_parity {}",
                     prot.lrc_global_parity
                 )
                 .unwrap();
@@ -638,10 +634,10 @@ impl S3Metrics {
         // Requests total
         writeln!(
             output,
-            "# HELP objectio_s3_requests_total Total S3 requests by operation and status"
+            "# HELP iolake_s3_requests_total Total S3 requests by operation and status"
         )
         .unwrap();
-        writeln!(output, "# TYPE objectio_s3_requests_total counter").unwrap();
+        writeln!(output, "# TYPE iolake_s3_requests_total counter").unwrap();
         for (op, metrics) in ops.iter() {
             let op_name: &str = op.as_str();
             let success = metrics.requests_success.load(Ordering::Relaxed);
@@ -650,19 +646,19 @@ impl S3Metrics {
 
             writeln!(
                 output,
-                "objectio_s3_requests_total{{operation=\"{}\",status=\"success\"}} {}",
+                "iolake_s3_requests_total{{operation=\"{}\",status=\"success\"}} {}",
                 op_name, success
             )
             .unwrap();
             writeln!(
                 output,
-                "objectio_s3_requests_total{{operation=\"{}\",status=\"client_error\"}} {}",
+                "iolake_s3_requests_total{{operation=\"{}\",status=\"client_error\"}} {}",
                 op_name, client_err
             )
             .unwrap();
             writeln!(
                 output,
-                "objectio_s3_requests_total{{operation=\"{}\",status=\"server_error\"}} {}",
+                "iolake_s3_requests_total{{operation=\"{}\",status=\"server_error\"}} {}",
                 op_name, server_err
             )
             .unwrap();
@@ -671,15 +667,15 @@ impl S3Metrics {
         // Request/response bytes
         writeln!(
             output,
-            "# HELP objectio_s3_request_bytes_total Total request body bytes"
+            "# HELP iolake_s3_request_bytes_total Total request body bytes"
         )
         .unwrap();
-        writeln!(output, "# TYPE objectio_s3_request_bytes_total counter").unwrap();
+        writeln!(output, "# TYPE iolake_s3_request_bytes_total counter").unwrap();
         for (op, metrics) in ops.iter() {
             let op_name: &str = op.as_str();
             writeln!(
                 output,
-                "objectio_s3_request_bytes_total{{operation=\"{}\"}} {}",
+                "iolake_s3_request_bytes_total{{operation=\"{}\"}} {}",
                 op_name,
                 metrics.request_bytes_total.load(Ordering::Relaxed)
             )
@@ -688,15 +684,15 @@ impl S3Metrics {
 
         writeln!(
             output,
-            "# HELP objectio_s3_response_bytes_total Total response body bytes"
+            "# HELP iolake_s3_response_bytes_total Total response body bytes"
         )
         .unwrap();
-        writeln!(output, "# TYPE objectio_s3_response_bytes_total counter").unwrap();
+        writeln!(output, "# TYPE iolake_s3_response_bytes_total counter").unwrap();
         for (op, metrics) in ops.iter() {
             let op_name: &str = op.as_str();
             writeln!(
                 output,
-                "objectio_s3_response_bytes_total{{operation=\"{}\"}} {}",
+                "iolake_s3_response_bytes_total{{operation=\"{}\"}} {}",
                 op_name,
                 metrics.response_bytes_total.load(Ordering::Relaxed)
             )
@@ -706,12 +702,12 @@ impl S3Metrics {
         // Latency histogram
         writeln!(
             output,
-            "# HELP objectio_s3_request_duration_seconds S3 request duration histogram"
+            "# HELP iolake_s3_request_duration_seconds S3 request duration histogram"
         )
         .unwrap();
         writeln!(
             output,
-            "# TYPE objectio_s3_request_duration_seconds histogram"
+            "# TYPE iolake_s3_request_duration_seconds histogram"
         )
         .unwrap();
         for (op, metrics) in ops.iter() {
@@ -726,7 +722,7 @@ impl S3Metrics {
                 let cumulative = metrics.latency_buckets[i].load(Ordering::Relaxed);
                 writeln!(
                     output,
-                    "objectio_s3_request_duration_seconds_bucket{{operation=\"{}\",le=\"{}\"}} {}",
+                    "iolake_s3_request_duration_seconds_bucket{{operation=\"{}\",le=\"{}\"}} {}",
                     op_name,
                     boundary_ms as f64 / 1000.0,
                     cumulative
@@ -735,20 +731,20 @@ impl S3Metrics {
             }
             writeln!(
                 output,
-                "objectio_s3_request_duration_seconds_bucket{{operation=\"{}\",le=\"+Inf\"}} {}",
+                "iolake_s3_request_duration_seconds_bucket{{operation=\"{}\",le=\"+Inf\"}} {}",
                 op_name, total
             )
             .unwrap();
             writeln!(
                 output,
-                "objectio_s3_request_duration_seconds_sum{{operation=\"{}\"}} {}",
+                "iolake_s3_request_duration_seconds_sum{{operation=\"{}\"}} {}",
                 op_name,
                 sum_us as f64 / 1_000_000.0
             )
             .unwrap();
             writeln!(
                 output,
-                "objectio_s3_request_duration_seconds_count{{operation=\"{}\"}} {}",
+                "iolake_s3_request_duration_seconds_count{{operation=\"{}\"}} {}",
                 op_name, total
             )
             .unwrap();
@@ -759,10 +755,10 @@ impl S3Metrics {
         if !iceberg_ops.is_empty() {
             writeln!(
                 output,
-                "# HELP objectio_iceberg_requests_total Total Iceberg requests by operation and status"
+                "# HELP iolake_iceberg_requests_total Total Iceberg requests by operation and status"
             )
             .unwrap();
-            writeln!(output, "# TYPE objectio_iceberg_requests_total counter").unwrap();
+            writeln!(output, "# TYPE iolake_iceberg_requests_total counter").unwrap();
             for (op, metrics) in iceberg_ops.iter() {
                 let op_name = op.as_str();
                 let success = metrics.requests_success.load(Ordering::Relaxed);
@@ -770,19 +766,19 @@ impl S3Metrics {
                 let server_err = metrics.requests_server_error.load(Ordering::Relaxed);
                 writeln!(
                     output,
-                    "objectio_iceberg_requests_total{{operation=\"{}\",status=\"success\"}} {}",
+                    "iolake_iceberg_requests_total{{operation=\"{}\",status=\"success\"}} {}",
                     op_name, success
                 )
                 .unwrap();
                 writeln!(
                     output,
-                    "objectio_iceberg_requests_total{{operation=\"{}\",status=\"client_error\"}} {}",
+                    "iolake_iceberg_requests_total{{operation=\"{}\",status=\"client_error\"}} {}",
                     op_name, client_err
                 )
                 .unwrap();
                 writeln!(
                     output,
-                    "objectio_iceberg_requests_total{{operation=\"{}\",status=\"server_error\"}} {}",
+                    "iolake_iceberg_requests_total{{operation=\"{}\",status=\"server_error\"}} {}",
                     op_name, server_err
                 )
                 .unwrap();
@@ -790,12 +786,12 @@ impl S3Metrics {
 
             writeln!(
                 output,
-                "# HELP objectio_iceberg_request_duration_seconds Iceberg request duration histogram"
+                "# HELP iolake_iceberg_request_duration_seconds Iceberg request duration histogram"
             )
             .unwrap();
             writeln!(
                 output,
-                "# TYPE objectio_iceberg_request_duration_seconds histogram"
+                "# TYPE iolake_iceberg_request_duration_seconds histogram"
             )
             .unwrap();
             for (op, metrics) in iceberg_ops.iter() {
@@ -809,7 +805,7 @@ impl S3Metrics {
                     let cumulative = metrics.latency_buckets[i].load(Ordering::Relaxed);
                     writeln!(
                         output,
-                        "objectio_iceberg_request_duration_seconds_bucket{{operation=\"{}\",le=\"{}\"}} {}",
+                        "iolake_iceberg_request_duration_seconds_bucket{{operation=\"{}\",le=\"{}\"}} {}",
                         op_name,
                         boundary_ms as f64 / 1000.0,
                         cumulative
@@ -818,20 +814,20 @@ impl S3Metrics {
                 }
                 writeln!(
                     output,
-                    "objectio_iceberg_request_duration_seconds_bucket{{operation=\"{}\",le=\"+Inf\"}} {}",
+                    "iolake_iceberg_request_duration_seconds_bucket{{operation=\"{}\",le=\"+Inf\"}} {}",
                     op_name, total
                 )
                 .unwrap();
                 writeln!(
                     output,
-                    "objectio_iceberg_request_duration_seconds_sum{{operation=\"{}\"}} {}",
+                    "iolake_iceberg_request_duration_seconds_sum{{operation=\"{}\"}} {}",
                     op_name,
                     sum_us as f64 / 1_000_000.0
                 )
                 .unwrap();
                 writeln!(
                     output,
-                    "objectio_iceberg_request_duration_seconds_count{{operation=\"{}\"}} {}",
+                    "iolake_iceberg_request_duration_seconds_count{{operation=\"{}\"}} {}",
                     op_name, total
                 )
                 .unwrap();
@@ -844,10 +840,10 @@ impl S3Metrics {
         if !unity_ops.is_empty() {
             writeln!(
                 output,
-                "# HELP objectio_unity_requests_total Total Unity Catalog requests by operation and status"
+                "# HELP iolake_unity_requests_total Total Unity Catalog requests by operation and status"
             )
             .unwrap();
-            writeln!(output, "# TYPE objectio_unity_requests_total counter").unwrap();
+            writeln!(output, "# TYPE iolake_unity_requests_total counter").unwrap();
             for (op, metrics) in unity_ops.iter() {
                 let op_name = op.as_str();
                 let success = metrics.requests_success.load(Ordering::Relaxed);
@@ -855,19 +851,19 @@ impl S3Metrics {
                 let server_err = metrics.requests_server_error.load(Ordering::Relaxed);
                 writeln!(
                     output,
-                    "objectio_unity_requests_total{{operation=\"{}\",status=\"success\"}} {}",
+                    "iolake_unity_requests_total{{operation=\"{}\",status=\"success\"}} {}",
                     op_name, success
                 )
                 .unwrap();
                 writeln!(
                     output,
-                    "objectio_unity_requests_total{{operation=\"{}\",status=\"client_error\"}} {}",
+                    "iolake_unity_requests_total{{operation=\"{}\",status=\"client_error\"}} {}",
                     op_name, client_err
                 )
                 .unwrap();
                 writeln!(
                     output,
-                    "objectio_unity_requests_total{{operation=\"{}\",status=\"server_error\"}} {}",
+                    "iolake_unity_requests_total{{operation=\"{}\",status=\"server_error\"}} {}",
                     op_name, server_err
                 )
                 .unwrap();
@@ -875,12 +871,12 @@ impl S3Metrics {
 
             writeln!(
                 output,
-                "# HELP objectio_unity_request_duration_seconds Unity Catalog request duration histogram"
+                "# HELP iolake_unity_request_duration_seconds Unity Catalog request duration histogram"
             )
             .unwrap();
             writeln!(
                 output,
-                "# TYPE objectio_unity_request_duration_seconds histogram"
+                "# TYPE iolake_unity_request_duration_seconds histogram"
             )
             .unwrap();
             for (op, metrics) in unity_ops.iter() {
@@ -894,7 +890,7 @@ impl S3Metrics {
                     let cumulative = metrics.latency_buckets[i].load(Ordering::Relaxed);
                     writeln!(
                         output,
-                        "objectio_unity_request_duration_seconds_bucket{{operation=\"{}\",le=\"{}\"}} {}",
+                        "iolake_unity_request_duration_seconds_bucket{{operation=\"{}\",le=\"{}\"}} {}",
                         op_name,
                         boundary_ms as f64 / 1000.0,
                         cumulative
@@ -903,20 +899,20 @@ impl S3Metrics {
                 }
                 writeln!(
                     output,
-                    "objectio_unity_request_duration_seconds_bucket{{operation=\"{}\",le=\"+Inf\"}} {}",
+                    "iolake_unity_request_duration_seconds_bucket{{operation=\"{}\",le=\"+Inf\"}} {}",
                     op_name, total
                 )
                 .unwrap();
                 writeln!(
                     output,
-                    "objectio_unity_request_duration_seconds_sum{{operation=\"{}\"}} {}",
+                    "iolake_unity_request_duration_seconds_sum{{operation=\"{}\"}} {}",
                     op_name,
                     sum_us as f64 / 1_000_000.0
                 )
                 .unwrap();
                 writeln!(
                     output,
-                    "objectio_unity_request_duration_seconds_count{{operation=\"{}\"}} {}",
+                    "iolake_unity_request_duration_seconds_count{{operation=\"{}\"}} {}",
                     op_name, total
                 )
                 .unwrap();
@@ -1001,7 +997,7 @@ mod tests {
         metrics.record_operation(S3Operation::PutObject, 200, 2048, 0, 10000);
 
         let output = metrics.export_prometheus();
-        assert!(output.contains("objectio_s3_requests_total"));
+        assert!(output.contains("iolake_s3_requests_total"));
         assert!(output.contains("GetObject"));
         assert!(output.contains("PutObject"));
     }
@@ -1019,8 +1015,8 @@ mod tests {
 
         let output = metrics.export_prometheus();
         for family in [
-            "objectio_s3_request_duration_seconds",
-            "objectio_iceberg_request_duration_seconds",
+            "iolake_s3_request_duration_seconds",
+            "iolake_iceberg_request_duration_seconds",
         ] {
             let mut buckets: Vec<u64> = Vec::new();
             let mut inf = None;
@@ -1048,7 +1044,7 @@ mod tests {
         }
         let get = |le: &str| -> u64 {
             let key = format!(
-                "objectio_s3_request_duration_seconds_bucket{{operation=\"GetObject\",le=\"{le}\"}} "
+                "iolake_s3_request_duration_seconds_bucket{{operation=\"GetObject\",le=\"{le}\"}} "
             );
             output
                 .lines()
@@ -1069,10 +1065,10 @@ mod tests {
         metrics.record_iceberg_operation(IcebergOperation::LoadTable, 500, 10000);
 
         let output = metrics.export_prometheus();
-        assert!(output.contains("objectio_iceberg_requests_total"));
+        assert!(output.contains("iolake_iceberg_requests_total"));
         assert!(output.contains("ListNamespaces"));
         assert!(output.contains("CreateTable"));
-        assert!(output.contains("objectio_iceberg_request_duration_seconds"));
+        assert!(output.contains("iolake_iceberg_request_duration_seconds"));
     }
 
     #[test]
@@ -1086,7 +1082,7 @@ mod tests {
         metrics.record_operation(S3Operation::GetObject, 200, 0, 100, 500000); // 500ms
 
         let output = metrics.export_prometheus();
-        assert!(output.contains("objectio_s3_request_duration_seconds_bucket"));
+        assert!(output.contains("iolake_s3_request_duration_seconds_bucket"));
         assert!(output.contains("le=\"0.001\"")); // 1ms bucket
         assert!(output.contains("le=\"0.05\"")); // 50ms bucket
     }
@@ -1119,14 +1115,11 @@ mod capacity_tests {
     #[test]
     fn cluster_totals_are_exported() {
         let out = export(vec![node("a", 100, 40, true), node("b", 100, 10, true)]);
-        assert!(out.contains("objectio_cluster_capacity_bytes 200"), "{out}");
-        assert!(out.contains("objectio_cluster_used_bytes 50"), "{out}");
-        assert!(
-            out.contains("objectio_cluster_available_bytes 150"),
-            "{out}"
-        );
-        assert!(out.contains("objectio_cluster_osds_total 2"), "{out}");
-        assert!(out.contains("objectio_cluster_osds_up 2"), "{out}");
+        assert!(out.contains("iolake_cluster_capacity_bytes 200"), "{out}");
+        assert!(out.contains("iolake_cluster_used_bytes 50"), "{out}");
+        assert!(out.contains("iolake_cluster_available_bytes 150"), "{out}");
+        assert!(out.contains("iolake_cluster_osds_total 2"), "{out}");
+        assert!(out.contains("iolake_cluster_osds_up 2"), "{out}");
     }
 
     /// An unreachable OSD must not make the cluster look smaller.
@@ -1134,16 +1127,16 @@ mod capacity_tests {
     /// Summing a node that did not answer as zero would show capacity
     /// *dropping* when a disk goes unreachable — indistinguishable from data
     /// loss at a glance. It is excluded from the totals and surfaced as
-    /// `objectio_osd_up 0` instead, so the two cases read differently.
+    /// `iolake_osd_up 0` instead, so the two cases read differently.
     #[test]
     fn an_unreachable_osd_is_excluded_from_totals_but_still_reported() {
         let out = export(vec![node("a", 100, 40, true), node("gone", 100, 90, false)]);
-        assert!(out.contains("objectio_cluster_capacity_bytes 100"), "{out}");
-        assert!(out.contains("objectio_cluster_used_bytes 40"), "{out}");
-        assert!(out.contains("objectio_cluster_osds_total 2"), "{out}");
-        assert!(out.contains("objectio_cluster_osds_up 1"), "{out}");
+        assert!(out.contains("iolake_cluster_capacity_bytes 100"), "{out}");
+        assert!(out.contains("iolake_cluster_used_bytes 40"), "{out}");
+        assert!(out.contains("iolake_cluster_osds_total 2"), "{out}");
+        assert!(out.contains("iolake_cluster_osds_up 1"), "{out}");
         assert!(
-            out.contains(r#"objectio_osd_up{osd_id="gone",address="http://gone:9200"} 0"#),
+            out.contains(r#"iolake_osd_up{osd_id="gone",address="http://gone:9200"} 0"#),
             "the down OSD is missing from the scrape entirely: {out}"
         );
     }
@@ -1154,14 +1147,14 @@ mod capacity_tests {
     fn each_osd_gets_its_own_series() {
         let out = export(vec![node("hot", 100, 99, true), node("cold", 100, 1, true)]);
         assert!(
-            out.contains(r#"objectio_osd_used_bytes{osd_id="hot",address="http://hot:9200"} 99"#),
+            out.contains(r#"iolake_osd_used_bytes{osd_id="hot",address="http://hot:9200"} 99"#),
             "{out}"
         );
         assert!(
-            out.contains(r#"objectio_osd_used_bytes{osd_id="cold",address="http://cold:9200"} 1"#),
+            out.contains(r#"iolake_osd_used_bytes{osd_id="cold",address="http://cold:9200"} 1"#),
             "{out}"
         );
-        assert!(out.contains(r#"objectio_osd_shards{osd_id="hot""#), "{out}");
+        assert!(out.contains(r#"iolake_osd_shards{osd_id="hot""#), "{out}");
     }
 
     /// Before the first poll completes there is nothing to report, and the
@@ -1169,9 +1162,9 @@ mod capacity_tests {
     #[test]
     fn an_empty_snapshot_still_exports_valid_zeroes() {
         let out = export(Vec::new());
-        assert!(out.contains("objectio_cluster_capacity_bytes 0"), "{out}");
-        assert!(out.contains("objectio_cluster_osds_total 0"), "{out}");
-        for line in out.lines().filter(|l| l.starts_with("objectio_cluster_")) {
+        assert!(out.contains("iolake_cluster_capacity_bytes 0"), "{out}");
+        assert!(out.contains("iolake_cluster_osds_total 0"), "{out}");
+        for line in out.lines().filter(|l| l.starts_with("iolake_cluster_")) {
             assert_eq!(line.split_whitespace().count(), 2, "malformed: {line}");
         }
     }
@@ -1182,12 +1175,12 @@ mod capacity_tests {
     fn every_capacity_gauge_is_documented() {
         let out = export(vec![node("a", 10, 1, true)]);
         for name in [
-            "objectio_cluster_capacity_bytes",
-            "objectio_cluster_used_bytes",
-            "objectio_cluster_available_bytes",
-            "objectio_osd_capacity_bytes",
-            "objectio_osd_used_bytes",
-            "objectio_osd_up",
+            "iolake_cluster_capacity_bytes",
+            "iolake_cluster_used_bytes",
+            "iolake_cluster_available_bytes",
+            "iolake_osd_capacity_bytes",
+            "iolake_osd_used_bytes",
+            "iolake_osd_up",
         ] {
             assert!(
                 out.contains(&format!("# HELP {name} ")),

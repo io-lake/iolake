@@ -1,5 +1,5 @@
 //! Lock-free Prometheus histograms, rendered in the text format by hand
-//! like the rest of ObjectIO's metrics.
+//! like the rest of IOLake's metrics.
 //!
 //! [`Histogram`] is one series; [`HistogramVec`] keys series by a
 //! pre-rendered label string (`op="CreateBucket"`). Keep label values

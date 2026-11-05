@@ -83,7 +83,7 @@ impl MetaService {
         let bytes = tenant.encode_to_vec();
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Tenants,
@@ -172,7 +172,7 @@ impl MetaService {
         let new_bytes = tenant.encode_to_vec();
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Tenants,
@@ -226,7 +226,7 @@ impl MetaService {
         }
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Tenants,

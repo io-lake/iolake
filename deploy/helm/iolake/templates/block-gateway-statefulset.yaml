@@ -1,0 +1,93 @@
+{{- if .Values.blockGateway.enabled }}
+# One pod: its write journal is used by one process at a time. A
+# StatefulSet starts a replacement only once the old pod is gone (a
+# Deployment may start one while the old pod is still running, on a node
+# that stopped answering), and updates stop the old pod first.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "iolake.blockGateway.fullname" . }}
+  labels:
+    {{- include "iolake.labels" . | nindent 4 }}
+    app.kubernetes.io/component: block-gateway
+spec:
+  serviceName: {{ include "iolake.blockGateway.fullname" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "iolake.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: block-gateway
+  template:
+    metadata:
+      labels:
+        {{- include "iolake.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: block-gateway
+      {{- with .Values.blockGateway.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with (include "iolake.podPlacement" (dict "root" . "values" .Values.blockGateway "component" "block-gateway") | trim) }}
+      {{- . | nindent 6 }}
+      {{- end }}
+      containers:
+        - name: block-gateway
+          image: {{ include "iolake.image" (dict "global" .Values.global "component" .Values.blockGateway) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["iolake-block-gateway"]
+          args:
+            - "--listen"
+            - "0.0.0.0:{{ .Values.blockGateway.service.grpcPort }}"
+            - "--nbd-listen"
+            - "0.0.0.0:{{ .Values.blockGateway.service.nbdPort }}"
+            - "--metrics-listen"
+            - "0.0.0.0:{{ .Values.blockGateway.service.metricsPort }}"
+            - "--advertise-host"
+            - {{ .Values.blockGateway.advertiseHost | quote }}
+            - "--meta-endpoint"
+            - "http://{{ include "iolake.meta.fullname" . }}:{{ .Values.meta.service.port }}"
+            - "--data-dir"
+            - "/var/lib/objectio/block-gw"
+            - "--ec-k"
+            - {{ .Values.ec.k | quote }}
+            - "--ec-m"
+            - {{ .Values.ec.m | quote }}
+            - "--cache-bytes"
+            - {{ .Values.blockGateway.cacheBytes | int64 | quote }}
+            - "--flush-interval-s"
+            - {{ .Values.blockGateway.flushIntervalS | quote }}
+            - "--log-level"
+            - {{ .Values.blockGateway.logLevel | quote }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.blockGateway.service.grpcPort }}
+              protocol: TCP
+            - name: nbd
+              containerPort: {{ .Values.blockGateway.service.nbdPort }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.blockGateway.service.metricsPort }}
+              protocol: TCP
+          {{- with (include "iolake.probes" (dict "values" .Values.blockGateway) | trim) }}
+          {{- . | nindent 10 }}
+          {{- end }}
+          {{- with (include "iolake.tls.env" .) }}
+          env:
+            {{- . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/objectio
+            {{- with (include "iolake.tls.volumeMount" .) }}
+            {{- . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.blockGateway.resources | nindent 12 }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "iolake.blockGateway.fullname" . }}
+        {{- with (include "iolake.tls.volume" (dict "ctx" . "role" "block-gateway")) }}
+        {{- . | nindent 8 }}
+        {{- end }}
+{{- end }}

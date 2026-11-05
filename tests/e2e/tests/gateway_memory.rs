@@ -9,8 +9,8 @@
 //! a byte: a multi-gigabyte object exceeded a 1 GiB pod's limit and killed
 //! the gateway, and with it every request it was serving.
 
-use objectio_e2e::Cluster;
-use objectio_e2e::ha::HaCluster;
+use iolake_e2e::Cluster;
+use iolake_e2e::ha::HaCluster;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
@@ -379,7 +379,7 @@ fn a_stripe_unreadable_after_the_headers_cuts_the_body_short() {
     assert!(
         await_metric(
             &c,
-            "objectio_gateway_get_aborted_total",
+            "iolake_gateway_get_aborted_total",
             &["reason=\"read\""],
             1
         ) >= 1,
@@ -416,7 +416,7 @@ fn requests_beyond_the_memory_budget_are_refused_with_slow_down() {
     assert!(
         metric(
             &c,
-            "objectio_gateway_requests_rejected_total",
+            "iolake_gateway_requests_rejected_total",
             &["reason=\"memory\""]
         ) >= 2
     );
@@ -435,7 +435,7 @@ fn requests_beyond_the_memory_budget_are_refused_with_slow_down() {
     assert_eq!(got.status, 200);
     assert!(got.bytes == existing);
     assert_eq!(
-        await_zero(&c, "objectio_gateway_memory_budget_in_use_bytes"),
+        await_zero(&c, "iolake_gateway_memory_budget_in_use_bytes"),
         0,
         "requests done, the budget is still held"
     );
@@ -465,7 +465,7 @@ fn requests_beyond_the_in_flight_limit_are_refused_but_probes_answer() {
     assert!(
         metric(
             &c,
-            "objectio_gateway_requests_rejected_total",
+            "iolake_gateway_requests_rejected_total",
             &["reason=\"requests\""]
         ) >= 1
     );
@@ -507,7 +507,7 @@ fn a_request_body_that_stops_arriving_is_cut_off() {
         "cut off only after {waited:?}"
     );
     assert_eq!(c.request("GET", "/slow/obj", &[]).status, 404);
-    assert!(metric(&c, "objectio_gateway_timeouts_total", &["kind=\"body\""]) >= 1);
+    assert!(metric(&c, "iolake_gateway_timeouts_total", &["kind=\"body\""]) >= 1);
 }
 
 /// Headers trickled in (slowloris), and a kept-alive connection left idle,
@@ -569,11 +569,11 @@ fn a_download_the_client_stops_reading_is_cut_off_and_its_memory_freed() {
     assert_eq!(status, 200);
     // Read nothing more: the socket buffers fill, the gateway's writes wait.
     assert!(
-        await_metric(&c, "objectio_gateway_timeouts_total", &["kind=\"send\""], 1) >= 1,
+        await_metric(&c, "iolake_gateway_timeouts_total", &["kind=\"send\""], 1) >= 1,
         "the stalled download is still being served"
     );
     assert_eq!(
-        await_zero(&c, "objectio_gateway_memory_budget_in_use_bytes"),
+        await_zero(&c, "iolake_gateway_memory_budget_in_use_bytes"),
         0,
         "the stalled download still holds its read-ahead"
     );

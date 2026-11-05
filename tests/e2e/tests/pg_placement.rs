@@ -1,6 +1,6 @@
 //! Placement through placement groups whose acting set and epoch are
 //! committed before any write uses them, and OSDs that refuse a request
-//! placed under an older epoch (B31 phase 1, objectio-docs
+//! placed under an older epoch (B31 phase 1, iolake-docs
 //! `core/pg-recovery.md`).
 //!
 //! Soak run 14 found what this prevents: an overwrite during a disk pull
@@ -12,12 +12,12 @@
 use std::collections::BTreeSet;
 use std::time::{Duration, Instant};
 
-use objectio_e2e::Cluster;
-use objectio_e2e::ha::HaCluster;
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
-use objectio_proto::metadata::{GetPlacementRequest, GetPlacementResponse, ObjectMeta};
-use objectio_proto::storage::GetObjectMetaRequest;
-use objectio_proto::storage::storage_service_client::StorageServiceClient;
+use iolake_e2e::Cluster;
+use iolake_e2e::ha::HaCluster;
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_proto::metadata::{GetPlacementRequest, GetPlacementResponse, ObjectMeta};
+use iolake_proto::storage::GetObjectMetaRequest;
+use iolake_proto::storage::storage_service_client::StorageServiceClient;
 use serde_json::json;
 
 const OSDS: usize = 7;
@@ -49,12 +49,10 @@ fn placement(
     key: &str,
 ) -> GetPlacementResponse {
     let meta = ha.meta_endpoints();
-    objectio_e2e::tls::client();
+    iolake_e2e::tls::client();
     rt.block_on(async {
         // With this build's format level: meta refuses a client without.
-        let channel = objectio_proto::transport::meta_channel(&meta)
-            .await
-            .unwrap();
+        let channel = iolake_proto::transport::meta_channel(&meta).await.unwrap();
         MetadataServiceClient::new(channel)
             .get_placement(GetPlacementRequest {
                 bucket: bucket.to_string(),
@@ -78,7 +76,7 @@ fn copy_on(
 ) -> Option<ObjectMeta> {
     let address = host_port(&ha.osd_endpoint(i));
     rt.block_on(async {
-        let r = StorageServiceClient::new(objectio_e2e::tls::channel(&address).await.ok()?)
+        let r = StorageServiceClient::new(iolake_e2e::tls::channel(&address).await.ok()?)
             .get_object_meta(GetObjectMetaRequest {
                 bucket: bucket.to_string(),
                 key: key.to_string(),
@@ -278,7 +276,7 @@ fn a_write_placed_under_an_old_epoch_is_refused_and_placed_again() {
         .request("GET", "/metrics", &[])
         .text()
         .lines()
-        .filter(|l| l.starts_with("objectio_gateway_stale_placement_total"))
+        .filter(|l| l.starts_with("iolake_gateway_stale_placement_total"))
         .filter_map(|l| l.rsplit(' ').next()?.parse::<u64>().ok())
         .sum();
     assert!(placed_again >= 1, "the PUT was not placed again");
@@ -327,7 +325,7 @@ fn a_delete_placed_under_an_old_epoch_is_refused_and_placed_again() {
         .request("GET", "/metrics", &[])
         .text()
         .lines()
-        .filter(|l| l.starts_with("objectio_gateway_stale_placement_total"))
+        .filter(|l| l.starts_with("iolake_gateway_stale_placement_total"))
         .filter_map(|l| l.rsplit(' ').next()?.parse::<u64>().ok())
         .sum();
     assert!(placed_again >= 1, "the DELETE was not placed again");

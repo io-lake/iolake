@@ -1,4 +1,4 @@
-//! The OSD's metadata key-value store, as an interface (B27, objectio-docs
+//! The OSD's metadata key-value store, as an interface (B27, iolake-docs
 //! `core/osd-engines.md`): what the OSD needs of whichever engine keeps its
 //! metadata, so one can replace another. [`MetadataStore`] (its own WAL,
 //! memtable and redb index file) is the implementation today.
@@ -18,7 +18,7 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
-use objectio_common::Result;
+use iolake_common::Result;
 
 use super::store::MetadataStore;
 use super::types::{MetadataKey, MetadataOp};
@@ -257,7 +257,7 @@ impl MetaIndex for MetadataStore {
 /// engine's index; RocksDB was asked for in a build without it.
 pub fn open(config: super::store::MetadataStoreConfig) -> Result<Arc<dyn MetaIndex>> {
     use super::store::MetaEngine;
-    use objectio_common::Error;
+    use iolake_common::Error;
     let dir = config.data_dir.clone();
     let native_here = dir.join("metadata.wal").exists() || dir.join("index.redb").exists();
     let rocks_here = dir.join("rocksdb").exists();

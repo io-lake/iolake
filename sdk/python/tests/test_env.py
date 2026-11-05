@@ -1,22 +1,22 @@
 """Environment and file-based configuration.
 
-Mirrored by sdk/go/objectio/env_test.go.
+Mirrored by sdk/go/iolake/env_test.go.
 """
 
 import pytest
 
-from objectio import Client
-from objectio.client import provisioner_user_id_from_env
+from iolake import Client
+from iolake.client import provisioner_user_id_from_env
 
 ALL_VARS = [
-    "OBJECTIO_ENDPOINT",
-    "OBJECTIO_URL",
-    "OBJECTIO_ACCESS_KEY",
-    "OBJECTIO_ACCESS_KEY_FILE",
-    "OBJECTIO_SECRET_KEY",
-    "OBJECTIO_SECRET_KEY_FILE",
-    "OBJECTIO_REGION",
-    "OBJECTIO_PROVISIONER_USER_ID",
+    "IOLAKE_ENDPOINT",
+    "IOLAKE_URL",
+    "IOLAKE_ACCESS_KEY",
+    "IOLAKE_ACCESS_KEY_FILE",
+    "IOLAKE_SECRET_KEY",
+    "IOLAKE_SECRET_KEY_FILE",
+    "IOLAKE_REGION",
+    "IOLAKE_PROVISIONER_USER_ID",
     "AWS_ACCESS_KEY_ID",
     "AWS_SECRET_ACCESS_KEY",
     "AWS_REGION",
@@ -30,11 +30,11 @@ def clean_env(monkeypatch):
         monkeypatch.delenv(name, raising=False)
 
 
-def test_reads_the_objectio_names(monkeypatch):
-    monkeypatch.setenv("OBJECTIO_ENDPOINT", "https://s3.example.com")
-    monkeypatch.setenv("OBJECTIO_ACCESS_KEY", "AKIA1")
-    monkeypatch.setenv("OBJECTIO_SECRET_KEY", "s3cret")
-    monkeypatch.setenv("OBJECTIO_REGION", "eu-west-1")
+def test_reads_the_iolake_names(monkeypatch):
+    monkeypatch.setenv("IOLAKE_ENDPOINT", "https://s3.example.com")
+    monkeypatch.setenv("IOLAKE_ACCESS_KEY", "AKIA1")
+    monkeypatch.setenv("IOLAKE_SECRET_KEY", "s3cret")
+    monkeypatch.setenv("IOLAKE_REGION", "eu-west-1")
 
     c = Client.from_env()
     assert (c.endpoint, c.access_key, c.secret_key, c.region) == (
@@ -45,17 +45,17 @@ def test_reads_the_objectio_names(monkeypatch):
     )
 
 
-def test_objectio_url_is_a_synonym_for_endpoint(monkeypatch):
-    monkeypatch.setenv("OBJECTIO_URL", "https://s3.example.com")
-    monkeypatch.setenv("OBJECTIO_ACCESS_KEY", "AKIA1")
-    monkeypatch.setenv("OBJECTIO_SECRET_KEY", "s3cret")
+def test_iolake_url_is_a_synonym_for_endpoint(monkeypatch):
+    monkeypatch.setenv("IOLAKE_URL", "https://s3.example.com")
+    monkeypatch.setenv("IOLAKE_ACCESS_KEY", "AKIA1")
+    monkeypatch.setenv("IOLAKE_SECRET_KEY", "s3cret")
     assert Client.from_env().endpoint == "https://s3.example.com"
 
 
 def test_falls_back_to_the_aws_names(monkeypatch):
     # A pod that already carries AWS credentials for its S3 client should not
     # need a second copy under different names.
-    monkeypatch.setenv("OBJECTIO_ENDPOINT", "https://s3.example.com")
+    monkeypatch.setenv("IOLAKE_ENDPOINT", "https://s3.example.com")
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAAWS")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "awssecret")
     monkeypatch.setenv("AWS_DEFAULT_REGION", "ap-south-1")
@@ -64,10 +64,10 @@ def test_falls_back_to_the_aws_names(monkeypatch):
     assert (c.access_key, c.secret_key, c.region) == ("AKIAAWS", "awssecret", "ap-south-1")
 
 
-def test_objectio_names_win_over_aws(monkeypatch):
-    monkeypatch.setenv("OBJECTIO_ENDPOINT", "https://s3.example.com")
-    monkeypatch.setenv("OBJECTIO_ACCESS_KEY", "AKIAOWN")
-    monkeypatch.setenv("OBJECTIO_SECRET_KEY", "own")
+def test_iolake_names_win_over_aws(monkeypatch):
+    monkeypatch.setenv("IOLAKE_ENDPOINT", "https://s3.example.com")
+    monkeypatch.setenv("IOLAKE_ACCESS_KEY", "AKIAOWN")
+    monkeypatch.setenv("IOLAKE_SECRET_KEY", "own")
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAAWS")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "awssecret")
 
@@ -84,9 +84,9 @@ def test_secret_from_a_file_and_the_trailing_newline_is_stripped(monkeypatch, tm
     access = tmp_path / "access"
     access.write_text("AKIAFILE\n")
 
-    monkeypatch.setenv("OBJECTIO_ENDPOINT", "https://s3.example.com")
-    monkeypatch.setenv("OBJECTIO_ACCESS_KEY_FILE", str(access))
-    monkeypatch.setenv("OBJECTIO_SECRET_KEY_FILE", str(secret))
+    monkeypatch.setenv("IOLAKE_ENDPOINT", "https://s3.example.com")
+    monkeypatch.setenv("IOLAKE_ACCESS_KEY_FILE", str(access))
+    monkeypatch.setenv("IOLAKE_SECRET_KEY_FILE", str(secret))
 
     c = Client.from_env()
     assert (c.access_key, c.secret_key) == ("AKIAFILE", "s3cret")
@@ -95,26 +95,26 @@ def test_secret_from_a_file_and_the_trailing_newline_is_stripped(monkeypatch, tm
 def test_the_file_wins_over_the_inline_value(monkeypatch, tmp_path):
     secret = tmp_path / "secret"
     secret.write_text("from-file")
-    monkeypatch.setenv("OBJECTIO_ENDPOINT", "https://s3.example.com")
-    monkeypatch.setenv("OBJECTIO_ACCESS_KEY", "AKIA1")
-    monkeypatch.setenv("OBJECTIO_SECRET_KEY", "from-env")
-    monkeypatch.setenv("OBJECTIO_SECRET_KEY_FILE", str(secret))
+    monkeypatch.setenv("IOLAKE_ENDPOINT", "https://s3.example.com")
+    monkeypatch.setenv("IOLAKE_ACCESS_KEY", "AKIA1")
+    monkeypatch.setenv("IOLAKE_SECRET_KEY", "from-env")
+    monkeypatch.setenv("IOLAKE_SECRET_KEY_FILE", str(secret))
     assert Client.from_env().secret_key == "from-file"
 
 
 def test_region_defaults(monkeypatch):
-    monkeypatch.setenv("OBJECTIO_ENDPOINT", "https://s3.example.com")
-    monkeypatch.setenv("OBJECTIO_ACCESS_KEY", "AKIA1")
-    monkeypatch.setenv("OBJECTIO_SECRET_KEY", "s")
+    monkeypatch.setenv("IOLAKE_ENDPOINT", "https://s3.example.com")
+    monkeypatch.setenv("IOLAKE_ACCESS_KEY", "AKIA1")
+    monkeypatch.setenv("IOLAKE_SECRET_KEY", "s")
     assert Client.from_env().region == "us-east-1"
 
 
 @pytest.mark.parametrize(
     "present,missing",
     [
-        ({"OBJECTIO_ACCESS_KEY": "a", "OBJECTIO_SECRET_KEY": "b"}, "OBJECTIO_ENDPOINT"),
-        ({"OBJECTIO_ENDPOINT": "https://x", "OBJECTIO_SECRET_KEY": "b"}, "OBJECTIO_ACCESS_KEY"),
-        ({"OBJECTIO_ENDPOINT": "https://x", "OBJECTIO_ACCESS_KEY": "a"}, "OBJECTIO_SECRET_KEY"),
+        ({"IOLAKE_ACCESS_KEY": "a", "IOLAKE_SECRET_KEY": "b"}, "IOLAKE_ENDPOINT"),
+        ({"IOLAKE_ENDPOINT": "https://x", "IOLAKE_SECRET_KEY": "b"}, "IOLAKE_ACCESS_KEY"),
+        ({"IOLAKE_ENDPOINT": "https://x", "IOLAKE_ACCESS_KEY": "a"}, "IOLAKE_SECRET_KEY"),
     ],
 )
 def test_missing_settings_name_themselves(monkeypatch, present, missing):
@@ -125,14 +125,14 @@ def test_missing_settings_name_themselves(monkeypatch, present, missing):
 
 
 def test_unreadable_secret_file_is_an_error(monkeypatch, tmp_path):
-    monkeypatch.setenv("OBJECTIO_ENDPOINT", "https://s3.example.com")
-    monkeypatch.setenv("OBJECTIO_ACCESS_KEY", "AKIA1")
-    monkeypatch.setenv("OBJECTIO_SECRET_KEY_FILE", str(tmp_path / "nope"))
+    monkeypatch.setenv("IOLAKE_ENDPOINT", "https://s3.example.com")
+    monkeypatch.setenv("IOLAKE_ACCESS_KEY", "AKIA1")
+    monkeypatch.setenv("IOLAKE_SECRET_KEY_FILE", str(tmp_path / "nope"))
     with pytest.raises(OSError):
         Client.from_env()
 
 
 def test_provisioner_user_id(monkeypatch):
     assert provisioner_user_id_from_env() == ""
-    monkeypatch.setenv("OBJECTIO_PROVISIONER_USER_ID", " abc-123 \n")
+    monkeypatch.setenv("IOLAKE_PROVISIONER_USER_ID", " abc-123 \n")
     assert provisioner_user_id_from_env() == "abc-123"

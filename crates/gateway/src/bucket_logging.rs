@@ -38,11 +38,11 @@ use std::time::{Duration, Instant};
 use axum::body::Body;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use objectio_auth::AuthResult;
-use objectio_auth::policy::{BucketPolicy, PolicyDecision, PolicyEvaluator, RequestContext};
-use objectio_common::histogram::CounterVec;
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
-use objectio_proto::metadata::{
+use iolake_auth::AuthResult;
+use iolake_auth::policy::{BucketPolicy, PolicyDecision, PolicyEvaluator, RequestContext};
+use iolake_common::histogram::CounterVec;
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_proto::metadata::{
     GetBucketPolicyRequest, GetBucketRequest, GetBucketSettingRequest, PutBucketSettingRequest,
 };
 use parking_lot::{Mutex, RwLock};
@@ -77,17 +77,17 @@ static FAILURES: LazyLock<CounterVec> = LazyLock::new(CounterVec::new);
 pub fn render_metrics(out: &mut String) {
     DELIVERED.render(
         out,
-        "objectio_bucket_logging_records_total",
+        "iolake_bucket_logging_records_total",
         "Access-log records delivered into target buckets",
     );
     DROPPED.render(
         out,
-        "objectio_bucket_logging_dropped_total",
+        "iolake_bucket_logging_dropped_total",
         "Access-log records not delivered, by reason",
     );
     FAILURES.render(
         out,
-        "objectio_bucket_logging_delivery_failures_total",
+        "iolake_bucket_logging_delivery_failures_total",
         "Failed attempts to write a log object (retried)",
     );
 }
@@ -286,9 +286,9 @@ pub(crate) fn policy_allows(
             .statements
             .iter()
             .filter(|s| {
-                s.effect == objectio_auth::policy::Effect::Deny
+                s.effect == iolake_auth::policy::Effect::Deny
                     || matches!(&s.principal,
-                        objectio_auth::policy::Principal::OBIO(names) if names.contains(&service))
+                        iolake_auth::policy::Principal::OBIO(names) if names.contains(&service))
             })
             .cloned()
             .collect(),

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run ceph's s3-tests against a fresh objectio-aio, and write a report.
+# Run ceph's s3-tests against a fresh iolake-aio, and write a report.
 #
 #   scripts/s3-tests/run.sh [options] [-- extra pytest args]
 #
@@ -9,15 +9,15 @@
 #   --jobs N         pytest workers (default: 4)
 #   --s3tests REF    s3-tests commit to test against (default: the pinned one)
 #   --acl-shim       turn canned bucket ACLs into equivalent bucket policies
-#                    (ObjectIO is BucketOwnerEnforced); off by default so runs
+#                    (IOLake is BucketOwnerEnforced); off by default so runs
 #                    compare
-#   --no-build       use target/debug/objectio-aio as it is
+#   --no-build       use target/debug/iolake-aio as it is
 #   --previous CSV   an earlier results.csv: the summary lists what changed
 #
 # Any arguments after `--` go to pytest, e.g. `-- -k test_object_` for a subset.
 #
 # Results land in <work>/report/: results.csv (one row per test), summary.md,
-# junit.xml. To publish a run, copy that folder to objectio-docs under
+# junit.xml. To publish a run, copy that folder to iolake-docs under
 # developer-guide/s3-compatibility/<date>/<platform>/. Failures are labelled from
 # known-failures.csv next to this script; add new ones there.
 set -euo pipefail
@@ -67,12 +67,12 @@ PY="$WORK/venv/bin/python"
 "$PY" -m pip install -q -e "$WORK/s3-tests"
 
 if [ "$BUILD" = 1 ]; then
-  (cd "$REPO" && cargo build --bin objectio-aio)
+  (cd "$REPO" && cargo build --bin iolake-aio)
 fi
 
 # A fresh cluster every run: leftovers from an earlier run change results.
 rm -rf "$DATA"
-"$REPO/target/debug/objectio-aio" \
+"$REPO/target/debug/iolake-aio" \
   --data "$DATA" --port "$PORT" --listen-addr 127.0.0.1 \
   --osds 6 --ec-k 4 --ec-m 2 --auth \
   --lifecycle-interval-secs 2 --lifecycle-day-secs 10 \

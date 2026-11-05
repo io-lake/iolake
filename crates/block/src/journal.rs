@@ -7,7 +7,7 @@ use crate::chunk::ChunkId;
 use crate::error::{BlockError, BlockResult};
 
 use bytes::Bytes;
-use objectio_common::log_tail::{ReadAt, whole_record_after};
+use iolake_common::log_tail::{ReadAt, whole_record_after};
 use parking_lot::Mutex;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
@@ -355,7 +355,7 @@ fn new_journal(path: &Path, sequence: u64) -> BlockResult<(PathBuf, File)> {
 ///
 /// Fail-stop: a write or sync that fails leaves the journal refusing every
 /// write after it until it is opened again, and an open refuses a journal
-/// damaged anywhere but at its end (objectio-docs `block/block-write-path.md`).
+/// damaged anywhere but at its end (iolake-docs `block/block-write-path.md`).
 pub struct WriteJournal {
     /// Journal file path
     path: PathBuf,
@@ -413,7 +413,7 @@ impl WriteJournal {
     /// # Errors
     /// I/O; a header this release doesn't read; a whole entry of a type it
     /// doesn't know; or a damaged entry with a whole one after it, which is
-    /// damage, not a torn write (objectio-common `log_tail`).
+    /// damage, not a torn write (iolake-common `log_tail`).
     pub fn open<P: AsRef<Path>>(path: P, max_size: u64) -> BlockResult<Self> {
         let path = path.as_ref().to_path_buf();
 
@@ -677,7 +677,7 @@ impl WriteJournal {
     /// before then leaves at most a torn tail, which the open cuts off. Any
     /// other failure, or a cut that fails, fails the journal.
     fn write_failed(&self, file: &mut File, start: u64, e: &std::io::Error) -> BlockError {
-        if !objectio_common::error::is_out_of_space(e) {
+        if !iolake_common::error::is_out_of_space(e) {
             return self.fail("write", e);
         }
         let cut = file.metadata().and_then(|m| {
@@ -957,26 +957,26 @@ impl WriteJournal {
 }
 
 /// Time of each journal fsync: every acknowledged block write waits for one.
-static SYNC_SECONDS: std::sync::LazyLock<objectio_common::histogram::Histogram> =
+static SYNC_SECONDS: std::sync::LazyLock<iolake_common::histogram::Histogram> =
     std::sync::LazyLock::new(|| {
-        objectio_common::histogram::Histogram::new(objectio_common::histogram::LATENCY_BUCKETS)
+        iolake_common::histogram::Histogram::new(iolake_common::histogram::LATENCY_BUCKETS)
     });
 
 /// Journal entries made durable, counted once each: entries per fsync is
-/// `objectio_block_journal_entries_synced_total / …_fsync_seconds_count`.
+/// `iolake_block_journal_entries_synced_total / …_fsync_seconds_count`.
 static SYNCED_ENTRIES: AtomicU64 = AtomicU64::new(0);
 
 /// The journal's metrics, as Prometheus text.
 pub fn render_metrics(out: &mut String) {
     let n = SYNCED_ENTRIES.load(Ordering::Relaxed);
     out.push_str(&format!(
-        "# HELP objectio_block_journal_entries_synced_total Journal entries made durable; divided by fsyncs, the group-commit size\n\
-         # TYPE objectio_block_journal_entries_synced_total counter\n\
-         objectio_block_journal_entries_synced_total {n}\n"
+        "# HELP iolake_block_journal_entries_synced_total Journal entries made durable; divided by fsyncs, the group-commit size\n\
+         # TYPE iolake_block_journal_entries_synced_total counter\n\
+         iolake_block_journal_entries_synced_total {n}\n"
     ));
     SYNC_SECONDS.render(
         out,
-        "objectio_block_journal_fsync_seconds",
+        "iolake_block_journal_fsync_seconds",
         "Time to fsync the block write journal; every acknowledged write waits for one",
         "",
     );
@@ -1326,7 +1326,7 @@ mod fail_stop_tests {
                     .unwrap_err();
                 assert!(
                     matches!(&err, BlockError::Io(e)
-                        if objectio_common::error::is_out_of_space(e)),
+                        if iolake_common::error::is_out_of_space(e)),
                     "{err}"
                 );
             };

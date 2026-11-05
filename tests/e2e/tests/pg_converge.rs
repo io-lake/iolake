@@ -8,13 +8,13 @@
 
 use std::time::{Duration, Instant};
 
-use objectio_e2e::ha::HaCluster;
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
-use objectio_proto::metadata::{
+use iolake_e2e::ha::HaCluster;
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_proto::metadata::{
     CreateObjectRequest, DeleteObjectRequest, HealEnqueueRequest, HealListRequest, ObjectMeta,
 };
-use objectio_proto::storage::GetObjectMetaRequest;
-use objectio_proto::storage::storage_service_client::StorageServiceClient;
+use iolake_proto::storage::GetObjectMetaRequest;
+use iolake_proto::storage::storage_service_client::StorageServiceClient;
 use serde_json::json;
 
 const WITHIN: Duration = Duration::from_secs(120);
@@ -58,7 +58,7 @@ fn copy_on(
 ) -> Option<ObjectMeta> {
     let address = ha.osd_endpoint(i).trim_start_matches("http://").to_string();
     rt.block_on(async {
-        let r = StorageServiceClient::new(objectio_e2e::tls::channel(&address).await.ok()?)
+        let r = StorageServiceClient::new(iolake_e2e::tls::channel(&address).await.ok()?)
             .get_object_meta(GetObjectMetaRequest {
                 bucket: "conv".to_string(),
                 key: key.to_string(),
@@ -77,11 +77,11 @@ fn meta(
     rt: &tokio::runtime::Runtime,
     ha: &HaCluster,
 ) -> MetadataServiceClient<tonic::transport::Channel> {
-    objectio_e2e::tls::client();
+    iolake_e2e::tls::client();
     let endpoints = ha.meta_endpoints();
     rt.block_on(async {
         MetadataServiceClient::new(
-            objectio_proto::transport::meta_channel(&endpoints)
+            iolake_proto::transport::meta_channel(&endpoints)
                 .await
                 .unwrap(),
         )
@@ -250,7 +250,7 @@ fn a_pg_down_says_why_and_nothing_loops() {
     ha.stop_osd(3);
     ha.stop_osd(4);
     ha.stop_osd(5);
-    let down = "objectio_meta_pgs{state=\"Down\"}";
+    let down = "iolake_meta_pgs{state=\"Down\"}";
     until("PGs Down", || ha.meta_metric(down).unwrap_or(0.0) > 0.0);
 
     let pgs = ha.clients[0]
@@ -271,9 +271,9 @@ fn a_pg_down_says_why_and_nothing_loops() {
 
     let counters = |ha: &HaCluster| {
         (
-            ha.meta_metric("objectio_meta_pg_recovery_retries_total")
+            ha.meta_metric("iolake_meta_pg_recovery_retries_total")
                 .unwrap_or(0.0),
-            ha.meta_metric("objectio_meta_scrub_errors_total")
+            ha.meta_metric("iolake_meta_scrub_errors_total")
                 .unwrap_or(0.0),
         )
     };

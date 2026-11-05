@@ -1,5 +1,5 @@
-//! Standard `process_*` metrics and `objectio_build_info`, hand-rendered in
-//! the Prometheus text format like the rest of ObjectIO's metrics.
+//! Standard `process_*` metrics and `iolake_build_info`, hand-rendered in
+//! the Prometheus text format like the rest of IOLake's metrics.
 //!
 //! Every service calls [`render`]. In the all-in-one binary they share one
 //! process, so each exposition also carries [`instance_id`]: the gateway,
@@ -9,16 +9,16 @@
 use std::fmt::Write;
 use std::sync::OnceLock;
 
-/// Release version baked in at build time (`OBJECTIO_VERSION`), falling
+/// Release version baked in at build time (`IOLAKE_VERSION`), falling
 /// back to the crate version. The crate version is the same for every
 /// build, so a release sets the tag here.
-pub const VERSION: &str = match option_env!("OBJECTIO_VERSION") {
+pub const VERSION: &str = match option_env!("IOLAKE_VERSION") {
     Some(v) if !v.is_empty() => v,
     _ => env!("CARGO_PKG_VERSION"),
 };
 
-/// Git commit baked in at build time (`OBJECTIO_GIT_COMMIT`).
-pub const COMMIT: &str = match option_env!("OBJECTIO_GIT_COMMIT") {
+/// Git commit baked in at build time (`IOLAKE_GIT_COMMIT`).
+pub const COMMIT: &str = match option_env!("IOLAKE_GIT_COMMIT") {
     Some(c) if !c.is_empty() => c,
     _ => "unknown",
 };
@@ -38,13 +38,13 @@ pub fn render(labels: &str) -> String {
 
     family(
         &mut out,
-        "objectio_build_info",
+        "iolake_build_info",
         "gauge",
         "Build version and commit; always 1",
     );
     writeln!(
         out,
-        "objectio_build_info{{version=\"{VERSION}\",commit=\"{COMMIT}\"{sep}{labels}}} 1"
+        "iolake_build_info{{version=\"{VERSION}\",commit=\"{COMMIT}\"{sep}{labels}}} 1"
     )
     .unwrap();
 
@@ -212,7 +212,7 @@ mod tests {
     #[test]
     fn renders_build_info_and_cpu() {
         let out = render("osd_id=\"a\"");
-        assert!(out.contains("objectio_build_info{version=\""), "{out}");
+        assert!(out.contains("iolake_build_info{version=\""), "{out}");
         assert!(out.contains(",osd_id=\"a\"} 1"), "{out}");
         assert!(
             out.contains("process_cpu_seconds_total{osd_id=\"a\"} "),
@@ -228,6 +228,6 @@ mod tests {
     fn no_labels_renders_bare_names() {
         let out = render("");
         assert!(out.contains("process_cpu_seconds_total "), "{out}");
-        assert!(out.contains("objectio_build_info{version=\""), "{out}");
+        assert!(out.contains("iolake_build_info{version=\""), "{out}");
     }
 }

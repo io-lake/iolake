@@ -17,11 +17,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from objectio import (
+from iolake import (
     APIError,
     BucketAccess,
     Client,
-    ObjectIOError,
+    IOLakeError,
     OIDCProvider,
     PublicAccessBlock,
     tenant_oidc_provider_name,
@@ -117,7 +117,7 @@ def client(stub):
 def test_endpoint_only_client_refuses_signed_calls(stub):
     c = Client(endpoint=stub.endpoint)
     assert not c.has_credentials
-    with pytest.raises(ObjectIOError, match="needs credentials"):
+    with pytest.raises(IOLakeError, match="needs credentials"):
         c.list_users()
     assert stub.requests == []
 

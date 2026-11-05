@@ -20,13 +20,13 @@ use axum::{
 };
 use base64::Engine;
 use bytes::Bytes;
-use objectio_auth::{
+use iolake_auth::{
     AuthResult,
     policy::{BucketPolicy, PolicyEvaluator},
 };
-use objectio_common::ErasureConfig;
-use objectio_erasure::ErasureCodec;
-use objectio_proto::metadata::{
+use iolake_common::ErasureConfig;
+use iolake_erasure::ErasureCodec;
+use iolake_proto::metadata::{
     AbortMultipartUploadRequest,
     BucketSseConfiguration,
     CompleteMultipartUploadRequest as ProtoCompleteMultipartUploadRequest,
@@ -133,7 +133,7 @@ pub struct AppState {
     /// SSE-S3 master key for wrapping per-object DEKs. `None` when
     /// no master key was configured — PUTs targeting buckets with
     /// default encryption will fail in that case.
-    pub master_key: Option<objectio_kms::MasterKey>,
+    pub master_key: Option<iolake_kms::MasterKey>,
     /// KMS provider used by SSE-KMS PUT/GET paths. Polymorphic so the same
     /// code handles local, Vault, and AWS KMS backends identically.
     ///
@@ -141,7 +141,7 @@ pub struct AppState {
     /// backend without restarting the gateway. Accessors below clone the
     /// inner `Arc` out of the lock before any async call so the lock is
     /// never held across an `await`.
-    pub kms: parking_lot::RwLock<Option<Arc<dyn objectio_kms::KmsProvider>>>,
+    pub kms: parking_lot::RwLock<Option<Arc<dyn iolake_kms::KmsProvider>>>,
     /// Concrete handle to the local KMS provider (only when backend=local).
     /// Used by `/_admin/kms/*` key-management endpoints. External backends
     /// leave this `None` and those endpoints return `NotImplemented`.
@@ -150,7 +150,7 @@ pub struct AppState {
     /// read routing (Phase 2): shards on OSDs that share enclosing levels
     /// are tried first. Fully-empty when not configured — routing then
     /// falls back to round-robin and this struct is inert.
-    pub self_topology: objectio_placement::FailureDomainInfo,
+    pub self_topology: iolake_placement::FailureDomainInfo,
     /// Platform-specific host lifecycle. `NoopHostProvider` by default;
     /// a k8s / ssh / appliance provider gets wired in via `--host-provider`
     /// at startup. Behind an `Arc<dyn>` so handlers can clone into async
@@ -171,7 +171,7 @@ pub struct AppState {
     pub inline_max_size: usize,
     /// The largest shard sent with its object's metadata (B21); 0: never.
     pub small_shard_max: usize,
-    /// Dedup dry-run queue (objectio-docs `architecture/design/core/dedup.md`).
+    /// Dedup dry-run queue (iolake-docs `architecture/design/core/dedup.md`).
     pub dedup: crate::dedup::DryRun,
     /// Proxies whose `X-Forwarded-For` names the client (`aws:SourceIp`).
     pub trusted_proxies: crate::origin::TrustedProxies,
@@ -192,7 +192,7 @@ impl AppState {
     /// Snapshot of the current KMS provider for polymorphic SSE use.
     /// Returns an owned `Arc` so the caller can `.await` without holding
     /// the internal lock.
-    pub fn kms(&self) -> Option<Arc<dyn objectio_kms::KmsProvider>> {
+    pub fn kms(&self) -> Option<Arc<dyn iolake_kms::KmsProvider>> {
         self.kms.read().clone()
     }
 
@@ -206,7 +206,7 @@ impl AppState {
     /// paths always see a consistent pair.
     pub fn set_kms(
         &self,
-        kms: Option<Arc<dyn objectio_kms::KmsProvider>>,
+        kms: Option<Arc<dyn iolake_kms::KmsProvider>>,
         kms_local: Option<Arc<crate::kms::LocalKmsProvider>>,
     ) {
         *self.kms.write() = kms;
@@ -570,7 +570,7 @@ pub(crate) async fn get_placement_nodes_for_object(
     state: &AppState,
     bucket: &str,
     key: &str,
-) -> Result<Vec<objectio_proto::metadata::NodePlacement>, Response> {
+) -> Result<Vec<iolake_proto::metadata::NodePlacement>, Response> {
     let mut client = state.meta_client.clone();
     match client
         .get_placement(GetPlacementRequest {
@@ -631,7 +631,7 @@ mod s3_tests {
     /// not by `modified_at`, which only has seconds.
     #[test]
     fn a_null_version_made_later_in_the_same_second_sorts_newer() {
-        use objectio_proto::metadata::ObjectMeta;
+        use iolake_proto::metadata::ObjectMeta;
         let versioned = ObjectMeta {
             version_id: uuid::Uuid::now_v7().to_string(),
             object_id: uuid::Uuid::now_v7().as_bytes().to_vec(),
@@ -873,10 +873,10 @@ mod s3_tests {
     fn user_metadata_is_stored_without_its_prefix() {
         let m = extract_user_metadata(&headers(&[
             ("x-amz-meta-author", "alice"),
-            ("x-amz-meta-project", "objectio"),
+            ("x-amz-meta-project", "iolake"),
         ]));
         assert_eq!(m.get("author").map(String::as_str), Some("alice"));
-        assert_eq!(m.get("project").map(String::as_str), Some("objectio"));
+        assert_eq!(m.get("project").map(String::as_str), Some("iolake"));
     }
 
     #[test]

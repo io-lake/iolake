@@ -1,4 +1,4 @@
-//! Checksum utilities for ObjectIO
+//! Checksum utilities for IOLake
 //!
 //! Provides multi-algorithm checksum calculation and verification
 //! for data integrity.

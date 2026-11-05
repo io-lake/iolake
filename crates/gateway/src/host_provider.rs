@@ -13,7 +13,7 @@
 //!
 //! ## Phases
 //!
-//! Phase 2 (this): [`K8sHostProvider`]. Scales `StatefulSet/objectio-osd`
+//! Phase 2 (this): [`K8sHostProvider`]. Scales `StatefulSet/iolake-osd`
 //! for Add Host, deletes the pod for Reboot. Requires an RBAC-granted
 //! ServiceAccount on the gateway pod.
 //!
@@ -25,7 +25,7 @@ use async_trait::async_trait;
 
 /// Errors returned by a host provider.
 ///
-/// Distinct from `objectio_common::Error` because the K8s client's
+/// Distinct from `iolake_common::Error` because the K8s client's
 /// error types are opaque; surfacing them as strings with a category
 /// keeps the admin HTTP layer simple (400 vs 503 vs 500).
 #[derive(Debug, thiserror::Error)]
@@ -91,7 +91,7 @@ pub trait HostProvider: Send + Sync {
 
     /// Reboot the pod / machine running an OSD, identified by its
     /// pod / host name (not the OSD `node_id`). K8s: `delete pod`;
-    /// SSH: `systemctl restart objectio-osd`; appliance: agent reboot.
+    /// SSH: `systemctl restart iolake-osd`; appliance: agent reboot.
     async fn reboot(&self, host: &str) -> Result<RebootOutcome, HostProviderError>;
 }
 
@@ -127,7 +127,7 @@ impl HostProvider for NoopHostProvider {
 /// grants this SA the RBAC below.
 ///
 /// Permissions required:
-///   - patch `statefulsets/scale` on `objectio-osd` (Add Host)
+///   - patch `statefulsets/scale` on `iolake-osd` (Add Host)
 ///   - delete `pods` matching the OSD label selector (Reboot)
 pub struct K8sHostProvider {
     client: kube::Client,
@@ -135,7 +135,7 @@ pub struct K8sHostProvider {
     /// gateway env as `POD_NAMESPACE` (downward API).
     namespace: String,
     /// Name of the OSD StatefulSet — typically `{release}-osd`, e.g.
-    /// `objectio-osd`. Gateway args surface this so a renamed helm
+    /// `iolake-osd`. Gateway args surface this so a renamed helm
     /// release still addresses the right sts.
     sts_name: String,
 }
@@ -202,7 +202,7 @@ impl HostProvider for K8sHostProvider {
 
         // The newly-scheduled pods follow the sts naming pattern
         // `{sts_name}-{ordinal}`; list them so the caller can display
-        // "added: objectio-osd-5, objectio-osd-6".
+        // "added: iolake-osd-5, iolake-osd-6".
         let pods_added: Vec<String> = (previous_replicas..new_replicas)
             .map(|i| format!("{}-{}", self.sts_name, i))
             .collect();

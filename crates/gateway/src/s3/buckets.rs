@@ -33,7 +33,7 @@ pub async fn list_buckets(
         Some(Extension(a)) if a.user_arn != crate::admin::SYSTEM_ADMIN_USER_ARN => {
             let tenant_admin = !a.tenant.is_empty()
                 && client
-                    .get_tenant(objectio_proto::metadata::GetTenantRequest {
+                    .get_tenant(iolake_proto::metadata::GetTenantRequest {
                         name: a.tenant.clone(),
                     })
                     .await
@@ -81,8 +81,8 @@ pub async fn list_buckets(
             let result = ListBucketsResult {
                 continuation_token,
                 owner: Owner {
-                    id: "objectio".to_string(),
-                    display_name: "ObjectIO User".to_string(),
+                    id: "iolake".to_string(),
+                    display_name: "IOLake User".to_string(),
                 },
                 buckets: Buckets {
                     bucket: buckets
@@ -184,7 +184,7 @@ pub async fn create_bucket(
     }
 
     // S3's naming rules, for a bucket created through S3.
-    if let Err(e) = objectio_common::BucketName::new(bucket.clone()) {
+    if let Err(e) = iolake_common::BucketName::new(bucket.clone()) {
         return S3Error::xml_response(
             "InvalidBucketName",
             &format!("The specified bucket is not valid: {e}"),
@@ -221,7 +221,7 @@ pub async fn create_bucket(
             settings: crate::public_access::initial_settings(&state).await,
             // The pool its data goes to; meta checks the tenant may use it.
             pool: headers
-                .get("x-objectio-pool")
+                .get("x-iolake-pool")
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or_default()
                 .to_string(),
@@ -323,7 +323,7 @@ pub async fn create_bucket(
             ) {
                 // A pool that doesn't exist or is disabled.
                 S3Error::xml_response("InvalidArgument", e.message(), StatusCode::BAD_REQUEST)
-            } else if objectio_proto::is_no_room(&e) {
+            } else if iolake_proto::is_no_room(&e) {
                 S3Error::meta_full(&e)
             } else if e.code() == tonic::Code::ResourceExhausted {
                 S3Error::xml_response("TooManyBuckets", e.message(), StatusCode::BAD_REQUEST)
@@ -437,7 +437,7 @@ pub async fn delete_bucket(
 /// Whether any OSD holds a version or delete marker in `bucket`. Every
 /// OSD in the listing must answer: one that can't might hold the only one.
 pub(crate) async fn holds_versions(state: &AppState, bucket: &str) -> Result<bool, Response> {
-    use objectio_proto::storage::ListObjectVersionsMetaRequest;
+    use iolake_proto::storage::ListObjectVersionsMetaRequest;
     let unavailable = |what: String| {
         warn!("{bucket}: cannot tell whether it is empty: {what}");
         S3Error::xml_response(
@@ -518,7 +518,7 @@ pub(crate) async fn bucket_versioning(
 pub(crate) async fn bucket_versioning_with(
     meta_client: &mut MetadataServiceClient<Channel>,
     bucket: &str,
-    pre: Option<Result<objectio_proto::metadata::GetBucketVersioningResponse, tonic::Status>>,
+    pre: Option<Result<iolake_proto::metadata::GetBucketVersioningResponse, tonic::Status>>,
 ) -> Result<VersioningState, Response> {
     let answer = match pre {
         Some(answer) => answer,
@@ -1131,7 +1131,7 @@ mod meta_full_tests {
     /// meta being unavailable.
     #[test]
     fn a_write_meta_has_no_room_for_is_507() {
-        let full = objectio_proto::no_room("meta can't take writes");
+        let full = iolake_proto::no_room("meta can't take writes");
         assert_eq!(
             S3Error::from_status(&full).status(),
             StatusCode::INSUFFICIENT_STORAGE

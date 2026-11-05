@@ -1,5 +1,5 @@
 """pytest plugin: map canned *bucket* ACLs to equivalent public bucket policies
-(ObjectIO is BucketOwnerEnforced). Object ACLs are left alone."""
+(IOLake is BucketOwnerEnforced). Object ACLs are left alone."""
 import json, botocore.client
 _orig = botocore.client.BaseClient._make_api_call
 ACTS = {"public-read": (["s3:ListBucket"], ["s3:GetObject"]),

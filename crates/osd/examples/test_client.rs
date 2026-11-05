@@ -1,6 +1,6 @@
 //! Simple test client for OSD gRPC service
 
-use objectio_proto::storage::{
+use iolake_proto::storage::{
     Checksum, GetStatusRequest, HealthCheckRequest, ReadShardRequest, ShardId, WriteShardRequest,
     storage_service_client::StorageServiceClient,
 };
@@ -14,9 +14,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Connecting to OSD at {}...", endpoint);
 
-    let endpoint = objectio_proto::transport::endpoint(&endpoint)?;
-    let mut client =
-        StorageServiceClient::new(objectio_proto::transport::connect(&endpoint).await?);
+    let endpoint = iolake_proto::transport::endpoint(&endpoint)?;
+    let mut client = StorageServiceClient::new(iolake_proto::transport::connect(&endpoint).await?);
 
     // Test 1: Health check
     println!("\n--- Health Check ---");
@@ -52,7 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Test 3: Write a shard
     println!("\n--- Write Shard ---");
     let object_id = *Uuid::new_v4().as_bytes();
-    let test_data = b"Hello from ObjectIO test client! This is test data for the storage service.";
+    let test_data = b"Hello from IOLake test client! This is test data for the storage service.";
 
     let write_response = client
         .write_shard(WriteShardRequest {

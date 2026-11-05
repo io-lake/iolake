@@ -139,19 +139,19 @@ export const RANGES: RangeOption[] = [
 /// and a long query returns holes wherever scrapes were sparse.
 export const QUERIES = {
   requestsByOperation:
-    'sum by (operation) (rate(objectio_s3_requests_total{status="success"}[$RATE]))',
+    'sum by (operation) (rate(iolake_s3_requests_total{status="success"}[$RATE]))',
   latencyQuantile: (q: number) =>
-    `histogram_quantile(${q}, sum by (le) (rate(objectio_s3_request_duration_seconds_bucket[$RATE])))`,
+    `histogram_quantile(${q}, sum by (le) (rate(iolake_s3_request_duration_seconds_bucket[$RATE])))`,
   errorsByClass:
-    'sum by (status) (rate(objectio_s3_requests_total{status=~"client_error|server_error"}[$RATE]))',
-  icebergOps: "sum(rate(objectio_iceberg_requests_total[$RATE]))",
+    'sum by (status) (rate(iolake_s3_requests_total{status=~"client_error|server_error"}[$RATE]))',
+  icebergOps: "sum(rate(iolake_iceberg_requests_total[$RATE]))",
   // Possible only through Prometheus: `instance` is added by the scraper, and
   // is absent from the /metrics text the live view reads.
   throughputByInstance:
-    "sum by (instance) (rate(objectio_s3_response_bytes_total[$RATE]))",
+    "sum by (instance) (rate(iolake_s3_response_bytes_total[$RATE]))",
   // p99 of every OSD call, by method, in milliseconds.
   osdLatencyByInstance:
-    "1000 * histogram_quantile(0.99, sum by (method, le) (rate(objectio_osd_grpc_latency_seconds_bucket[$RATE])))",
+    "1000 * histogram_quantile(0.99, sum by (method, le) (rate(iolake_osd_grpc_latency_seconds_bucket[$RATE])))",
 };
 
 /// Rate window for a given range. A 5s scrape needs at least a few intervals

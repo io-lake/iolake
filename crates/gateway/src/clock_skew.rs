@@ -8,8 +8,8 @@
 //!
 //! Until the first comparison, writes go ahead.
 
-use objectio_proto::metadata::GetTimeRequest;
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_proto::metadata::GetTimeRequest;
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::time::Duration;
 use tonic::transport::Channel;
@@ -28,7 +28,7 @@ static SKEWED: AtomicBool = AtomicBool::new(false);
 
 /// The clock this gateway stamps writes from.
 fn now_ms() -> i64 {
-    i64::try_from(objectio_common::stamp::wall_millis()).unwrap_or(i64::MAX)
+    i64::try_from(iolake_common::stamp::wall_millis()).unwrap_or(i64::MAX)
 }
 
 /// The refusal, if this gateway's clock is too far from meta's to stamp a
@@ -81,22 +81,22 @@ pub fn spawn(meta: MetadataServiceClient<Channel>) {
     });
 }
 
-/// `objectio_gateway_clock_offset_seconds` and
-/// `objectio_gateway_clock_skewed`, in Prometheus text.
+/// `iolake_gateway_clock_offset_seconds` and
+/// `iolake_gateway_clock_skewed`, in Prometheus text.
 pub fn render(out: &mut String) {
     #[allow(clippy::cast_precision_loss)]
     let offset = OFFSET_MS.load(Ordering::Relaxed) as f64 / 1000.0;
     out.push_str(
-        "# HELP objectio_gateway_clock_offset_seconds This gateway's clock minus meta's\n\
-         # TYPE objectio_gateway_clock_offset_seconds gauge\n",
+        "# HELP iolake_gateway_clock_offset_seconds This gateway's clock minus meta's\n\
+         # TYPE iolake_gateway_clock_offset_seconds gauge\n",
     );
-    out.push_str(&format!("objectio_gateway_clock_offset_seconds {offset}\n"));
+    out.push_str(&format!("iolake_gateway_clock_offset_seconds {offset}\n"));
     out.push_str(
-        "# HELP objectio_gateway_clock_skewed 1 while writes are refused for clock skew\n\
-         # TYPE objectio_gateway_clock_skewed gauge\n",
+        "# HELP iolake_gateway_clock_skewed 1 while writes are refused for clock skew\n\
+         # TYPE iolake_gateway_clock_skewed gauge\n",
     );
     out.push_str(&format!(
-        "objectio_gateway_clock_skewed {}\n",
+        "iolake_gateway_clock_skewed {}\n",
         u8::from(SKEWED.load(Ordering::Relaxed))
     ));
 }

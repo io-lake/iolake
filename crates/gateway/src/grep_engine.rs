@@ -1,7 +1,7 @@
 //! Pluggable pattern-matching engines for gateway-side grep.
 //!
 //! The default engine is the pure-Rust `regex` crate — fast, safe,
-//! always available. It handles every pattern ObjectIO grep tests
+//! always available. It handles every pattern IOLake grep tests
 //! cover (it's RE2-based: linear-time, no catastrophic backtracking,
 //! no backrefs, no lookaround).
 //!

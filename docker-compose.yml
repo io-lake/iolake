@@ -1,4 +1,4 @@
-# ObjectIO Docker Compose - Development Tools
+# IOLake Docker Compose - Development Tools
 # Use docker-compose.cluster.yml for running a local cluster
 #
 # Usage:
@@ -8,7 +8,7 @@
 #   docker compose run lint       # Run clippy
 
 services:
-  # Development container for building and running ObjectIO
+  # Development container for building and running IOLake
   dev:
     build:
       context: .

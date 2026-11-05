@@ -9,7 +9,7 @@
 //! at the consumer side — that produces the v2 [`RaftLogStorage`] and
 //! [`RaftStateMachine`] pair the current framework needs.
 //!
-//! ## Persistence layout (objectio-docs `core/meta-log.md`, B25)
+//! ## Persistence layout (iolake-docs `core/meta-log.md`, B25)
 //!
 //! | Where                    | What                                                  |
 //! |--------------------------|-------------------------------------------------------|
@@ -38,7 +38,7 @@
 //!   snapshot directory (never held in memory: meta has a listing entry
 //!   per object), so the log can be compacted (B18).
 //!
-//! ## A full filesystem (objectio-docs `core/meta.md`)
+//! ## A full filesystem (iolake-docs `core/meta.md`)
 //!
 //! openraft stops a node for good on any error from these calls, and redb
 //! refuses everything after an I/O error until it is opened again. What
@@ -346,7 +346,7 @@ impl MetaRaftStorage {
                 // so non-Raft readers (who still read the CONFIG table
                 // directly) don't need migration code.
                 use prost::Message;
-                let entry = objectio_proto::metadata::ConfigEntry {
+                let entry = iolake_proto::metadata::ConfigEntry {
                     key: key.clone(),
                     value: value.clone(),
                     updated_at: *updated_at,
@@ -894,7 +894,7 @@ impl MetaRaftStorage {
             };
             if let Err(e) = keep_snapshot(&dir, &file, &path, &meta) {
                 discard_unkept(&dir, &path, &meta.snapshot_id);
-                return Err(if objectio_common::error::is_out_of_space(&e) {
+                return Err(if iolake_common::error::is_out_of_space(&e) {
                     space.out_of_space();
                     Unbuilt::NoRoom(format!("keeping the snapshot: {e}"))
                 } else {
@@ -1103,7 +1103,7 @@ impl Write for RoomFor<'_> {
                 Ok(n)
             }
             Err(e) => {
-                if objectio_common::error::is_out_of_space(&e) {
+                if iolake_common::error::is_out_of_space(&e) {
                     self.space.out_of_space();
                     self.no_room = Some(e.to_string());
                 }
@@ -1501,7 +1501,7 @@ impl RaftStorage<MetaTypeConfig> for MetaRaftStorage {
 fn test_snapshot_dir() -> PathBuf {
     static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     std::env::temp_dir().join(format!(
-        "objectio-meta-store-test-snapshots/{}-{}",
+        "iolake-meta-store-test-snapshots/{}-{}",
         std::process::id(),
         SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ))
@@ -2024,7 +2024,7 @@ mod tests {
                 1,
                 MetaCommand::SetOsdAdminState {
                     node_id: [3; 16],
-                    state: objectio_common::OsdAdminState::Out,
+                    state: iolake_common::OsdAdminState::Out,
                     requested_by: "test".into(),
                 },
             )])
@@ -2051,7 +2051,7 @@ mod tests {
             disk_ids: Vec::new(),
             topology: None,
             disk_capacity_bytes: Vec::new(),
-            admin_state: objectio_common::OsdAdminState::In,
+            admin_state: iolake_common::OsdAdminState::In,
             te_segment: String::new(),
         };
         let put = normal_entry(
@@ -2070,7 +2070,7 @@ mod tests {
             2,
             MetaCommand::SetOsdAdminState {
                 node_id: [7; 16],
-                state: objectio_common::OsdAdminState::Out,
+                state: iolake_common::OsdAdminState::Out,
                 requested_by: "test".into(),
             },
         );
@@ -2080,7 +2080,7 @@ mod tests {
             panic!("no event for the admin state change");
         };
         let seen = crate::types::OsdNode::from_bytes(&new_value.unwrap()).unwrap();
-        assert_eq!(seen.admin_state, objectio_common::OsdAdminState::Out);
+        assert_eq!(seen.admin_state, iolake_common::OsdAdminState::Out);
     }
 
     #[tokio::test]
@@ -2735,7 +2735,7 @@ mod room_tests {
         let space = DiskSpace::new(dir.path(), 0);
         let mut out = RoomFor::new(&full, &space);
         let e = out.write_all(&[0u8; 4096]).unwrap_err();
-        assert!(objectio_common::error::is_out_of_space(&e), "{e}");
+        assert!(iolake_common::error::is_out_of_space(&e), "{e}");
         assert!(out.no_room.is_some());
         assert!(space.starved());
     }

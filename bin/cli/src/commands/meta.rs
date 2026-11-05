@@ -1,4 +1,4 @@
-//! Meta backups: `obioctl meta export`.
+//! Meta backups: `iolakectl meta export`.
 
 use super::Ctx;
 use crate::cli::MetaCmd;
@@ -68,7 +68,7 @@ async fn export(file: Option<&Path>, ctx: &mut Ctx<'_, '_>) -> Result<()> {
     let mut resp = ctx.api.download("/_admin/meta/export", &[]).await?;
     let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(16);
     let checker = std::thread::spawn(move || {
-        objectio_common::meta_backup::verify(Received {
+        iolake_common::meta_backup::verify(Received {
             rx,
             chunk: Vec::new(),
             at: 0,

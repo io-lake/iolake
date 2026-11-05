@@ -236,7 +236,7 @@ pub fn plan(spec: &HostSpec, layout: &Layout) -> Result<Plan> {
     if spec.runs(Role::Meta) {
         let p = &spec.ports;
         let data = layout.meta_data_dir();
-        let mut argv = vec![bin("objectio-meta")];
+        let mut argv = vec![bin("iolake-meta")];
         argv.extend(strings(&[
             "--node-id",
             &spec.node_id.to_string(),
@@ -258,9 +258,9 @@ pub fn plan(spec: &HostSpec, layout: &Layout) -> Result<Plan> {
         ]));
         argv.extend(spec.protection.meta_flags());
         services.push(Service {
-            unit: "objectio-meta".into(),
+            unit: "iolake-meta".into(),
             kind: Kind::Meta,
-            description: "ObjectIO metadata service".into(),
+            description: "IOLake metadata service".into(),
             argv,
         });
         dirs.push(data);
@@ -291,11 +291,11 @@ pub fn plan(spec: &HostSpec, layout: &Layout) -> Result<Plan> {
                 ),
             ));
             services.push(Service {
-                unit: format!("objectio-osd-{i}"),
+                unit: format!("iolake-osd-{i}"),
                 kind: Kind::Osd,
-                description: format!("ObjectIO OSD {i} ({disk})"),
+                description: format!("IOLake OSD {i} ({disk})"),
                 argv: vec![
-                    bin("objectio-osd"),
+                    bin("iolake-osd"),
                     "--config".into(),
                     config.display().to_string(),
                     "--metrics-port".into(),
@@ -309,7 +309,7 @@ pub fn plan(spec: &HostSpec, layout: &Layout) -> Result<Plan> {
     }
 
     if spec.runs(Role::Gateway) {
-        let mut argv = vec![bin("objectio-gateway")];
+        let mut argv = vec![bin("iolake-gateway")];
         argv.extend(strings(&[
             "--listen",
             &format!("0.0.0.0:{}", spec.ports.gateway),
@@ -328,9 +328,9 @@ pub fn plan(spec: &HostSpec, layout: &Layout) -> Result<Plan> {
             argv.push("--no-auth".into());
         }
         services.push(Service {
-            unit: "objectio-gateway".into(),
+            unit: "iolake-gateway".into(),
             kind: Kind::Gateway,
-            description: "ObjectIO S3 gateway".into(),
+            description: "IOLake S3 gateway".into(),
             argv,
         });
         ports.push((spec.ports.gateway, "gateway".into()));
@@ -356,7 +356,7 @@ fn quoted(s: &str) -> String {
 
 fn osd_toml(listen: &str, advertise: &str, meta_endpoint: &str, disk: &str, data: &Path) -> String {
     format!(
-        r#"# Written by objectio-install. Flags given to objectio-osd win over this file.
+        r#"# Written by iolake-install. Flags given to iolake-osd win over this file.
 
 [osd]
 listen = {listen}
@@ -431,8 +431,8 @@ mod tests {
     #[test]
     fn meta_and_the_gateway_get_the_charts_flags_and_no_config_file() {
         let plan = plan(&spec(&[Role::All], &["/dev/sdb"]), &host()).unwrap();
-        let meta = argv(&plan, "objectio-meta");
-        assert_eq!(meta[0], "/usr/local/bin/objectio-meta");
+        let meta = argv(&plan, "iolake-meta");
+        assert_eq!(meta[0], "/usr/local/bin/iolake-meta");
         assert_eq!(flag(meta, "--node-id"), "2");
         assert_eq!(flag(meta, "--listen"), "0.0.0.0:9100");
         assert_eq!(flag(meta, "--raft-advertise"), "node2.internal:9100");
@@ -442,7 +442,7 @@ mod tests {
         assert_eq!(flag(meta, "--data-dir"), "/var/lib/objectio/meta");
         assert_eq!(flag(meta, "--ec-k"), "4");
         assert_eq!(flag(meta, "--ec-m"), "2");
-        let gw = argv(&plan, "objectio-gateway");
+        let gw = argv(&plan, "iolake-gateway");
         assert_eq!(flag(gw, "--listen"), "0.0.0.0:9000");
         assert_eq!(flag(gw, "--meta-endpoint"), "http://127.0.0.1:9100");
         assert_eq!(flag(gw, "--region"), "us-east-1");
@@ -462,7 +462,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(plan.services.len(), 2);
-        let osd1 = argv(&plan, "objectio-osd-1");
+        let osd1 = argv(&plan, "iolake-osd-1");
         assert_eq!(flag(osd1, "--config"), "/etc/objectio/osd-1.toml");
         assert_eq!(flag(osd1, "--metrics-port"), "9203");
         let (path, text) = &plan.osd_configs[1];
@@ -499,7 +499,7 @@ mod tests {
         assert!(err.to_string().contains("--meta-endpoint"), "{err}");
         let p = plan(&spec(&[Role::Gateway], &[]).with_meta(), &host()).unwrap();
         assert_eq!(
-            flag(argv(&p, "objectio-gateway"), "--meta-endpoint"),
+            flag(argv(&p, "iolake-gateway"), "--meta-endpoint"),
             "http://m1:9100,http://m2:9100"
         );
     }
@@ -526,11 +526,11 @@ mod tests {
         let layout = Layout::new(Path::new("/tmp/host1")).unwrap();
         let plan = plan(&spec(&[Role::All], &["/dev/sdb"]), &layout).unwrap();
         assert_eq!(
-            flag(argv(&plan, "objectio-meta"), "--data-dir"),
+            flag(argv(&plan, "iolake-meta"), "--data-dir"),
             "/tmp/host1/var/lib/objectio/meta"
         );
         assert_eq!(
-            flag(argv(&plan, "objectio-osd-0"), "--config"),
+            flag(argv(&plan, "iolake-osd-0"), "--config"),
             "/tmp/host1/etc/objectio/osd-0.toml"
         );
         assert!(plan.dirs.iter().all(|d| d.starts_with("/tmp/host1")));
@@ -559,8 +559,8 @@ mod tests {
         let mut s = spec(&[Role::Meta, Role::Gateway], &[]);
         s.protection = Protection::Replication(1);
         let plan = plan(&s, &host()).unwrap();
-        assert_eq!(flag(argv(&plan, "objectio-meta"), "--replication"), "1");
-        let gw = argv(&plan, "objectio-gateway");
+        assert_eq!(flag(argv(&plan, "iolake-meta"), "--replication"), "1");
+        let gw = argv(&plan, "iolake-gateway");
         assert_eq!(flag(gw, "--protection"), "replication");
         assert_eq!(flag(gw, "--replicas"), "1");
     }

@@ -66,7 +66,7 @@ pub fn apply_column_filter(
 
 /// Inject a row filter expression into table properties.
 ///
-/// Query engines that support `ObjectIO` read the `obio.row-filter` property
+/// Query engines that support `IOLake` read the `obio.row-filter` property
 /// and apply the WHERE clause when scanning the table.
 pub fn apply_row_filter(metadata: &mut Value, row_filter_expression: &str) {
     if row_filter_expression.is_empty() {

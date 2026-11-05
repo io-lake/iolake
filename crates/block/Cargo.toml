@@ -1,13 +1,13 @@
 [package]
-name = "objectio-block"
-description = "Block storage layer for ObjectIO"
+name = "iolake-block"
+description = "Block storage layer for IOLake"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
 # Internal crates
-objectio-common = { workspace = true }
+iolake-common = { workspace = true }
 
 # Async runtime
 tokio = { workspace = true, features = ["sync", "fs", "io-util"] }

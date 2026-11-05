@@ -29,11 +29,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
-use objectio_proto::metadata::metadata_service_server::MetadataService;
-use objectio_proto::metadata::{
+use iolake_proto::metadata::metadata_service_server::MetadataService;
+use iolake_proto::metadata::{
     ErasureType, GetPlacementRequest, NodePlacement, ObjectMeta, ShardLocation, StripeMeta,
 };
-use objectio_proto::storage::{
+use iolake_proto::storage::{
     CheckShardsRequest, ReadShardRequest, ShardId, ShardState, WriteShardRequest,
     storage_service_client::StorageServiceClient,
 };
@@ -115,27 +115,27 @@ pub fn render_metrics(out: &mut String) {
     let s = &STATS;
     for (name, help, v) in [
         (
-            "objectio_meta_repair_last_pass_seconds",
+            "iolake_meta_repair_last_pass_seconds",
             "How long the last completed repair pass took (on the node that ran it)",
             s.last_pass_ms.load(Ordering::Relaxed) as f64 / 1000.0,
         ),
         (
-            "objectio_meta_repair_last_pass_timestamp_seconds",
+            "iolake_meta_repair_last_pass_timestamp_seconds",
             "When the last repair pass completed (Unix time; 0: none yet on this node)",
             s.last_pass_end.load(Ordering::Relaxed) as f64,
         ),
         (
-            "objectio_meta_degraded_objects",
+            "iolake_meta_degraded_objects",
             "Objects acknowledged short of shards and not yet repaired (as last counted by the leader's repairer)",
             DEGRADED.load(Ordering::Relaxed) as f64,
         ),
         (
-            "objectio_meta_lost_objects",
+            "iolake_meta_lost_objects",
             "Objects recorded as lost: fewer than k shards left (B29). Anything above 0 is data loss: alert",
             LOST.load(Ordering::Relaxed) as f64,
         ),
         (
-            "objectio_meta_degraded_oldest_seconds",
+            "iolake_meta_degraded_oldest_seconds",
             "Age of the oldest object short of shards: alert when it grows while every OSD is up",
             DEGRADED_OLDEST_SECS.load(Ordering::Relaxed) as f64,
         ),
@@ -144,32 +144,32 @@ pub fn render_metrics(out: &mut String) {
     }
     for (name, help, v) in [
         (
-            "objectio_meta_repair_passes_total",
+            "iolake_meta_repair_passes_total",
             "Completed repair passes",
             &s.passes,
         ),
         (
-            "objectio_meta_repair_objects_checked_total",
+            "iolake_meta_repair_objects_checked_total",
             "Objects checked by the repairer",
             &s.objects,
         ),
         (
-            "objectio_meta_repair_unrecoverable_stripes_total",
+            "iolake_meta_repair_unrecoverable_stripes_total",
             "Stripes found with fewer than k good shards",
             &s.unrecoverable,
         ),
         (
-            "objectio_meta_repair_errors_total",
+            "iolake_meta_repair_errors_total",
             "Repairs that failed and will be retried next pass",
             &s.errors,
         ),
         (
-            "objectio_meta_degraded_repaired_total",
+            "iolake_meta_degraded_repaired_total",
             "Objects written short of shards that repair made whole",
             &s.degraded_repaired,
         ),
         (
-            "objectio_meta_repair_block_stripes_checked_total",
+            "iolake_meta_repair_block_stripes_checked_total",
             "Block chunk stripes checked by the repairer (also counted in objects checked)",
             &s.block_stripes,
         ),
@@ -178,7 +178,7 @@ pub fn render_metrics(out: &mut String) {
         let _ = writeln!(out, "# TYPE {name} counter");
         let _ = writeln!(out, "{name} {}", v.load(Ordering::Relaxed));
     }
-    let name = "objectio_meta_repair_shards_rebuilt_total";
+    let name = "iolake_meta_repair_shards_rebuilt_total";
     let _ = writeln!(
         out,
         "# HELP {name} Shards rebuilt from the rest of their stripe"
@@ -250,7 +250,7 @@ enum Source {
 pub const PACK_KEY_PREFIX: &str = ".objectio-pack/";
 
 /// A pack in the shape `audit` takes, named and placed as it was written.
-fn pack_object(pack: objectio_proto::metadata::PackRecord) -> Option<ObjectMeta> {
+fn pack_object(pack: iolake_proto::metadata::PackRecord) -> Option<ObjectMeta> {
     let stripe = pack.stripe?;
     Some(ObjectMeta {
         key: format!("{PACK_KEY_PREFIX}{}", hex::encode(&pack.pack_id)),
@@ -628,7 +628,7 @@ async fn rebuild(
         return Err(anyhow::anyhow!("read {have} good shards, need {k}"));
     }
 
-    let codec = objectio_erasure::ErasureCodec::new(objectio_common::ErasureConfig::new(
+    let codec = iolake_erasure::ErasureCodec::new(iolake_common::ErasureConfig::new(
         stripe.ec_k as u8,
         stripe.ec_m as u8,
     ))
@@ -774,7 +774,7 @@ async fn write_shard(
     stripe: &StripeMeta,
     position: u32,
     bytes: Vec<u8>,
-) -> anyhow::Result<objectio_proto::storage::BlockLocation> {
+) -> anyhow::Result<iolake_proto::storage::BlockLocation> {
     let mut client = StorageServiceClient::new(open_channel(address).await?)
         .max_encoding_message_size(100 * 1024 * 1024);
     let checksum = Some(checksum_of(&bytes));

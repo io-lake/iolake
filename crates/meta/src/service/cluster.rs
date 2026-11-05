@@ -27,7 +27,7 @@ impl MetaService {
                 }
             }
         }
-        if key == objectio_common::version::ACTIVE_LEVEL_KEY {
+        if key == iolake_common::version::ACTIVE_LEVEL_KEY {
             self.note_active_level();
         }
     }
@@ -35,7 +35,7 @@ impl MetaService {
     /// Mirror a replicated OSD record into this node's caches.
     pub(super) fn apply_osd_node_event(&self, key: &str, new_value: Option<&[u8]>) {
         match new_value {
-            Some(bytes) => match objectio_meta_store::record::deserialize::<OsdNode>(bytes) {
+            Some(bytes) => match iolake_meta_store::record::deserialize::<OsdNode>(bytes) {
                 Ok(node) => {
                     {
                         let mut nodes = self.osd_nodes.write();
@@ -112,7 +112,7 @@ impl MetaService {
 
     /// Apply a committed PlacementGroup mutation to the in-memory
     /// cache. Key format is "{pool}\0{pg_id:010}" — same as the redb
-    /// key produced by `objectio_meta_store::MetaStore::pg_key`. A
+    /// key produced by `iolake_meta_store::MetaStore::pg_key`. A
     /// delete (`new_value = None`) removes the entry; a put decodes
     /// the prost bytes and upserts.
     pub(super) fn apply_placement_group_event(&self, key: &str, new_value: Option<&[u8]>) {
@@ -152,7 +152,7 @@ impl MetaService {
         }
     }
 
-    /// Inverse of `objectio_meta_store::MetaStore::pg_key`. Returns
+    /// Inverse of `iolake_meta_store::MetaStore::pg_key`. Returns
     /// (pool, pg_id) from "{pool}\0{pg_id:010}".
     pub(super) fn parse_pg_key(key: &str) -> Option<(String, u32)> {
         let (pool, tail) = key.split_once('\0')?;
@@ -186,12 +186,12 @@ impl MetaService {
     ) -> Result<
         (
             usize,
-            objectio_placement::PlacementRule,
-            objectio_placement::CopysetPool,
+            iolake_placement::PlacementRule,
+            iolake_placement::CopysetPool,
         ),
         Status,
     > {
-        use objectio_placement::CopysetPool;
+        use iolake_placement::CopysetPool;
 
         let copy_count = super::pgs::copy_count(pool);
         if copy_count == 0 {
@@ -263,12 +263,12 @@ impl MetaService {
         }
 
         // Commit in batches, under the operations one command carries
-        // (`objectio_meta_store::MAX_OPS`).
+        // (`iolake_meta_store::MAX_OPS`).
         const CHUNK: usize = 128;
         let raft = self.raft_handle();
         for chunk in pgs.chunks(CHUNK) {
             if let Some(raft) = raft.clone() {
-                use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+                use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
                 let ops: Vec<CasOp> = chunk
                     .iter()
                     .map(|pg| CasOp {
@@ -478,12 +478,12 @@ impl MetaService {
         position: u32,
         exclude: &[u8; 16],
     ) -> Option<[u8; 16]> {
-        use objectio_placement::crush2::PlacementTemplate;
+        use iolake_placement::crush2::PlacementTemplate;
 
         let template = PlacementTemplate::mds(self.default_ec_k as u8, self.default_ec_m as u8);
 
         let crush = self.crush.read();
-        let obj_id = objectio_common::ObjectId::from_uuid(uuid::Uuid::from_bytes(*object_id));
+        let obj_id = iolake_common::ObjectId::from_uuid(uuid::Uuid::from_bytes(*object_id));
         // Too few OSDs for the stripe: no CRUSH choice, the caller looks
         // for one itself.
         let placements = crush.select_placement(&obj_id, &template).ok()?;
@@ -530,7 +530,7 @@ impl MetaService {
             .osd_nodes
             .read()
             .iter()
-            .filter(|n| n.admin_state == objectio_common::OsdAdminState::In)
+            .filter(|n| n.admin_state == iolake_common::OsdAdminState::In)
             .map(|n| n.node_id)
             .collect();
         let ok = |c: &[u8; 16]| in_service.contains(c) && !holders.contains(c);
@@ -563,13 +563,13 @@ impl MetaService {
     pub async fn internal_set_osd_admin_state(
         &self,
         node_id: [u8; 16],
-        state: objectio_common::OsdAdminState,
+        state: iolake_common::OsdAdminState,
         requested_by: String,
     ) -> anyhow::Result<()> {
         let raft = self
             .raft_handle()
             .ok_or_else(|| anyhow::anyhow!("raft handle unavailable"))?;
-        raft.client_write(objectio_meta_store::MetaCommand::SetOsdAdminState {
+        raft.client_write(iolake_meta_store::MetaCommand::SetOsdAdminState {
             node_id,
             state,
             requested_by,
@@ -639,11 +639,11 @@ impl MetaService {
             .iter()
             .map(|disk_id| {
                 DiskInfo {
-                    id: objectio_common::DiskId::from_bytes(*disk_id),
+                    id: iolake_common::DiskId::from_bytes(*disk_id),
                     path: String::new(),
                     total_capacity: 1_000_000_000_000, // 1TB default
                     used_capacity: 0,
-                    status: objectio_common::DiskStatus::Healthy,
+                    status: iolake_common::DiskStatus::Healthy,
                     weight: 1.0,
                 }
             })
@@ -792,7 +792,7 @@ impl MetaService {
                 // has a home.
                 let (node_address, disk_id) = match node {
                     Some(n) => (
-                        if n.admin_state == objectio_common::OsdAdminState::In {
+                        if n.admin_state == iolake_common::OsdAdminState::In {
                             n.address.clone()
                         } else {
                             String::new()
@@ -863,14 +863,12 @@ impl MetaService {
 
     pub(crate) async fn get_metrics(
         &self,
-        _request: Request<objectio_proto::metadata::GetMetricsRequest>,
-    ) -> Result<Response<objectio_proto::metadata::GetMetricsResponse>, Status> {
-        Ok(Response::new(
-            objectio_proto::metadata::GetMetricsResponse {
-                text: self.metrics_renderer.get().map(|f| f()).unwrap_or_default(),
-                process_instance: objectio_common::process_metrics::instance_id().to_string(),
-            },
-        ))
+        _request: Request<iolake_proto::metadata::GetMetricsRequest>,
+    ) -> Result<Response<iolake_proto::metadata::GetMetricsResponse>, Status> {
+        Ok(Response::new(iolake_proto::metadata::GetMetricsResponse {
+            text: self.metrics_renderer.get().map(|f| f()).unwrap_or_default(),
+            process_instance: iolake_common::process_metrics::instance_id().to_string(),
+        }))
     }
 
     pub(crate) async fn register_osd(
@@ -1009,7 +1007,7 @@ impl MetaService {
                             req.address,
                             hex::encode(node_id)
                         );
-                        n.admin_state = objectio_common::OsdAdminState::Out;
+                        n.admin_state = iolake_common::OsdAdminState::Out;
                         n.address = String::new();
                         lost.push(n.clone());
                     }
@@ -1068,7 +1066,7 @@ impl MetaService {
             OSD_NODES_TABLE,
             hex::encode(node_id),
             Some(
-                objectio_meta_store::record::serialize(&node)
+                iolake_meta_store::record::serialize(&node)
                     .map_err(|e| Status::internal(format!("OSD encode: {e}")))?,
             ),
         )];
@@ -1082,7 +1080,7 @@ impl MetaService {
                 OSD_NODES_TABLE,
                 hex::encode(n.node_id),
                 Some(
-                    objectio_meta_store::record::serialize(n)
+                    iolake_meta_store::record::serialize(n)
                         .map_err(|e| Status::internal(format!("OSD encode: {e}")))?,
                 ),
             ));
@@ -1130,7 +1128,7 @@ impl MetaService {
         if req.key.is_empty() {
             return Err(Status::invalid_argument("config key is required"));
         }
-        if req.key == objectio_common::version::ACTIVE_LEVEL_KEY {
+        if req.key == iolake_common::version::ACTIVE_LEVEL_KEY {
             return Err(Status::permission_denied(
                 "the active format level is raised only by finalizing an upgrade",
             ));
@@ -1141,7 +1139,7 @@ impl MetaService {
         // hint so the client (gateway) can retry against the right pod.
         if let Some(raft) = self.raft_handle() {
             match raft
-                .client_write(objectio_meta_store::MetaCommand::SetConfig {
+                .client_write(iolake_meta_store::MetaCommand::SetConfig {
                     key: req.key.clone(),
                     value: req.value.clone(),
                     updated_by: req.updated_by.clone(),
@@ -1158,7 +1156,7 @@ impl MetaService {
                     // but their in-memory map is not updated until R1's
                     // follow-up adds an apply listener.
                     let version = match resp.data {
-                        objectio_meta_store::MetaResponse::ConfigSet { version } => version,
+                        iolake_meta_store::MetaResponse::ConfigSet { version } => version,
                         _ => 0,
                     };
                     let now = Self::current_timestamp();
@@ -1216,7 +1214,7 @@ impl MetaService {
         request: Request<DeleteConfigRequest>,
     ) -> Result<Response<DeleteConfigResponse>, Status> {
         let req = request.into_inner();
-        if req.key == objectio_common::version::ACTIVE_LEVEL_KEY {
+        if req.key == iolake_common::version::ACTIVE_LEVEL_KEY {
             return Err(Status::permission_denied(
                 "the active format level is raised only by finalizing an upgrade",
             ));
@@ -1236,7 +1234,7 @@ impl MetaService {
 
         if let Some(raft) = self.raft_handle() {
             match raft
-                .client_write(objectio_meta_store::MetaCommand::DeleteConfig {
+                .client_write(iolake_meta_store::MetaCommand::DeleteConfig {
                     key: req.key.clone(),
                 })
                 .await
@@ -1244,7 +1242,7 @@ impl MetaService {
                 Ok(resp) => {
                     let existed = matches!(
                         resp.data,
-                        objectio_meta_store::MetaResponse::ConfigDeleted { existed: true }
+                        iolake_meta_store::MetaResponse::ConfigDeleted { existed: true }
                     );
                     if existed {
                         self.config.write().remove(&req.key);
@@ -1288,15 +1286,15 @@ impl MetaService {
         // here; rely on the generated accessor to handle unknown values.
         // prost prefixes the proto enum variants with the enum name; map
         // them back to our internal OsdAdminState.
-        let state = match objectio_proto::metadata::OsdAdminState::try_from(req.state) {
-            Ok(objectio_proto::metadata::OsdAdminState::OsdAdminIn) => {
-                objectio_common::OsdAdminState::In
+        let state = match iolake_proto::metadata::OsdAdminState::try_from(req.state) {
+            Ok(iolake_proto::metadata::OsdAdminState::OsdAdminIn) => {
+                iolake_common::OsdAdminState::In
             }
-            Ok(objectio_proto::metadata::OsdAdminState::OsdAdminOut) => {
-                objectio_common::OsdAdminState::Out
+            Ok(iolake_proto::metadata::OsdAdminState::OsdAdminOut) => {
+                iolake_common::OsdAdminState::Out
             }
-            Ok(objectio_proto::metadata::OsdAdminState::OsdAdminDraining) => {
-                objectio_common::OsdAdminState::Draining
+            Ok(iolake_proto::metadata::OsdAdminState::OsdAdminDraining) => {
+                iolake_common::OsdAdminState::Draining
             }
             Err(_) => {
                 return Err(Status::invalid_argument(format!(
@@ -1319,7 +1317,7 @@ impl MetaService {
         // After a restore, a purge the restored state holds as pending may
         // be long done, the OSD back in: the operator says which.
         let confirming = self.osd_to_confirm(&node_id);
-        if state != objectio_common::OsdAdminState::Out
+        if state != iolake_common::OsdAdminState::Out
             && purge.as_deref() == Some(crate::drain_observer::PURGE_PENDING)
             && !confirming
         {
@@ -1337,7 +1335,7 @@ impl MetaService {
         })?;
 
         let resp = raft
-            .client_write(objectio_meta_store::MetaCommand::SetOsdAdminState {
+            .client_write(iolake_meta_store::MetaCommand::SetOsdAdminState {
                 node_id,
                 state,
                 requested_by,
@@ -1346,7 +1344,7 @@ impl MetaService {
             .map_err(|e| raft_write_to_status(&e))?;
 
         let (found, changed) = match resp.data {
-            objectio_meta_store::MetaResponse::OsdAdminStateSet { found, changed } => {
+            iolake_meta_store::MetaResponse::OsdAdminStateSet { found, changed } => {
                 (found, changed)
             }
             _ => (false, false),
@@ -1385,7 +1383,7 @@ impl MetaService {
         // Back in service after a purge: it starts clean, and a later
         // drain starts a new record.
         if found
-            && state != objectio_common::OsdAdminState::Out
+            && state != iolake_common::OsdAdminState::Out
             && purge.as_deref() == Some(crate::drain_observer::PURGE_DONE)
             && let Err(e) = self.set_purge_state(node_id, None).await
         {
@@ -1395,7 +1393,7 @@ impl MetaService {
         // Set by an operator after a restore: in service means not to be
         // purged, and the drain observer acts on it again.
         if found && confirming {
-            if state != objectio_common::OsdAdminState::Out
+            if state != iolake_common::OsdAdminState::Out
                 && purge.as_deref() == Some(crate::drain_observer::PURGE_PENDING)
             {
                 self.set_purge_state(node_id, None).await?;
@@ -1546,7 +1544,7 @@ impl MetaService {
         let bytes = pool.encode_to_vec();
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Pools,
@@ -1668,7 +1666,7 @@ impl MetaService {
         let new_bytes = pool.encode_to_vec();
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Pools,
@@ -1744,7 +1742,7 @@ impl MetaService {
         }
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::Pools,
@@ -1837,21 +1835,21 @@ impl MetaService {
 
     pub(crate) async fn report_version(
         &self,
-        request: Request<objectio_proto::metadata::ReportVersionRequest>,
-    ) -> Result<Response<objectio_proto::metadata::ReportVersionResponse>, Status> {
+        request: Request<iolake_proto::metadata::ReportVersionRequest>,
+    ) -> Result<Response<iolake_proto::metadata::ReportVersionResponse>, Status> {
         let active_level = self.record_version(request.into_inner());
         Ok(Response::new(
-            objectio_proto::metadata::ReportVersionResponse { active_level },
+            iolake_proto::metadata::ReportVersionResponse { active_level },
         ))
     }
 
     pub(crate) async fn get_upgrade_status(
         &self,
-        _request: Request<objectio_proto::metadata::GetUpgradeStatusRequest>,
-    ) -> Result<Response<objectio_proto::metadata::GetUpgradeStatusResponse>, Status> {
+        _request: Request<iolake_proto::metadata::GetUpgradeStatusRequest>,
+    ) -> Result<Response<iolake_proto::metadata::GetUpgradeStatusResponse>, Status> {
         let plan = self.upgrade_plan();
         Ok(Response::new(
-            objectio_proto::metadata::GetUpgradeStatusResponse {
+            iolake_proto::metadata::GetUpgradeStatusResponse {
                 active_level: plan.active,
                 nodes: plan.nodes,
                 finalize_to: plan.target,
@@ -1862,18 +1860,18 @@ impl MetaService {
 
     pub(crate) async fn finalize_upgrade(
         &self,
-        request: Request<objectio_proto::metadata::FinalizeUpgradeRequest>,
-    ) -> Result<Response<objectio_proto::metadata::FinalizeUpgradeResponse>, Status> {
+        request: Request<iolake_proto::metadata::FinalizeUpgradeRequest>,
+    ) -> Result<Response<iolake_proto::metadata::FinalizeUpgradeResponse>, Status> {
         let active_level = self.finalize(&request.into_inner().requested_by).await?;
         Ok(Response::new(
-            objectio_proto::metadata::FinalizeUpgradeResponse { active_level },
+            iolake_proto::metadata::FinalizeUpgradeResponse { active_level },
         ))
     }
 
     pub(crate) async fn acquire_lease(
         &self,
-        request: Request<objectio_proto::metadata::AcquireLeaseRequest>,
-    ) -> Result<Response<objectio_proto::metadata::AcquireLeaseResponse>, Status> {
+        request: Request<iolake_proto::metadata::AcquireLeaseRequest>,
+    ) -> Result<Response<iolake_proto::metadata::AcquireLeaseResponse>, Status> {
         #[derive(serde::Serialize, serde::Deserialize)]
         struct Lease {
             holder: String,
@@ -1903,7 +1901,7 @@ impl MetaService {
                 expires_at: 0,
             });
             return Ok(Response::new(
-                objectio_proto::metadata::AcquireLeaseResponse {
+                iolake_proto::metadata::AcquireLeaseResponse {
                     acquired: false,
                     holder: l.holder,
                     expires_at: l.expires_at,
@@ -1927,14 +1925,14 @@ impl MetaService {
         };
         if req.release && current.is_none() {
             return Ok(Response::new(
-                objectio_proto::metadata::AcquireLeaseResponse::default(),
+                iolake_proto::metadata::AcquireLeaseResponse::default(),
             ));
         }
         // Compare-and-swap on what was read: of two callers racing for a
         // free lease, one commit wins and the other is refused.
         match self
             .cas_one(
-                objectio_meta_store::CasTable::Named(LEASES_TABLE.into()),
+                iolake_meta_store::CasTable::Named(LEASES_TABLE.into()),
                 &req.name,
                 current_bytes,
                 new_value,
@@ -1943,14 +1941,14 @@ impl MetaService {
             .await
         {
             Ok(()) => Ok(Response::new(
-                objectio_proto::metadata::AcquireLeaseResponse {
+                iolake_proto::metadata::AcquireLeaseResponse {
                     acquired: !req.release,
                     holder: lease.holder,
                     expires_at: lease.expires_at,
                 },
             )),
             Err(e) if e.code() == tonic::Code::Aborted => Ok(Response::new(
-                objectio_proto::metadata::AcquireLeaseResponse::default(),
+                iolake_proto::metadata::AcquireLeaseResponse::default(),
             )),
             Err(e) => Err(e),
         }
@@ -1963,8 +1961,8 @@ impl MetaService {
     /// while the PG isn't made.
     pub(crate) async fn heal_enqueue(
         &self,
-        request: Request<objectio_proto::metadata::HealEnqueueRequest>,
-    ) -> Result<Response<objectio_proto::metadata::HealEnqueueResponse>, Status> {
+        request: Request<iolake_proto::metadata::HealEnqueueRequest>,
+    ) -> Result<Response<iolake_proto::metadata::HealEnqueueResponse>, Status> {
         let req = request.into_inner();
         if self.key_pg(&req.bucket, &req.key).is_none() {
             return Err(Status::unavailable(format!(
@@ -1974,7 +1972,7 @@ impl MetaService {
         }
         self.mark_key_dirty(&req.bucket, &req.key);
         Ok(Response::new(
-            objectio_proto::metadata::HealEnqueueResponse {},
+            iolake_proto::metadata::HealEnqueueResponse {},
         ))
     }
 
@@ -1983,29 +1981,29 @@ impl MetaService {
     /// a rolling upgrade; remove in the release after.
     pub(crate) async fn heal_list(
         &self,
-        _request: Request<objectio_proto::metadata::HealListRequest>,
-    ) -> Result<Response<objectio_proto::metadata::HealListResponse>, Status> {
+        _request: Request<iolake_proto::metadata::HealListRequest>,
+    ) -> Result<Response<iolake_proto::metadata::HealListResponse>, Status> {
         Ok(Response::new(
-            objectio_proto::metadata::HealListResponse::default(),
+            iolake_proto::metadata::HealListResponse::default(),
         ))
     }
 
     /// See [`Self::heal_list`]: nothing to claim.
     pub(crate) async fn heal_claim(
         &self,
-        _request: Request<objectio_proto::metadata::HealClaimRequest>,
-    ) -> Result<Response<objectio_proto::metadata::HealClaimResponse>, Status> {
+        _request: Request<iolake_proto::metadata::HealClaimRequest>,
+    ) -> Result<Response<iolake_proto::metadata::HealClaimResponse>, Status> {
         Ok(Response::new(
-            objectio_proto::metadata::HealClaimResponse::default(),
+            iolake_proto::metadata::HealClaimResponse::default(),
         ))
     }
 
     /// See [`Self::heal_list`]: nothing queued, so nothing left to do.
     pub(crate) async fn heal_done(
         &self,
-        _request: Request<objectio_proto::metadata::HealDoneRequest>,
-    ) -> Result<Response<objectio_proto::metadata::HealDoneResponse>, Status> {
-        Ok(Response::new(objectio_proto::metadata::HealDoneResponse {
+        _request: Request<iolake_proto::metadata::HealDoneRequest>,
+    ) -> Result<Response<iolake_proto::metadata::HealDoneResponse>, Status> {
+        Ok(Response::new(iolake_proto::metadata::HealDoneResponse {
             done: true,
         }))
     }

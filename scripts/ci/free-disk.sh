@@ -4,7 +4,7 @@
 # runners have a 72 GB root with 12 GB free at the start of a job; after an
 # end-to-end shard's downloads it was under a tenth free, and there an OSD
 # keeps small shards on disk blocks rather than in its metadata store
-# (objectio-docs core/small-object-path.md), which the small-object tests
+# (iolake-docs core/small-object-path.md), which the small-object tests
 # then can't see.
 set -euo pipefail
 df -h /

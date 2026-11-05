@@ -20,9 +20,9 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use objectio_common::histogram::label_value;
-use objectio_proto::block::{Snapshot, SnapshotState, Volume, VolumeState};
-use objectio_proto::metadata::{
+use iolake_common::histogram::label_value;
+use iolake_proto::block::{Snapshot, SnapshotState, Volume, VolumeState};
+use iolake_proto::metadata::{
     BlockChunkRef, BlockCloneVolumeRequest, BlockCommitChunksRequest, BlockCreateSnapshotRequest,
     BlockCreateVolumeRequest, BlockDeleteSnapshotRequest, BlockDeleteVolumeRequest,
     BlockGetChunksRequest, BlockGetChunksResponse, BlockGetSnapshotRequest, BlockGetVolumeRequest,
@@ -239,7 +239,7 @@ impl MetaService {
     }
 
     /// Fill the block-table cache from the store.
-    pub(super) fn load_block_tables(&self, store: &objectio_meta_store::MetaStore) {
+    pub(super) fn load_block_tables(&self, store: &iolake_meta_store::MetaStore) {
         let mut tables = BlockTables::default();
         for t in TABLES {
             for (k, v) in store.load_all_raw(t) {
@@ -269,7 +269,7 @@ impl MetaService {
             })
             .collect();
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: ops
                     .iter()
@@ -982,11 +982,11 @@ impl MetaService {
             let _ = writeln!(out, "# HELP {name} {help}\n# TYPE {name} gauge");
         };
 
-        header(out, "objectio_block_volumes_total", "Block volumes");
-        let _ = writeln!(out, "objectio_block_volumes_total {}", volumes.len());
+        header(out, "iolake_block_volumes_total", "Block volumes");
+        let _ = writeln!(out, "iolake_block_volumes_total {}", volumes.len());
         header(
             out,
-            "objectio_block_volumes_by_state",
+            "iolake_block_volumes_by_state",
             "Block volumes by state",
         );
         for state in [
@@ -1001,10 +1001,7 @@ impl MetaService {
                 .as_str_name()
                 .trim_start_matches("VOLUME_STATE_")
                 .to_lowercase();
-            let _ = writeln!(
-                out,
-                "objectio_block_volumes_by_state{{state=\"{name}\"}} {n}"
-            );
+            let _ = writeln!(out, "iolake_block_volumes_by_state{{state=\"{name}\"}} {n}");
         }
         let provisioned: u64 = volumes.iter().map(|v| v.size_bytes).sum();
         let used: Vec<u64> = volumes
@@ -1013,32 +1010,29 @@ impl MetaService {
             .collect();
         header(
             out,
-            "objectio_block_volumes_provisioned_bytes",
+            "iolake_block_volumes_provisioned_bytes",
             "Size of every block volume added up",
         );
-        let _ = writeln!(
-            out,
-            "objectio_block_volumes_provisioned_bytes {provisioned}"
-        );
+        let _ = writeln!(out, "iolake_block_volumes_provisioned_bytes {provisioned}");
         header(
             out,
-            "objectio_block_volumes_used_bytes",
+            "iolake_block_volumes_used_bytes",
             "Chunks block volumes have written, in bytes (volumes are thin: unwritten chunks take nothing)",
         );
         let _ = writeln!(
             out,
-            "objectio_block_volumes_used_bytes {}",
+            "iolake_block_volumes_used_bytes {}",
             used.iter().sum::<u64>()
         );
         header(
             out,
-            "objectio_block_volume_size_bytes",
+            "iolake_block_volume_size_bytes",
             "Size of one block volume",
         );
         for v in &volumes {
             let _ = writeln!(
                 out,
-                "objectio_block_volume_size_bytes{{volume_id=\"{}\",name=\"{}\",pool=\"{}\"}} {}",
+                "iolake_block_volume_size_bytes{{volume_id=\"{}\",name=\"{}\",pool=\"{}\"}} {}",
                 v.volume_id,
                 label_value(&v.name),
                 label_value(&v.pool),
@@ -1047,29 +1041,29 @@ impl MetaService {
         }
         header(
             out,
-            "objectio_block_volume_used_bytes",
+            "iolake_block_volume_used_bytes",
             "Chunks one block volume has written, in bytes",
         );
         for (v, u) in volumes.iter().zip(&used) {
             let _ = writeln!(
                 out,
-                "objectio_block_volume_used_bytes{{volume_id=\"{}\",name=\"{}\",pool=\"{}\"}} {u}",
+                "iolake_block_volume_used_bytes{{volume_id=\"{}\",name=\"{}\",pool=\"{}\"}} {u}",
                 v.volume_id,
                 label_value(&v.name),
                 label_value(&v.pool)
             );
         }
-        header(out, "objectio_block_snapshots_total", "Block snapshots");
-        let _ = writeln!(out, "objectio_block_snapshots_total {}", snapshots.len());
+        header(out, "iolake_block_snapshots_total", "Block snapshots");
+        let _ = writeln!(out, "iolake_block_snapshots_total {}", snapshots.len());
         header(
             out,
-            "objectio_block_snapshot_chunks",
+            "iolake_block_snapshot_chunks",
             "Chunks one snapshot holds (shared with its volume until overwritten)",
         );
         for snap in &snapshots {
             let _ = writeln!(
                 out,
-                "objectio_block_snapshot_chunks{{snapshot_id=\"{}\",volume_id=\"{}\",name=\"{}\"}} {}",
+                "iolake_block_snapshot_chunks{{snapshot_id=\"{}\",volume_id=\"{}\",name=\"{}\"}} {}",
                 snap.snapshot_id,
                 snap.volume_id,
                 label_value(&snap.name),
@@ -1081,17 +1075,17 @@ impl MetaService {
         let refs = self.stripe_refs.read();
         header(
             out,
-            "objectio_meta_shared_stripes",
+            "iolake_meta_shared_stripes",
             "Stripes used by more than one object, chunk, snapshot or clone (zero-copy copies, snapshots)",
         );
-        let _ = writeln!(out, "objectio_meta_shared_stripes {}", refs.len());
+        let _ = writeln!(out, "iolake_meta_shared_stripes {}", refs.len());
         header(
             out,
-            "objectio_meta_shared_stripe_referrers",
+            "iolake_meta_shared_stripe_referrers",
             "References held on shared stripes; a stripe is freed when its last one goes",
         );
         let referrers: usize = refs.values().map(|r| r.referrers.len()).sum();
-        let _ = writeln!(out, "objectio_meta_shared_stripe_referrers {referrers}");
+        let _ = writeln!(out, "iolake_meta_shared_stripe_referrers {referrers}");
     }
 }
 
@@ -1102,7 +1096,7 @@ mod tests {
     //! else uses.
 
     use super::*;
-    use objectio_proto::metadata::BlockChunkUpdate;
+    use iolake_proto::metadata::BlockChunkUpdate;
 
     fn stripe(id: u8) -> StripeMeta {
         StripeMeta {

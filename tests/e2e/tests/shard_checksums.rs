@@ -3,7 +3,7 @@
 //! HTTP 200), is caught against the checksum its object records (B23): a
 //! GET decodes around it, and never returns the wrong bytes.
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 fn body(len: usize) -> Vec<u8> {

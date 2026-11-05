@@ -364,19 +364,15 @@ impl SmartMonitor {
         // Temperature
         writeln!(
             output,
-            "# HELP objectio_disk_smart_temperature_celsius Disk temperature in Celsius"
+            "# HELP iolake_disk_smart_temperature_celsius Disk temperature in Celsius"
         )
         .unwrap();
-        writeln!(
-            output,
-            "# TYPE objectio_disk_smart_temperature_celsius gauge"
-        )
-        .unwrap();
+        writeln!(output, "# TYPE iolake_disk_smart_temperature_celsius gauge").unwrap();
         for (device, health) in disks.iter() {
             if let Some(temp) = health.temperature_celsius {
                 writeln!(
                     output,
-                    "objectio_disk_smart_temperature_celsius{{osd_id=\"{}\",device=\"{}\"}} {}",
+                    "iolake_disk_smart_temperature_celsius{{osd_id=\"{}\",device=\"{}\"}} {}",
                     osd_id, device, temp
                 )
                 .unwrap();
@@ -386,18 +382,14 @@ impl SmartMonitor {
         // Reallocated sectors
         writeln!(
             output,
-            "# HELP objectio_disk_smart_reallocated_sectors Count of reallocated sectors"
+            "# HELP iolake_disk_smart_reallocated_sectors Count of reallocated sectors"
         )
         .unwrap();
-        writeln!(
-            output,
-            "# TYPE objectio_disk_smart_reallocated_sectors gauge"
-        )
-        .unwrap();
+        writeln!(output, "# TYPE iolake_disk_smart_reallocated_sectors gauge").unwrap();
         for (device, health) in disks.iter() {
             writeln!(
                 output,
-                "objectio_disk_smart_reallocated_sectors{{osd_id=\"{}\",device=\"{}\"}} {}",
+                "iolake_disk_smart_reallocated_sectors{{osd_id=\"{}\",device=\"{}\"}} {}",
                 osd_id, device, health.reallocated_sectors
             )
             .unwrap();
@@ -406,14 +398,14 @@ impl SmartMonitor {
         // Pending sectors
         writeln!(
             output,
-            "# HELP objectio_disk_smart_pending_sectors Count of pending sectors"
+            "# HELP iolake_disk_smart_pending_sectors Count of pending sectors"
         )
         .unwrap();
-        writeln!(output, "# TYPE objectio_disk_smart_pending_sectors gauge").unwrap();
+        writeln!(output, "# TYPE iolake_disk_smart_pending_sectors gauge").unwrap();
         for (device, health) in disks.iter() {
             writeln!(
                 output,
-                "objectio_disk_smart_pending_sectors{{osd_id=\"{}\",device=\"{}\"}} {}",
+                "iolake_disk_smart_pending_sectors{{osd_id=\"{}\",device=\"{}\"}} {}",
                 osd_id, device, health.pending_sectors
             )
             .unwrap();
@@ -422,14 +414,14 @@ impl SmartMonitor {
         // Power on hours
         writeln!(
             output,
-            "# HELP objectio_disk_smart_power_on_hours Disk power-on hours"
+            "# HELP iolake_disk_smart_power_on_hours Disk power-on hours"
         )
         .unwrap();
-        writeln!(output, "# TYPE objectio_disk_smart_power_on_hours counter").unwrap();
+        writeln!(output, "# TYPE iolake_disk_smart_power_on_hours counter").unwrap();
         for (device, health) in disks.iter() {
             writeln!(
                 output,
-                "objectio_disk_smart_power_on_hours{{osd_id=\"{}\",device=\"{}\"}} {}",
+                "iolake_disk_smart_power_on_hours{{osd_id=\"{}\",device=\"{}\"}} {}",
                 osd_id, device, health.power_on_hours
             )
             .unwrap();
@@ -438,10 +430,10 @@ impl SmartMonitor {
         // SMART healthy (1 = healthy, 0 = unhealthy)
         writeln!(
             output,
-            "# HELP objectio_disk_smart_healthy Disk health status (1=healthy, 0=unhealthy)"
+            "# HELP iolake_disk_smart_healthy Disk health status (1=healthy, 0=unhealthy)"
         )
         .unwrap();
-        writeln!(output, "# TYPE objectio_disk_smart_healthy gauge").unwrap();
+        writeln!(output, "# TYPE iolake_disk_smart_healthy gauge").unwrap();
         for (device, health) in disks.iter() {
             let healthy = if health.smart_passed && health.health_score >= 50 {
                 1
@@ -450,7 +442,7 @@ impl SmartMonitor {
             };
             writeln!(
                 output,
-                "objectio_disk_smart_healthy{{osd_id=\"{}\",device=\"{}\"}} {}",
+                "iolake_disk_smart_healthy{{osd_id=\"{}\",device=\"{}\"}} {}",
                 osd_id, device, healthy
             )
             .unwrap();
@@ -459,14 +451,14 @@ impl SmartMonitor {
         // Health score
         writeln!(
             output,
-            "# HELP objectio_disk_smart_health_score Disk health score (0-100)"
+            "# HELP iolake_disk_smart_health_score Disk health score (0-100)"
         )
         .unwrap();
-        writeln!(output, "# TYPE objectio_disk_smart_health_score gauge").unwrap();
+        writeln!(output, "# TYPE iolake_disk_smart_health_score gauge").unwrap();
         for (device, health) in disks.iter() {
             writeln!(
                 output,
-                "objectio_disk_smart_health_score{{osd_id=\"{}\",device=\"{}\"}} {}",
+                "iolake_disk_smart_health_score{{osd_id=\"{}\",device=\"{}\"}} {}",
                 osd_id, device, health.health_score
             )
             .unwrap();
@@ -477,19 +469,19 @@ impl SmartMonitor {
         if has_predictions {
             writeln!(
                 output,
-                "# HELP objectio_disk_smart_predicted_failure_days Predicted days until disk failure"
+                "# HELP iolake_disk_smart_predicted_failure_days Predicted days until disk failure"
             )
             .unwrap();
             writeln!(
                 output,
-                "# TYPE objectio_disk_smart_predicted_failure_days gauge"
+                "# TYPE iolake_disk_smart_predicted_failure_days gauge"
             )
             .unwrap();
             for (device, health) in disks.iter() {
                 if let Some(days) = health.predicted_failure_days {
                     writeln!(
                         output,
-                        "objectio_disk_smart_predicted_failure_days{{osd_id=\"{}\",device=\"{}\"}} {}",
+                        "iolake_disk_smart_predicted_failure_days{{osd_id=\"{}\",device=\"{}\"}} {}",
                         osd_id, device, days
                     )
                     .unwrap();
@@ -500,13 +492,13 @@ impl SmartMonitor {
         // Check stats
         writeln!(
             output,
-            "# HELP objectio_disk_smart_checks_total Total SMART checks performed"
+            "# HELP iolake_disk_smart_checks_total Total SMART checks performed"
         )
         .unwrap();
-        writeln!(output, "# TYPE objectio_disk_smart_checks_total counter").unwrap();
+        writeln!(output, "# TYPE iolake_disk_smart_checks_total counter").unwrap();
         writeln!(
             output,
-            "objectio_disk_smart_checks_total{{osd_id=\"{}\"}} {}",
+            "iolake_disk_smart_checks_total{{osd_id=\"{}\"}} {}",
             osd_id,
             self.check_count.load(Ordering::Relaxed)
         )
@@ -514,17 +506,17 @@ impl SmartMonitor {
 
         writeln!(
             output,
-            "# HELP objectio_disk_smart_check_errors_total Total SMART check errors"
+            "# HELP iolake_disk_smart_check_errors_total Total SMART check errors"
         )
         .unwrap();
         writeln!(
             output,
-            "# TYPE objectio_disk_smart_check_errors_total counter"
+            "# TYPE iolake_disk_smart_check_errors_total counter"
         )
         .unwrap();
         writeln!(
             output,
-            "objectio_disk_smart_check_errors_total{{osd_id=\"{}\"}} {}",
+            "iolake_disk_smart_check_errors_total{{osd_id=\"{}\"}} {}",
             osd_id,
             self.check_errors.load(Ordering::Relaxed)
         )

@@ -1,0 +1,229 @@
+{{- $fd := .Values.osd.failureDomain }}
+{{- $block := eq .Values.osd.persistence.data.volumeMode "Block" }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "iolake.osd.fullname" . }}
+  labels:
+    {{- include "iolake.labels" . | nindent 4 }}
+    app.kubernetes.io/component: osd
+spec:
+  serviceName: {{ include "iolake.osd.headless" . }}
+  replicas: {{ .Values.osd.replicas }}
+  # OSDs start together; updates still roll one pod at a time, each
+  # waiting for readiness.
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      {{- include "iolake.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: osd
+  template:
+    metadata:
+      labels:
+        {{- include "iolake.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: osd
+      {{- with .Values.osd.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with (include "iolake.podPlacement" (dict "root" . "values" .Values.osd "component" "osd") | trim) }}
+      {{- . | nindent 6 }}
+      {{- end }}
+      {{- if $fd.nodeLabels }}
+      # Only the node-topology init container talks to the API server; it
+      # mounts its own token (kube-api volume) and no other container has one.
+      serviceAccountName: {{ include "iolake.osd.fullname" . }}
+      {{- end }}
+      automountServiceAccountToken: false
+      securityContext:
+        runAsUser: 0
+      initContainers:
+        {{- if $fd.nodeLabels }}
+        # Reads the failure-domain levels osd.failureDomain.nodeLabels names
+        # from the node this pod was scheduled on, into topology.env.
+        - name: node-topology
+          image: {{ include "iolake.toolsImage" . }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["/bin/sh", "-c"]
+          env:
+            - name: K8S_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          args:
+            - |
+              set -eu
+              SA=/var/run/secrets/kubernetes.io/serviceaccount
+              # The node's metadata only. Label keys and values can't hold
+              # quotes, commas or braces, so the labels object is split
+              # without a JSON parser.
+              META=$(curl -sS --fail --max-time 10 --retry 5 --retry-all-errors \
+                --cacert "$SA/ca.crt" -A iolake-osd-topology \
+                -H "Authorization: Bearer $(cat "$SA/token")" \
+                -H 'Accept: application/json;as=PartialObjectMetadata;g=meta.k8s.io;v=v1' \
+                "https://kubernetes.default.svc/api/v1/nodes/${K8S_NODE_NAME}")
+              LABELS=$(printf '%s' "$META" | tr -d '\n' | sed -n 's/.*"labels": *{\([^}]*\)}.*/\1/p')
+              label() { printf '%s' "$LABELS" | tr ',' '\n' | awk -F'"' -v k="$1" '$2 == k { print $4 }'; }
+              : > /etc/objectio/topology.env
+              {{- range $level, $key := $fd.nodeLabels }}
+              v=$(label {{ $key | quote }})
+              if [ -z "$v" ]; then
+                echo "node ${K8S_NODE_NAME} has no label {{ $key }} (osd.failureDomain.nodeLabels.{{ $level }}): not starting this OSD in a wrong failure domain" >&2
+                exit 1
+              fi
+              echo "FD_{{ upper $level }}=$v" >> /etc/objectio/topology.env
+              {{- end }}
+              cat /etc/objectio/topology.env
+          volumeMounts:
+            - name: config
+              mountPath: /etc/objectio
+            - name: kube-api
+              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
+        {{- end }}
+        - name: config-renderer
+          image: {{ include "iolake.image" (dict "global" .Values.global "component" .Values.osd) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["/bin/sh", "-c"]
+          env:
+            # k8s worker node this pod is scheduled on. Used as the
+            # failure-domain "host" so multiple OSD pods on the same
+            # physical node share a host and CRUSH spreads shards across
+            # the real machines, not the pods. If unset (empty), fall
+            # back to the pod name so the topology still distinguishes
+            # OSDs (useful in development on a single-node kind).
+            - name: K8S_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          args:
+            - |
+              set -eu
+              ORDINAL=$(echo "$HOSTNAME" | rev | cut -d- -f1 | rev)
+              NODE_NAME="{{ include "iolake.osd.fullname" . }}-${ORDINAL}"
+              ADVERTISE_ADDR="{{ include "iolake.osd.fullname" . }}-${ORDINAL}.{{ include "iolake.osd.headless" . }}:{{ .Values.osd.service.port }}"
+              HOST_NAME="${K8S_NODE_NAME:-$NODE_NAME}"
+              FD_REGION= FD_ZONE= FD_DATACENTER= FD_RACK=
+              if [ -f /etc/objectio/topology.env ]; then . /etc/objectio/topology.env; fi
+              sed \
+                -e "s/__NODE_NAME__/${NODE_NAME}/g" \
+                -e "s/__HOST_NAME__/${HOST_NAME}/g" \
+                -e "s/__ADVERTISE_ADDR__/${ADVERTISE_ADDR}/g" \
+                -e "s/__FD_REGION__/${FD_REGION}/g" \
+                -e "s/__FD_ZONE__/${FD_ZONE}/g" \
+                -e "s/__FD_DATACENTER__/${FD_DATACENTER}/g" \
+                -e "s/__FD_RACK__/${FD_RACK}/g" \
+                /tmp/osd-template/osd.toml.tpl > /etc/objectio/osd.toml
+              echo "Rendered OSD config for ${NODE_NAME} (host=${HOST_NAME}):"
+              cat /etc/objectio/osd.toml
+          volumeMounts:
+            - name: config-template
+              mountPath: /tmp/osd-template
+            - name: config
+              mountPath: /etc/objectio
+      containers:
+        - name: osd
+          image: {{ include "iolake.image" (dict "global" .Values.global "component" .Values.osd) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["iolake-osd"]
+          args:
+            - "--config"
+            - "/etc/objectio/osd.toml"
+            - "--metrics-port"
+            - {{ .Values.osd.service.metricsPort | quote }}
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            {{- with (include "iolake.tls.env" .) }}
+            {{- . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.osd.service.port }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.osd.service.metricsPort }}
+              protocol: TCP
+          {{- with (include "iolake.probes" (dict "values" .Values.osd) | trim) }}
+          {{- . | nindent 10 }}
+          {{- end }}
+          {{- if $block }}
+          volumeDevices:
+            - name: data
+              devicePath: /dev/iolake/disk0
+          {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/objectio
+            {{- if not $block }}
+            - name: data
+              mountPath: /data/disk0
+            {{- end }}
+            - name: state
+              mountPath: /var/lib/objectio
+            {{- with (include "iolake.tls.volumeMount" .) }}
+            {{- . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.osd.resources | nindent 12 }}
+      volumes:
+        - name: config-template
+          configMap:
+            name: {{ include "iolake.osd.fullname" . }}-config
+        - name: config
+          emptyDir: {}
+        {{- if $fd.nodeLabels }}
+        - name: kube-api
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3607
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+        {{- end }}
+        {{- with (include "iolake.tls.volume" (dict "ctx" . "role" "osd")) }}
+        {{- . | nindent 8 }}
+        {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if $block }}
+        volumeMode: Block
+        {{- end }}
+        {{- if .Values.osd.persistence.data.storageClass }}
+        storageClassName: {{ .Values.osd.persistence.data.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.osd.persistence.data.size }}
+    - metadata:
+        name: state
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if .Values.osd.persistence.state.storageClass }}
+        storageClassName: {{ .Values.osd.persistence.state.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.osd.persistence.state.size }}

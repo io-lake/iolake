@@ -1,8 +1,8 @@
 //! Rolling upgrades: every node's reported version, the cluster's active
-//! format level, and finalize (objectio-docs core/upgrade-path.md).
+//! format level, and finalize (iolake-docs core/upgrade-path.md).
 //!
 //! Each process reports its release and format level every 30 s
-//! (`objectio_proto::transport::spawn_version_reporter`); the leader keeps
+//! (`iolake_proto::transport::spawn_version_reporter`); the leader keeps
 //! the reports in memory (a new leader hears from everyone again within
 //! 30 s). The leader counts itself as reported whenever it is asked: it is
 //! running, this binary. The active level lives in config, through Raft.
@@ -12,8 +12,8 @@
 
 use std::time::{Duration, Instant};
 
-use objectio_common::version;
-use objectio_proto::metadata::{ConfigEntry, NodeVersion, ReportVersionRequest};
+use iolake_common::version;
+use iolake_proto::metadata::{ConfigEntry, NodeVersion, ReportVersionRequest};
 use prost::Message;
 use tonic::Status;
 use tracing::{error, info};
@@ -127,7 +127,7 @@ impl MetaService {
             }
         }
         for osd in self.osd_nodes.read().iter() {
-            if osd.admin_state != objectio_common::OsdAdminState::Out {
+            if osd.admin_state != iolake_common::OsdAdminState::Out {
                 required.push(("osd", hex::encode(osd.node_id)));
             }
         }
@@ -203,7 +203,7 @@ impl MetaService {
             updated_by: requested_by.to_string(),
             version: 0,
         };
-        use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+        use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
         let cmd = MetaCommand::MultiCas {
             ops: vec![CasOp {
                 table: CasTable::Config,

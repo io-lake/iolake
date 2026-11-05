@@ -16,7 +16,7 @@
 //! Only [`MetaCommand::SetConfig`] and [`MetaCommand::DeleteConfig`] go
 //! through consensus in the first phase. The rest of the 40+ mutation
 //! handlers still write directly to redb and are not quorum-safe yet;
-//! see the migration plan in `FEATURES.md` in the sibling `objectio-docs` repo.
+//! see the migration plan in `FEATURES.md` in the sibling `iolake-docs` repo.
 
 use openraft::{BasicNode, declare_raft_types};
 use serde::{Deserialize, Serialize};
@@ -58,7 +58,7 @@ pub enum MetaCommand {
         /// 16-byte node UUID.
         node_id: [u8; 16],
         /// New state.
-        state: objectio_common::OsdAdminState,
+        state: iolake_common::OsdAdminState,
         /// Audit trail — who requested this change (user id / "console" /
         /// "cli"). Stored in logs, not in the state machine.
         requested_by: String,
@@ -80,7 +80,7 @@ pub enum MetaCommand {
         requested_by: String,
     },
     /// Several commands in one log entry: meta's group commit (format
-    /// level 8, objectio-docs `core/meta-log.md`). Applied in order, each
+    /// level 8, iolake-docs `core/meta-log.md`). Applied in order, each
     /// exactly as if it were an entry of its own, each with its own answer
     /// ([`MetaResponse::Batch`]); one entry, so one log sync, for every
     /// write that arrived while the last one was being committed. Never
@@ -208,7 +208,7 @@ pub enum MetaResponse {
 }
 
 /// The most operations one [`MetaCommand::MultiCas`] carries.
-pub const MAX_OPS: usize = objectio_common::META_MAX_OPS;
+pub const MAX_OPS: usize = iolake_common::META_MAX_OPS;
 
 impl MetaCommand {
     /// Why this command can never apply, whatever the state, or `None`.
@@ -269,7 +269,7 @@ mod tests {
             },
             MetaCommand::SetOsdAdminState {
                 node_id: [7; 16],
-                state: objectio_common::OsdAdminState::Out,
+                state: iolake_common::OsdAdminState::Out,
                 requested_by: "console".into(),
             },
             MetaCommand::MultiCas {

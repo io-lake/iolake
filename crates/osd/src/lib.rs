@@ -1,4 +1,4 @@
-//! ObjectIO OSD - Object Storage Daemon (library form).
+//! IOLake OSD - Object Storage Daemon (library form).
 //!
 //! `src/main.rs` is a thin entrypoint. `run()` is also consumed
 //! in-process by `bin/aio`.
@@ -21,11 +21,11 @@ use axum::{
     routing::get,
 };
 use clap::Parser;
-use objectio_proto::metadata::{
+use iolake_proto::metadata::{
     FailureDomainInfo, RegisterOsdRequest, metadata_service_client::MetadataServiceClient,
 };
-use objectio_proto::storage::storage_service_server::StorageServiceServer;
-use objectio_storage::SmartMonitor;
+use iolake_proto::storage::storage_service_server::StorageServiceServer;
+use iolake_storage::SmartMonitor;
 use serde::Deserialize;
 use service::OsdService;
 use std::fmt::Write;
@@ -37,8 +37,8 @@ use tokio::net::TcpListener;
 use tracing::{error, info, warn};
 
 #[derive(Parser, Debug)]
-#[command(name = "objectio-osd")]
-#[command(about = "ObjectIO Object Storage Daemon")]
+#[command(name = "iolake-osd")]
+#[command(about = "IOLake Object Storage Daemon")]
 #[command(version)]
 pub struct Args {
     /// Configuration file path
@@ -61,7 +61,7 @@ pub struct Args {
 
     /// Disk discovery glob(s), e.g. `/dev/disk/by-id/wwn-*` or
     /// `/data/disk*/disk.raw`. Each match is probed; previously-
-    /// claimed ObjectIO disks attach automatically, blanks are
+    /// claimed IOLake disks attach automatically, blanks are
     /// reported but skipped unless `--init-blank-disks=true`.
     /// Operator-safe by default: foreign filesystems and the root
     /// FS's backing device are always excluded.
@@ -115,19 +115,19 @@ pub struct Args {
     /// The share of each disk client writes may fill; past it they are
     /// refused (the gateway answers 507), and the rest is kept for repair,
     /// drain and backfill.
-    #[arg(long, env = "OBJECTIO_OSD_FULL_RATIO", default_value_t = crate::service::DEFAULT_FULL_RATIO)]
+    #[arg(long, env = "IOLAKE_OSD_FULL_RATIO", default_value_t = crate::service::DEFAULT_FULL_RATIO)]
     pub full_ratio: f64,
 
     /// The metadata index's page cache, in MiB: with the memtables, all
     /// the memory the OSD's metadata takes, whatever its object count.
-    #[arg(long, env = "OBJECTIO_OSD_META_CACHE_MIB", default_value_t = 1024)]
+    #[arg(long, env = "IOLAKE_OSD_META_CACHE_MIB", default_value_t = 1024)]
     pub meta_cache_mib: usize,
 
     /// The engine of the metadata index (B27): `native`, or `rocksdb` (in a
     /// build with the `rocksdb` feature). A data directory is opened only
     /// by the engine that wrote it.
-    #[arg(long, env = "OBJECTIO_OSD_META_ENGINE", default_value = "native")]
-    pub meta_engine: objectio_storage::metadata::MetaEngine,
+    #[arg(long, env = "IOLAKE_OSD_META_ENGINE", default_value = "native")]
+    pub meta_engine: iolake_storage::metadata::MetaEngine,
 
     /// Accept shard transfers over Mooncake Transfer Engine: `rdma`, or
     /// `tcp` to develop without RDMA hardware. Unset: gRPC bytes only.
@@ -150,7 +150,7 @@ pub struct Args {
 
     /// mTLS between services (A8a).
     #[command(flatten)]
-    pub tls: objectio_proto::transport::TlsArgs,
+    pub tls: iolake_proto::transport::TlsArgs,
 }
 
 /// Configuration file structure. A key it doesn't know is an error, as a
@@ -301,13 +301,13 @@ fn default_meta_endpoint() -> String {
 ///
 /// Derived from the storage layer's constant rather than restated, because it
 /// was restated here as 4 MiB — the *stripe* size — and that is the value the
-/// OSD actually used. `objectio_common::StorageConfig` said one thing,
-/// `objectio-storage` said another, and this said a third; this one won.
+/// OSD actually used. `iolake_common::StorageConfig` said one thing,
+/// `iolake-storage` said another, and this said a third; this one won.
 ///
 /// The effect: every shard occupied a whole 4 MiB block however small it was,
 /// so a 4 KB object and a 4 MB object both cost 24 MB across a 4+2 stripe.
 fn default_block_size() -> usize {
-    objectio_storage::DEFAULT_BLOCK_SIZE as usize
+    iolake_storage::DEFAULT_BLOCK_SIZE as usize
 }
 
 fn default_log_level() -> String {
@@ -347,7 +347,7 @@ pub async fn run(
     args: Args,
     shutdown: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
-    objectio_proto::transport::configure_tls(&args.tls).map_err(anyhow::Error::msg)?;
+    iolake_proto::transport::configure_tls(&args.tls).map_err(anyhow::Error::msg)?;
     let config = load_config(&args.config)?;
 
     // Merge CLI args with config file (CLI takes precedence)
@@ -361,7 +361,7 @@ pub async fn run(
     let block_size = config.storage.block_size;
     let data_dir = args.data_dir.unwrap_or(config.storage.data_dir);
 
-    info!("Starting ObjectIO OSD");
+    info!("Starting IOLake OSD");
 
     // Resolve final disk list — explicit disks pass through; any
     // `--disk-filter` globs are expanded, root-FS device + mounted
@@ -681,7 +681,7 @@ pub async fn run(
     }
 
     // Report this binary's release and format level (rolling upgrades).
-    objectio_proto::transport::spawn_version_reporter(
+    iolake_proto::transport::spawn_version_reporter(
         meta_endpoint.clone(),
         "osd",
         node_id.clone(),
@@ -696,13 +696,13 @@ pub async fn run(
 
     // `serve` turns Nagle off on each connection, as tonic does only on
     // listeners it binds itself.
-    let grpc = objectio_proto::transport::server()
-        .layer(objectio_proto::rpc_metrics::RpcMetricsLayer(&RPC_METRICS))
-        .layer(objectio_proto::peer_auth::PeerAuthLayer::new(&[
-            objectio_proto::peer_auth::STORAGE_SERVICE,
+    let grpc = iolake_proto::transport::server()
+        .layer(iolake_proto::rpc_metrics::RpcMetricsLayer(&RPC_METRICS))
+        .layer(iolake_proto::peer_auth::PeerAuthLayer::new(&[
+            iolake_proto::peer_auth::STORAGE_SERVICE,
         ]))
         .add_service(storage_service);
-    let server_future = objectio_proto::transport::serve(grpc, listener, async move {
+    let server_future = iolake_proto::transport::serve(grpc, listener, async move {
         shutdown.await;
         info!("Shutting down...");
     });
@@ -748,7 +748,7 @@ async fn register_with_meta(
 
     // Connect to metadata service
     let mut client = MetadataServiceClient::new(
-        objectio_proto::transport::meta_channel(meta_endpoint)
+        iolake_proto::transport::meta_channel(meta_endpoint)
             .await
             .map_err(|e| format!("Failed to connect to metadata service: {e}"))?,
     );
@@ -812,7 +812,7 @@ async fn register_with_meta(
 }
 
 /// Every gRPC call this OSD serves: counts by status and latency.
-static RPC_METRICS: std::sync::LazyLock<objectio_proto::rpc_metrics::RpcMetrics> =
+static RPC_METRICS: std::sync::LazyLock<iolake_proto::rpc_metrics::RpcMetrics> =
     std::sync::LazyLock::new(Default::default);
 
 /// OSD metrics state for the HTTP server
@@ -850,11 +850,11 @@ fn render_metrics(state: &OsdMetricsState) -> String {
     let mut output = String::with_capacity(16 * 1024);
 
     // OSD info
-    writeln!(output, "# HELP objectio_osd_info OSD information").unwrap();
-    writeln!(output, "# TYPE objectio_osd_info gauge").unwrap();
+    writeln!(output, "# HELP iolake_osd_info OSD information").unwrap();
+    writeln!(output, "# TYPE iolake_osd_info gauge").unwrap();
     writeln!(
         output,
-        "objectio_osd_info{{osd_id=\"{}\",node=\"{}\",rack=\"{}\",datacenter=\"{}\",region=\"{}\"}} 1",
+        "iolake_osd_info{{osd_id=\"{}\",node=\"{}\",rack=\"{}\",datacenter=\"{}\",region=\"{}\"}} 1",
         state.osd_id, state.node_name, state.failure_domain.rack,
         state.failure_domain.datacenter, state.failure_domain.region
     ).unwrap();
@@ -863,13 +863,13 @@ fn render_metrics(state: &OsdMetricsState) -> String {
     let uptime = state.start_time.elapsed().as_secs();
     writeln!(
         output,
-        "# HELP objectio_osd_uptime_seconds OSD uptime in seconds"
+        "# HELP iolake_osd_uptime_seconds OSD uptime in seconds"
     )
     .unwrap();
-    writeln!(output, "# TYPE objectio_osd_uptime_seconds counter").unwrap();
+    writeln!(output, "# TYPE iolake_osd_uptime_seconds counter").unwrap();
     writeln!(
         output,
-        "objectio_osd_uptime_seconds{{osd_id=\"{}\"}} {}",
+        "iolake_osd_uptime_seconds{{osd_id=\"{}\"}} {}",
         state.osd_id, uptime
     )
     .unwrap();
@@ -877,62 +877,58 @@ fn render_metrics(state: &OsdMetricsState) -> String {
     // Get disk stats from OSD service
     let status = state.osd_service.status();
 
-    // OSD capacity and usage are per disk below (`objectio_disk_*`), and
-    // per OSD from the gateway's poll (`objectio_osd_capacity_bytes`,
-    // `objectio_osd_used_bytes`). Exporting them here as well put two
+    // OSD capacity and usage are per disk below (`iolake_disk_*`), and
+    // per OSD from the gateway's poll (`iolake_osd_capacity_bytes`,
+    // `iolake_osd_used_bytes`). Exporting them here as well put two
     // series per OSD under one name once OSDs are scraped directly.
 
     // Shard count
+    writeln!(output, "# HELP iolake_osd_shards_total Total shards stored").unwrap();
+    writeln!(output, "# TYPE iolake_osd_shards_total gauge").unwrap();
     writeln!(
         output,
-        "# HELP objectio_osd_shards_total Total shards stored"
-    )
-    .unwrap();
-    writeln!(output, "# TYPE objectio_osd_shards_total gauge").unwrap();
-    writeln!(
-        output,
-        "objectio_osd_shards_total{{osd_id=\"{}\"}} {}",
+        "iolake_osd_shards_total{{osd_id=\"{}\"}} {}",
         state.osd_id, status.total_shards
     )
     .unwrap();
 
     // Per-disk metrics
-    writeln!(output, "# HELP objectio_disk_capacity_bytes Disk capacity").unwrap();
-    writeln!(output, "# TYPE objectio_disk_capacity_bytes gauge").unwrap();
-    writeln!(output, "# HELP objectio_disk_used_bytes Disk used space").unwrap();
-    writeln!(output, "# TYPE objectio_disk_used_bytes gauge").unwrap();
-    writeln!(output, "# HELP objectio_disk_shards_total Shards on disk").unwrap();
-    writeln!(output, "# TYPE objectio_disk_shards_total gauge").unwrap();
+    writeln!(output, "# HELP iolake_disk_capacity_bytes Disk capacity").unwrap();
+    writeln!(output, "# TYPE iolake_disk_capacity_bytes gauge").unwrap();
+    writeln!(output, "# HELP iolake_disk_used_bytes Disk used space").unwrap();
+    writeln!(output, "# TYPE iolake_disk_used_bytes gauge").unwrap();
+    writeln!(output, "# HELP iolake_disk_shards_total Shards on disk").unwrap();
+    writeln!(output, "# TYPE iolake_disk_shards_total gauge").unwrap();
     writeln!(
         output,
-        "# HELP objectio_disk_healthy Disk health status (1=healthy, 0=unhealthy)"
+        "# HELP iolake_disk_healthy Disk health status (1=healthy, 0=unhealthy)"
     )
     .unwrap();
-    writeln!(output, "# TYPE objectio_disk_healthy gauge").unwrap();
+    writeln!(output, "# TYPE iolake_disk_healthy gauge").unwrap();
 
     for disk in &status.disks {
         let healthy = if disk.status == "healthy" { 1 } else { 0 };
         writeln!(
             output,
-            "objectio_disk_capacity_bytes{{osd_id=\"{}\",disk=\"{}\"}} {}",
+            "iolake_disk_capacity_bytes{{osd_id=\"{}\",disk=\"{}\"}} {}",
             state.osd_id, disk.path, disk.capacity
         )
         .unwrap();
         writeln!(
             output,
-            "objectio_disk_used_bytes{{osd_id=\"{}\",disk=\"{}\"}} {}",
+            "iolake_disk_used_bytes{{osd_id=\"{}\",disk=\"{}\"}} {}",
             state.osd_id, disk.path, disk.used
         )
         .unwrap();
         writeln!(
             output,
-            "objectio_disk_shards_total{{osd_id=\"{}\",disk=\"{}\"}} {}",
+            "iolake_disk_shards_total{{osd_id=\"{}\",disk=\"{}\"}} {}",
             state.osd_id, disk.path, disk.shard_count
         )
         .unwrap();
         writeln!(
             output,
-            "objectio_disk_healthy{{osd_id=\"{}\",disk=\"{}\"}} {}",
+            "iolake_disk_healthy{{osd_id=\"{}\",disk=\"{}\"}} {}",
             state.osd_id, disk.path, healthy
         )
         .unwrap();
@@ -942,28 +938,25 @@ fn render_metrics(state: &OsdMetricsState) -> String {
     type DiskField = fn(&service::DiskStatusInfo) -> u64;
     let io_families: [(&str, &str, &str, DiskField); 5] = [
         (
-            "objectio_disk_available_bytes",
+            "iolake_disk_available_bytes",
             "gauge",
             "Free bytes on the disk",
             |d| d.capacity.saturating_sub(d.used),
         ),
-        ("objectio_disk_reads_total", "counter", "Shard reads", |d| {
+        ("iolake_disk_reads_total", "counter", "Shard reads", |d| {
             d.reads
         }),
+        ("iolake_disk_writes_total", "counter", "Shard writes", |d| {
+            d.writes
+        }),
         (
-            "objectio_disk_writes_total",
-            "counter",
-            "Shard writes",
-            |d| d.writes,
-        ),
-        (
-            "objectio_disk_read_bytes_total",
+            "iolake_disk_read_bytes_total",
             "counter",
             "Bytes read",
             |d| d.bytes_read,
         ),
         (
-            "objectio_disk_written_bytes_total",
+            "iolake_disk_written_bytes_total",
             "counter",
             "Bytes written",
             |d| d.bytes_written,
@@ -985,10 +978,10 @@ fn render_metrics(state: &OsdMetricsState) -> String {
     }
     writeln!(
         output,
-        "# HELP objectio_disk_errors_total Failed reads, failed writes and flushes, and checksum mismatches"
+        "# HELP iolake_disk_errors_total Failed reads, failed writes and flushes, and checksum mismatches"
     )
     .unwrap();
-    writeln!(output, "# TYPE objectio_disk_errors_total counter").unwrap();
+    writeln!(output, "# TYPE iolake_disk_errors_total counter").unwrap();
     for disk in &status.disks {
         for (kind, v) in [
             ("read", disk.read_errors),
@@ -997,7 +990,7 @@ fn render_metrics(state: &OsdMetricsState) -> String {
         ] {
             writeln!(
                 output,
-                "objectio_disk_errors_total{{osd_id=\"{}\",disk=\"{}\",type=\"{kind}\"}} {v}",
+                "iolake_disk_errors_total{{osd_id=\"{}\",disk=\"{}\",type=\"{kind}\"}} {v}",
                 state.osd_id, disk.path
             )
             .unwrap();
@@ -1015,7 +1008,7 @@ fn render_metrics(state: &OsdMetricsState) -> String {
     // gRPC calls served, every method
     RPC_METRICS.render(
         &mut output,
-        "objectio_osd_grpc",
+        "iolake_osd_grpc",
         "this OSD",
         &format!("osd_id=\"{}\"", state.osd_id),
     );
@@ -1030,7 +1023,7 @@ fn render_metrics(state: &OsdMetricsState) -> String {
     state.smart_monitor.check_if_needed(&state.disk_devices);
     output.push_str(&state.smart_monitor.export_prometheus());
 
-    output.push_str(&objectio_common::process_metrics::render(&format!(
+    output.push_str(&iolake_common::process_metrics::render(&format!(
         "osd_id=\"{}\"",
         state.osd_id
     )));
@@ -1121,7 +1114,7 @@ mod tests {
                 assert_eq!(config.logging.level, "info");
                 assert_eq!(
                     config.storage.block_size,
-                    objectio_storage::DEFAULT_BLOCK_SIZE as usize
+                    iolake_storage::DEFAULT_BLOCK_SIZE as usize
                 );
             }
         }

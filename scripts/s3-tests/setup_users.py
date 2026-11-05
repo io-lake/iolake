@@ -16,8 +16,8 @@ sys.path.insert(
     0, os.path.join(os.path.dirname(__file__), "..", "..", "sdk", "python")
 )
 
-from objectio import Client  # noqa: E402
-from objectio.models import PublicAccessBlock  # noqa: E402
+from iolake import Client  # noqa: E402
+from iolake.models import PublicAccessBlock  # noqa: E402
 
 endpoint, creds_path, out_path = sys.argv[1:4]
 env = dict(

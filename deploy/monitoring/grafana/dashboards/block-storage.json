@@ -50,7 +50,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_block_volumes_total",
+          "expr": "iolake_block_volumes_total",
           "legendFormat": "Volumes",
           "refId": "A"
         }
@@ -91,7 +91,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_block_snapshots_total",
+          "expr": "iolake_block_snapshots_total",
           "legendFormat": "Snapshots",
           "refId": "A"
         }
@@ -132,7 +132,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(objectio_block_volumes_by_state{state=\"attached\"})",
+          "expr": "sum(iolake_block_volumes_by_state{state=\"attached\"})",
           "legendFormat": "Attached",
           "refId": "A"
         }
@@ -173,7 +173,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_block_volumes_provisioned_bytes",
+          "expr": "iolake_block_volumes_provisioned_bytes",
           "legendFormat": "Provisioned",
           "refId": "A"
         }
@@ -214,7 +214,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_block_volumes_used_bytes",
+          "expr": "iolake_block_volumes_used_bytes",
           "legendFormat": "Used",
           "refId": "A"
         }
@@ -255,7 +255,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(objectio_block_snapshot_chunks) * 4194304",
+          "expr": "sum(iolake_block_snapshot_chunks) * 4194304",
           "legendFormat": "Captured",
           "refId": "A"
         }
@@ -305,7 +305,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_block_volumes_by_state > 0",
+          "expr": "iolake_block_volumes_by_state > 0",
           "legendFormat": "{{state}}",
           "refId": "A"
         }
@@ -347,7 +347,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (protocol) (rate(objectio_block_io_bytes_total[5m])) > 0",
+          "expr": "sum by (protocol) (rate(iolake_block_io_bytes_total[5m])) > 0",
           "legendFormat": "{{protocol}}",
           "refId": "A"
         }
@@ -405,13 +405,13 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_block_volumes_provisioned_bytes",
+          "expr": "iolake_block_volumes_provisioned_bytes",
           "legendFormat": "Provisioned",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_block_volumes_used_bytes",
+          "expr": "iolake_block_volumes_used_bytes",
           "legendFormat": "Used",
           "refId": "B"
         }
@@ -454,7 +454,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "100 * objectio_block_volume_used_bytes / objectio_block_volume_size_bytes",
+          "expr": "100 * iolake_block_volume_used_bytes / iolake_block_volume_size_bytes",
           "legendFormat": "{{name}}",
           "refId": "A"
         }
@@ -526,7 +526,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_block_volume_size_bytes",
+          "expr": "iolake_block_volume_size_bytes",
           "format": "table",
           "instant": true,
           "legendFormat": "",
@@ -534,7 +534,7 @@
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_block_volume_used_bytes",
+          "expr": "iolake_block_volume_used_bytes",
           "format": "table",
           "instant": true,
           "legendFormat": "",
@@ -639,19 +639,19 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (op) (rate(objectio_block_io_seconds_count[5m]))",
+          "expr": "sum by (op) (rate(iolake_block_io_seconds_count[5m]))",
           "legendFormat": "{{op}}",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (op) (rate(objectio_block_io_errors_total[5m]))",
+          "expr": "sum by (op) (rate(iolake_block_io_errors_total[5m]))",
           "legendFormat": "{{op}} errors",
           "refId": "B"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(objectio_block_chunks_flushed_total[5m]))",
+          "expr": "sum(rate(iolake_block_chunks_flushed_total[5m]))",
           "legendFormat": "chunk flushes",
           "refId": "C"
         }
@@ -701,7 +701,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (op) (rate(objectio_block_io_bytes_total[5m]))",
+          "expr": "sum by (op) (rate(iolake_block_io_bytes_total[5m]))",
           "legendFormat": "{{op}}",
           "refId": "A"
         }
@@ -759,7 +759,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_block_snapshots_total",
+          "expr": "iolake_block_snapshots_total",
           "legendFormat": "Total Snapshots",
           "refId": "A"
         }
@@ -801,7 +801,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "objectio_block_snapshot_chunks * 4194304 > 0",
+          "expr": "iolake_block_snapshot_chunks * 4194304 > 0",
           "legendFormat": "{{name}}",
           "refId": "A"
         }
@@ -813,7 +813,7 @@
   "refresh": "10s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["objectio", "block", "storage", "volumes"],
+  "tags": ["iolake", "block", "storage", "volumes"],
   "templating": {
     "list": [
       {
@@ -836,8 +836,8 @@
   "time": { "from": "now-1h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "ObjectIO - Block Storage",
-  "uid": "objectio-block-storage",
+  "title": "IOLake - Block Storage",
+  "uid": "iolake-block-storage",
   "version": 1,
   "weekStart": ""
 }

@@ -1,4 +1,4 @@
-//! Meta's Raft log, in files of its own (B25; objectio-docs
+//! Meta's Raft log, in files of its own (B25; iolake-docs
 //! `core/meta-log.md`).
 //!
 //! The log lives in a directory of segments, `<first index, 20 digits>.log`,
@@ -90,7 +90,7 @@ impl LogError {
     /// append that failed so was cut off, and can be tried again.
     #[must_use]
     pub fn is_out_of_space(&self) -> bool {
-        matches!(self, Self::Io { source, .. } if objectio_common::error::is_out_of_space(source))
+        matches!(self, Self::Io { source, .. } if iolake_common::error::is_out_of_space(source))
     }
 }
 
@@ -238,7 +238,7 @@ fn never_written(data: &[u8], from: usize, to: usize) -> bool {
 fn whole_record_after(data: &[u8], bad: usize, expect: u64) -> Option<(u64, u64)> {
     let len = data.len() as u64;
     let mut found = 0;
-    let at = objectio_common::log_tail::whole_record_after(
+    let at = iolake_common::log_tail::whole_record_after(
         data,
         bad as u64,
         len,
@@ -379,7 +379,7 @@ impl RaftLog {
         while offset < data.len() {
             // A torn record ends the log, only in the last segment, and only
             // with no whole record after it: one after it was synced, and so
-            // was this one, which is then damage (objectio-common
+            // was this one, which is then damage (iolake-common
             // `log_tail`).
             let torn = |what: &str| -> Result<(), LogError> {
                 let corrupt = |what: String| LogError::Corrupt {
@@ -678,7 +678,7 @@ impl RaftLog {
         e: io::Error,
     ) -> LogError {
         let path = self.segments[segment].path.clone();
-        if !objectio_common::error::is_out_of_space(&e) {
+        if !iolake_common::error::is_out_of_space(&e) {
             return io_err(&path)(e);
         }
         let cut = if new_segment {

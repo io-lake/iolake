@@ -4,8 +4,8 @@
 
 use std::time::Duration;
 
-use objectio_e2e::Cluster;
-use objectio_e2e::ha::HaCluster;
+use iolake_e2e::Cluster;
+use iolake_e2e::ha::HaCluster;
 use serde_json::json;
 
 #[test]
@@ -29,7 +29,7 @@ fn a_gateway_with_a_wrong_clock_refuses_writes() {
 
     let metrics = c.request("GET", "/metrics", &[]).text();
     assert!(
-        metrics.contains("objectio_gateway_clock_skewed 1"),
+        metrics.contains("iolake_gateway_clock_skewed 1"),
         "{}",
         metrics
             .lines()

@@ -117,7 +117,7 @@ impl MetadataKey {
 
     /// The tombstone of a delete of `bucket/key` (`version_id` empty: the
     /// current object), holding the delete's stamp
-    /// (objectio-docs core/object-metadata-quorum.md).
+    /// (iolake-docs core/object-metadata-quorum.md).
     /// Format: `t{bucket}\0{key}\0{version_id}`
     pub fn tombstone(bucket: &str, key: &str, version_id: &str) -> Self {
         let mut data = Vec::with_capacity(3 + bucket.len() + key.len() + version_id.len());

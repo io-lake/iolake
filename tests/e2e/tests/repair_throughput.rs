@@ -2,17 +2,17 @@
 //! fail of correctness (the `repair` tests are). Ignored by default:
 //!
 //! ```text
-//! cargo test -p objectio-e2e --test repair_throughput -- --ignored --nocapture
+//! cargo test -p iolake-e2e --test repair_throughput -- --ignored --nocapture
 //! ```
 
 use std::time::{Duration, Instant};
 
-use objectio_e2e::ha::HaCluster;
+use iolake_e2e::ha::HaCluster;
 
 fn rebuilt(ha: &HaCluster) -> u64 {
     let m = ha.clients[0].request("GET", "/metrics", &[]).text();
     m.lines()
-        .filter(|l| l.starts_with("objectio_meta_repair_shards_rebuilt_total"))
+        .filter(|l| l.starts_with("iolake_meta_repair_shards_rebuilt_total"))
         .filter_map(|l| l.rsplit(' ').next()?.parse::<u64>().ok())
         .sum()
 }
@@ -77,7 +77,7 @@ fn a_lost_osd_is_evacuated_at_this_rate() {
         assert_eq!(c.request("PUT", &format!("/evac/k{i}"), &body).status, 200);
     }
     let endpoint = ha.osd_endpoint(5);
-    let ids = |c: &objectio_e2e::Cluster| -> Vec<(String, String)> {
+    let ids = |c: &iolake_e2e::Cluster| -> Vec<(String, String)> {
         c.request("GET", "/_admin/nodes", &[]).json()["nodes"]
             .as_array()
             .unwrap()

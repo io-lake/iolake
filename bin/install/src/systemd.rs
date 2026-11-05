@@ -39,11 +39,11 @@ pub fn unit(service: &Service, layout: &Layout, with_meta: bool) -> String {
     let mut u = String::new();
     let _ = writeln!(u, "[Unit]");
     let _ = writeln!(u, "Description={}", service.description);
-    let _ = writeln!(u, "Documentation=https://object-io.github.io");
+    let _ = writeln!(u, "Documentation=https://iolake.dev");
     let _ = writeln!(u, "After=network-online.target");
     let _ = writeln!(u, "Wants=network-online.target");
     if with_meta && service.kind != Kind::Meta {
-        let _ = writeln!(u, "After=objectio-meta.service");
+        let _ = writeln!(u, "After=iolake-meta.service");
     }
     let _ = writeln!(u);
     let _ = writeln!(u, "[Service]");
@@ -59,7 +59,7 @@ pub fn unit(service: &Service, layout: &Layout, with_meta: bool) -> String {
         }
     }
     if service.kind == Kind::Gateway {
-        // OBJECTIO_MASTER_KEY (SSE) and other settings read from the
+        // IOLAKE_MASTER_KEY (SSE) and other settings read from the
         // environment; the file is optional.
         let _ = writeln!(u, "EnvironmentFile=-{}", layout.gateway_env().display());
     }
@@ -102,7 +102,7 @@ mod tests {
 
     fn service(kind: Kind, argv: &[&str]) -> Service {
         Service {
-            unit: "objectio-x".into(),
+            unit: "iolake-x".into(),
             kind,
             description: "x".into(),
             argv: argv.iter().map(ToString::to_string).collect(),
@@ -112,8 +112,8 @@ mod tests {
     #[test]
     fn arguments_are_quoted_as_systemd_reads_them() {
         assert_eq!(
-            quote("/usr/local/bin/objectio-meta"),
-            "/usr/local/bin/objectio-meta"
+            quote("/usr/local/bin/iolake-meta"),
+            "/usr/local/bin/iolake-meta"
         );
         assert_eq!(quote("a b"), "\"a b\"");
         assert_eq!(quote("50%"), "50%%");
@@ -128,23 +128,23 @@ mod tests {
         let meta = unit(
             &service(
                 Kind::Meta,
-                &["/usr/local/bin/objectio-meta", "--node-id", "1"],
+                &["/usr/local/bin/iolake-meta", "--node-id", "1"],
             ),
             &layout,
             true,
         );
-        assert!(meta.contains("\nExecStart=/usr/local/bin/objectio-meta --node-id 1\n"));
+        assert!(meta.contains("\nExecStart=/usr/local/bin/iolake-meta --node-id 1\n"));
         assert!(meta.contains("\nUser=objectio\n"));
         assert!(meta.contains("\nReadWritePaths=/var/lib/objectio/meta\n"));
-        assert!(!meta.contains("After=objectio-meta.service"));
+        assert!(!meta.contains("After=iolake-meta.service"));
         // A HUP would stop a service that doesn't handle it.
         assert!(!meta.contains("ExecReload"));
 
         let gw = unit(&service(Kind::Gateway, &["/g"]), &layout, true);
-        assert!(gw.contains("\nAfter=objectio-meta.service\n"));
+        assert!(gw.contains("\nAfter=iolake-meta.service\n"));
         assert!(gw.contains("\nEnvironmentFile=-/etc/objectio/gateway.env\n"));
         let gw = unit(&service(Kind::Gateway, &["/g"]), &layout, false);
-        assert!(!gw.contains("objectio-meta.service"));
+        assert!(!gw.contains("iolake-meta.service"));
 
         let osd = unit(&service(Kind::Osd, &["/o"]), &layout, false);
         assert!(osd.contains("\nUser=root\n"));

@@ -12,7 +12,7 @@
 //! presigning code, so these check the server against an independent reading
 //! of the spec rather than against itself.
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 fn setup(bucket: &str) -> Cluster {

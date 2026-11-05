@@ -24,7 +24,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Instant;
 
-use objectio_common::histogram::{CounterVec, HistogramVec, LATENCY_BUCKETS, label_value};
+use iolake_common::histogram::{CounterVec, HistogramVec, LATENCY_BUCKETS, label_value};
 use tonic::codegen::http;
 
 /// One server's request counts and latencies, by method.
@@ -179,13 +179,13 @@ mod tests {
             std::time::Duration::from_millis(1),
         );
         let mut out = String::new();
-        m.render(&mut out, "objectio_osd_grpc", "this OSD", "osd_id=\"a\"");
+        m.render(&mut out, "iolake_osd_grpc", "this OSD", "osd_id=\"a\"");
         assert!(out.contains(
-            "objectio_osd_grpc_requests_total{osd_id=\"a\",method=\"WriteShard\",code=\"NOT_FOUND\"} 1"
+            "iolake_osd_grpc_requests_total{osd_id=\"a\",method=\"WriteShard\",code=\"NOT_FOUND\"} 1"
         ), "{out}");
         assert!(
             out.contains(
-                "objectio_osd_grpc_latency_seconds_count{osd_id=\"a\",method=\"WriteShard\"} 2"
+                "iolake_osd_grpc_latency_seconds_count{osd_id=\"a\",method=\"WriteShard\"} 2"
             ),
             "{out}"
         );

@@ -346,7 +346,7 @@ function ReplicationCard({ setting }: { setting: Setting<ReplicationDoc> | undef
   const rules = setting?.state === "set" ? (setting.doc.Rule ?? []).map(replicationRule) : [];
   const sorted = [...rules].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
   return (
-    <SettingCard title="Replication" description="Copies new objects from this bucket to another ObjectIO cluster, by rule.">
+    <SettingCard title="Replication" description="Copies new objects from this bucket to another IOLake cluster, by rule.">
       {!setting || setting.state === "error" ? (
         <NotYet s={setting} />
       ) : rules.length === 0 ? (

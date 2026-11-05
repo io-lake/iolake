@@ -1,5 +1,5 @@
 #![allow(clippy::result_large_err)]
-//! ObjectIO Block Gateway
+//! IOLake Block Gateway
 //!
 //! Accepts block I/O over gRPC (BlockService) and NBD, buffers writes in an
 //! in-memory WriteCache, and flushes 4 MB chunks as EC objects to the OSDs.
@@ -20,9 +20,9 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use objectio_block::chunk::ChunkMapper;
-use objectio_block::{CacheConfig, VolumeManager, WriteCache};
-use objectio_proto::block::block_service_server::BlockServiceServer;
+use iolake_block::chunk::ChunkMapper;
+use iolake_block::{CacheConfig, VolumeManager, WriteCache};
+use iolake_proto::block::block_service_server::BlockServiceServer;
 use tokio::sync::Mutex;
 use tracing::{info, warn};
 
@@ -36,10 +36,7 @@ const MAX_MESSAGE: usize = 64 * 1024 * 1024;
 // ── CLI ───────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Parser)]
-#[command(
-    name = "objectio-block-gateway",
-    about = "ObjectIO Block Storage Gateway"
-)]
+#[command(name = "iolake-block-gateway", about = "IOLake Block Storage Gateway")]
 pub struct Args {
     /// gRPC listen address (BlockService)
     #[arg(long, default_value = "0.0.0.0:9300")]
@@ -89,7 +86,7 @@ pub struct Args {
 
     /// mTLS between services (A8a).
     #[command(flatten)]
-    pub tls: objectio_proto::transport::TlsArgs,
+    pub tls: iolake_proto::transport::TlsArgs,
 }
 
 // ── Entry point ───────────────────────────────────────────────────────────────
@@ -106,12 +103,12 @@ pub async fn run(
     args: Args,
     shutdown: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
-    objectio_proto::transport::configure_tls(&args.tls).map_err(anyhow::Error::msg)?;
-    info!("Starting ObjectIO Block Gateway");
+    iolake_proto::transport::configure_tls(&args.tls).map_err(anyhow::Error::msg)?;
+    info!("Starting IOLake Block Gateway");
     // Volumes are coded with this profile, not a pool's: one meta would
     // refuse for a pool (no parity, or some loss of m shards it can't
     // decode) is refused here too.
-    if let Err(why) = objectio_erasure::check_mds(args.ec_k as usize, args.ec_m as usize) {
+    if let Err(why) = iolake_erasure::check_mds(args.ec_k as usize, args.ec_m as usize) {
         anyhow::bail!("--ec-k {} --ec-m {}: {why}", args.ec_k, args.ec_m);
     }
 
@@ -145,9 +142,9 @@ pub async fn run(
                 axum::routing::get(|| async {
                     // Erasure coding and process stats too: under aio the
                     // gateway exports these for the whole process already.
-                    let mut out = objectio_common::metrics_registry::render_registered();
-                    objectio_erasure::metrics::render(&mut out);
-                    out.push_str(&objectio_common::process_metrics::render(""));
+                    let mut out = iolake_common::metrics_registry::render_registered();
+                    iolake_erasure::metrics::render(&mut out);
+                    out.push_str(&iolake_common::process_metrics::render(""));
                     out
                 }),
             )
@@ -162,13 +159,13 @@ pub async fn run(
     }
 
     // ── Meta gRPC client ──────────────────────────────────────────────────────
-    let meta_channel = objectio_proto::transport::meta_channel(&args.meta_endpoint)
+    let meta_channel = iolake_proto::transport::meta_channel(&args.meta_endpoint)
         .await
         .map_err(anyhow::Error::msg)
         .context("connect to meta service")?;
 
     // Report this binary's release and format level (rolling upgrades).
-    objectio_proto::transport::spawn_version_reporter(
+    iolake_proto::transport::spawn_version_reporter(
         args.meta_endpoint.clone(),
         "block-gateway",
         format!(
@@ -180,7 +177,7 @@ pub async fn run(
     );
 
     let meta = Arc::new(MetaBlocks::new(Arc::new(Mutex::new(
-        objectio_proto::metadata::metadata_service_client::MetadataServiceClient::new(meta_channel),
+        iolake_proto::metadata::metadata_service_client::MetadataServiceClient::new(meta_channel),
     ))));
 
     // ── Volumes, from meta ────────────────────────────────────────────────────
@@ -188,7 +185,7 @@ pub async fn run(
     let volumes = meta
         .client()
         .await
-        .block_list_volumes(objectio_proto::metadata::BlockListVolumesRequest {})
+        .block_list_volumes(iolake_proto::metadata::BlockListVolumesRequest {})
         .await
         .context("list volumes from meta")?
         .into_inner()
@@ -290,9 +287,9 @@ pub async fn run(
     info!("NBD server on {nbd_addr}");
 
     let svc = service::BlockGatewayService::new(Arc::clone(&state));
-    let grpc = objectio_proto::transport::server()
-        .layer(objectio_proto::peer_auth::PeerAuthLayer::new(&[
-            objectio_proto::peer_auth::BLOCK_SERVICE,
+    let grpc = iolake_proto::transport::server()
+        .layer(iolake_proto::peer_auth::PeerAuthLayer::new(&[
+            iolake_proto::peer_auth::BLOCK_SERVICE,
         ]))
         // tonic's default 4 MiB limit refused any Write or Read of a
         // chunk or more.
@@ -304,7 +301,7 @@ pub async fn run(
     let listener = tokio::net::TcpListener::bind(grpc_addr)
         .await
         .with_context(|| format!("bind gRPC on {grpc_addr}"))?;
-    objectio_proto::transport::serve(grpc, listener, async move {
+    iolake_proto::transport::serve(grpc, listener, async move {
         shutdown.await;
         info!("Shutting down...");
     })
@@ -333,13 +330,10 @@ pub async fn run(
 }
 
 /// Export every volume meta records as attached; the number exported.
-fn restore_exports(
-    nbd_server: &nbd::NbdServer,
-    volumes: &[objectio_proto::block::Volume],
-) -> usize {
+fn restore_exports(nbd_server: &nbd::NbdServer, volumes: &[iolake_proto::block::Volume]) -> usize {
     let mut restored = 0;
     for v in volumes {
-        if v.state() == objectio_proto::block::VolumeState::Attached {
+        if v.state() == iolake_proto::block::VolumeState::Attached {
             nbd_server.register(&v.volume_id, v.size_bytes, v.attached_read_only);
             restored += 1;
         }

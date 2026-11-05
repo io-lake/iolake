@@ -8,7 +8,7 @@ use std::fmt::Write as _;
 use std::io::Write as _;
 use std::sync::Arc;
 
-use objectio_e2e::{Cluster, Response};
+use iolake_e2e::{Cluster, Response};
 use serde_json::json;
 
 fn bucket(c: &Cluster, name: &str) {

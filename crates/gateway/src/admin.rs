@@ -16,8 +16,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use bytes::Bytes;
-use objectio_auth::AuthResult;
-use objectio_proto::metadata::{
+use iolake_auth::AuthResult;
+use iolake_proto::metadata::{
     CreatePoolRequest, CreateTenantRequest, DeleteConfigRequest, DeletePoolRequest,
     DeleteTenantRequest, GetConfigRequest, GetDrainStatusRequest, GetListingNodesRequest,
     GetPoolRequest, GetRebalanceStatusRequest, GetTenantRequest, ListConfigRequest,
@@ -25,7 +25,7 @@ use objectio_proto::metadata::{
     SetConfigRequest, SetOsdAdminStateRequest, TenantConfig, UpdatePoolRequest,
     UpdateTenantRequest,
 };
-use objectio_proto::storage::storage_service_client::StorageServiceClient;
+use iolake_proto::storage::storage_service_client::StorageServiceClient;
 
 /// `base` with each top-level field of `update` put over it.
 fn overlay(mut base: serde_json::Value, update: &serde_json::Value) -> serde_json::Value {
@@ -120,15 +120,15 @@ fn json_to_tenant(v: &serde_json::Value) -> TenantConfig {
         dedup: v
             .get("dedup")
             .filter(|d| !d.is_null())
-            .and_then(|d| objectio_proto::dedup::from_json(d).ok()),
+            .and_then(|d| iolake_proto::dedup::from_json(d).ok()),
     }
 }
 
 /// Why a tenant body's `dedup` cannot be stored, if it cannot.
 fn tenant_dedup_error(v: &serde_json::Value) -> Option<String> {
     let d = v.get("dedup").filter(|d| !d.is_null())?;
-    objectio_proto::dedup::from_json(d)
-        .and_then(|p| objectio_proto::dedup::validate(&p))
+    iolake_proto::dedup::from_json(d)
+        .and_then(|p| iolake_proto::dedup::validate(&p))
         .err()
 }
 
@@ -175,7 +175,7 @@ fn tenant_to_json(t: &TenantConfig) -> serde_json::Value {
         "updated_at": t.updated_at,
         // Round-trips: the console saves the whole tenant, and a field it
         // did not send back would reset to inherit.
-        "dedup": t.dedup.as_ref().map(objectio_proto::dedup::to_json),
+        "dedup": t.dedup.as_ref().map(iolake_proto::dedup::to_json),
     })
 }
 use serde::Deserialize;
@@ -527,7 +527,7 @@ pub fn extract_caller(
 ) -> CallerIdentity {
     // An anonymous request has an identity only to say it has none.
     if let Some(Extension(a)) = auth
-        && a.auth_mode != objectio_auth::AuthMode::Anonymous
+        && a.auth_mode != iolake_auth::AuthMode::Anonymous
     {
         return CallerIdentity {
             user_id: a.user_id.clone(),
@@ -580,7 +580,7 @@ fn deny_scoped_credential(auth: &Option<Extension<AuthResult>>) -> Option<Respon
     None
 }
 
-pub(crate) use objectio_auth::SYSTEM_ADMIN_USER_ARN;
+pub(crate) use iolake_auth::SYSTEM_ADMIN_USER_ARN;
 
 /// True iff the caller is a system administrator: the system admin's ARN,
 /// or a console session its sign-in made one. Being in the system scope is
@@ -979,7 +979,7 @@ pub async fn admin_get_pool(
 
 /// What peering last found of a placement group (B31 phase 2), as JSON;
 /// null if it hasn't run on it yet.
-fn pg_state_json(s: Option<&objectio_proto::metadata::PgState>) -> serde_json::Value {
+fn pg_state_json(s: Option<&iolake_proto::metadata::PgState>) -> serde_json::Value {
     let Some(s) = s else {
         return serde_json::Value::Null;
     };
@@ -1022,7 +1022,7 @@ fn pg_state_json(s: Option<&objectio_proto::metadata::PgState>) -> serde_json::V
 }
 
 /// A placement group's scrub (B31 phase 4), as JSON; null if none has run.
-fn pg_scrub_json(s: Option<&objectio_proto::metadata::PgScrub>) -> serde_json::Value {
+fn pg_scrub_json(s: Option<&iolake_proto::metadata::PgScrub>) -> serde_json::Value {
     let Some(s) = s else {
         return serde_json::Value::Null;
     };
@@ -1045,9 +1045,9 @@ fn pg_scrub_json(s: Option<&objectio_proto::metadata::PgScrub>) -> serde_json::V
 /// A placement group as JSON: epoch, acting and up sets, stand-ins being
 /// filled, what peering last found, and its scrub.
 fn pg_json(
-    pg: &objectio_proto::metadata::PlacementGroup,
-    state: Option<&objectio_proto::metadata::PgState>,
-    scrub: Option<&objectio_proto::metadata::PgScrub>,
+    pg: &iolake_proto::metadata::PlacementGroup,
+    state: Option<&iolake_proto::metadata::PgState>,
+    scrub: Option<&iolake_proto::metadata::PgScrub>,
 ) -> serde_json::Value {
     serde_json::json!({
         "pool": pg.pool,
@@ -1074,7 +1074,7 @@ pub async fn admin_get_pool_placement_group(
     headers: HeaderMap,
     Path((name, pg_id)): Path<(String, u32)>,
 ) -> Response {
-    use objectio_proto::metadata::GetPlacementGroupRequest;
+    use iolake_proto::metadata::GetPlacementGroupRequest;
     if let Some(deny) = require_system_admin(&auth, &headers) {
         return deny;
     }
@@ -1103,7 +1103,7 @@ pub async fn admin_scrub_pool_placement_group(
     headers: HeaderMap,
     Path((name, pg_id)): Path<(String, u32)>,
 ) -> Response {
-    use objectio_proto::metadata::RequestPgScrubRequest;
+    use iolake_proto::metadata::RequestPgScrubRequest;
     if let Some(deny) = require_system_admin(&auth, &headers) {
         return deny;
     }
@@ -1137,7 +1137,7 @@ pub async fn admin_list_pool_placement_groups(
     Path(name): Path<String>,
     Query(params): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
-    use objectio_proto::metadata::ListPlacementGroupsRequest;
+    use iolake_proto::metadata::ListPlacementGroupsRequest;
 
     if let Some(deny) = require_system_admin(&auth, &headers) {
         return deny;
@@ -1162,9 +1162,9 @@ pub async fn admin_list_pool_placement_groups(
     {
         Ok(resp) => {
             let r = resp.into_inner();
-            let states: std::collections::HashMap<u32, &objectio_proto::metadata::PgState> =
+            let states: std::collections::HashMap<u32, &iolake_proto::metadata::PgState> =
                 r.states.iter().map(|s| (s.pg_id, s)).collect();
-            let scrubs: std::collections::HashMap<u32, &objectio_proto::metadata::PgScrub> =
+            let scrubs: std::collections::HashMap<u32, &iolake_proto::metadata::PgScrub> =
                 r.scrubs.iter().map(|s| (s.pg_id, s)).collect();
             let mut by_state: std::collections::BTreeMap<String, u64> =
                 std::collections::BTreeMap::new();
@@ -1496,7 +1496,7 @@ pub async fn admin_remove_tenant_admin(
 }
 
 async fn get_tenant_or_404(
-    client: &mut objectio_proto::metadata::metadata_service_client::MetadataServiceClient<
+    client: &mut iolake_proto::metadata::metadata_service_client::MetadataServiceClient<
         tonic::transport::Channel,
     >,
     name: &str,
@@ -1518,7 +1518,7 @@ async fn get_tenant_or_404(
 async fn lookup_bucket_tenant(state: &AppState, bucket: &str) -> Option<String> {
     let mut client = state.meta_client.clone();
     let resp = client
-        .get_bucket(objectio_proto::metadata::GetBucketRequest {
+        .get_bucket(iolake_proto::metadata::GetBucketRequest {
             name: bucket.to_string(),
         })
         .await
@@ -1531,7 +1531,7 @@ async fn lookup_bucket_tenant(state: &AppState, bucket: &str) -> Option<String> 
 async fn lookup_user_tenant(state: &AppState, user_id: &str) -> Option<String> {
     let mut client = state.meta_client.clone();
     let resp = client
-        .get_user(objectio_proto::metadata::GetUserRequest {
+        .get_user(iolake_proto::metadata::GetUserRequest {
             user_id: user_id.to_string(),
         })
         .await
@@ -1601,7 +1601,7 @@ pub async fn admin_list_buckets(
 
     let mut client = state.meta_client.clone();
     match client
-        .list_buckets(objectio_proto::metadata::ListBucketsRequest {
+        .list_buckets(iolake_proto::metadata::ListBucketsRequest {
             owner: String::new(),
             tenant,
         })
@@ -1634,7 +1634,7 @@ pub async fn admin_list_buckets(
 /// or `{"enabled": true}` with its `default_retention` (`mode`, and `days`
 /// or `years`) when it has one.
 fn object_lock_json(
-    lock: Option<&objectio_proto::metadata::ObjectLockConfiguration>,
+    lock: Option<&iolake_proto::metadata::ObjectLockConfiguration>,
 ) -> serde_json::Value {
     let Some(lock) = lock.filter(|l| l.enabled) else {
         return serde_json::json!({ "enabled": false });
@@ -1686,7 +1686,7 @@ pub async fn admin_create_bucket(
     }
     let mut client = state.meta_client.clone();
     match client
-        .create_bucket(objectio_proto::metadata::CreateBucketRequest {
+        .create_bucket(iolake_proto::metadata::CreateBucketRequest {
             name: name.clone(),
             // The creator, not the literal string "admin". Authorization
             // falls back to ownership when no policy speaks, and it compares
@@ -1711,7 +1711,7 @@ pub async fn admin_create_bucket(
         .into_response(),
         Err(e) => {
             let status = match e.code() {
-                _ if objectio_proto::is_no_room(&e) => StatusCode::INSUFFICIENT_STORAGE,
+                _ if iolake_proto::is_no_room(&e) => StatusCode::INSUFFICIENT_STORAGE,
                 tonic::Code::PermissionDenied => StatusCode::FORBIDDEN,
                 tonic::Code::AlreadyExists => StatusCode::CONFLICT,
                 _ => StatusCode::BAD_REQUEST,
@@ -1731,7 +1731,7 @@ pub async fn admin_delete_bucket(
     // buckets.
     let mut client = state.meta_client.clone();
     let tenant = match client
-        .get_bucket(objectio_proto::metadata::GetBucketRequest { name: name.clone() })
+        .get_bucket(iolake_proto::metadata::GetBucketRequest { name: name.clone() })
         .await
     {
         Ok(resp) => resp
@@ -1784,7 +1784,7 @@ pub async fn admin_delete_bucket(
     }
 
     match client
-        .delete_bucket(objectio_proto::metadata::DeleteBucketRequest { name })
+        .delete_bucket(iolake_proto::metadata::DeleteBucketRequest { name })
         .await
     {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
@@ -1806,7 +1806,7 @@ pub async fn admin_get_bucket_policy(
     }
     let mut client = state.meta_client.clone();
     match client
-        .get_bucket_policy(objectio_proto::metadata::GetBucketPolicyRequest {
+        .get_bucket_policy(iolake_proto::metadata::GetBucketPolicyRequest {
             bucket: bucket.clone(),
         })
         .await
@@ -1905,7 +1905,7 @@ pub async fn admin_set_bucket_owner(
 
     let mut client = state.meta_client.clone();
     match client
-        .set_bucket_owner(objectio_proto::metadata::SetBucketOwnerRequest {
+        .set_bucket_owner(iolake_proto::metadata::SetBucketOwnerRequest {
             bucket: bucket.clone(),
             owner: owner.clone(),
         })
@@ -1926,7 +1926,7 @@ pub async fn admin_set_bucket_owner(
 
 /// `PUT /_admin/buckets/{bucket}/quota` with `{"quota_bytes": N,
 /// "quota_objects": N}` (0 or absent = unlimited): the bucket's quotas
-/// (A8b, objectio-docs `s3/quotas.md`). A system admin, or the admin of
+/// (A8b, iolake-docs `s3/quotas.md`). A system admin, or the admin of
 /// the bucket's tenant.
 pub async fn admin_set_bucket_quota(
     State(state): State<Arc<AppState>>,
@@ -1951,7 +1951,7 @@ pub async fn admin_set_bucket_quota(
     match state
         .meta_client
         .clone()
-        .set_bucket_quota(objectio_proto::metadata::SetBucketQuotaRequest {
+        .set_bucket_quota(iolake_proto::metadata::SetBucketQuotaRequest {
             bucket: bucket.clone(),
             quota_bytes,
             quota_objects,
@@ -2166,7 +2166,7 @@ pub async fn admin_list_warehouses(
     }
     let mut client = state.meta_client.clone();
     match client
-        .iceberg_list_warehouses(objectio_proto::metadata::IcebergListWarehousesRequest { tenant })
+        .iceberg_list_warehouses(iolake_proto::metadata::IcebergListWarehousesRequest { tenant })
         .await
     {
         Ok(resp) => {
@@ -2229,7 +2229,7 @@ pub async fn admin_create_warehouse(
 
     let mut client = state.meta_client.clone();
     match client
-        .iceberg_create_warehouse(objectio_proto::metadata::IcebergCreateWarehouseRequest {
+        .iceberg_create_warehouse(iolake_proto::metadata::IcebergCreateWarehouseRequest {
             name,
             tenant,
             properties,
@@ -2261,7 +2261,7 @@ pub async fn admin_delete_warehouse(
     // can gate the delete properly. There is no dedicated Get RPC yet.
     let mut client = state.meta_client.clone();
     let (tenant, bucket) = match client
-        .iceberg_list_warehouses(objectio_proto::metadata::IcebergListWarehousesRequest {
+        .iceberg_list_warehouses(iolake_proto::metadata::IcebergListWarehousesRequest {
             tenant: String::new(),
         })
         .await
@@ -2299,7 +2299,7 @@ pub async fn admin_delete_warehouse(
         Err(resp) => return resp,
     }
     match client
-        .iceberg_delete_warehouse(objectio_proto::metadata::IcebergDeleteWarehouseRequest { name })
+        .iceberg_delete_warehouse(iolake_proto::metadata::IcebergDeleteWarehouseRequest { name })
         .await
     {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
@@ -2332,7 +2332,7 @@ pub async fn admin_list_shares_tenant(
     let tenant = extract_tenant(&auth, &headers);
     let mut client = state.meta_client.clone();
     match client
-        .delta_list_shares(objectio_proto::metadata::DeltaListSharesRequest {
+        .delta_list_shares(iolake_proto::metadata::DeltaListSharesRequest {
             max_results: 0,
             page_token: String::new(),
             tenant,
@@ -2385,7 +2385,7 @@ pub async fn admin_create_share_tenant(
     }
     let mut client = state.meta_client.clone();
     match client
-        .delta_create_share(objectio_proto::metadata::DeltaCreateShareRequest {
+        .delta_create_share(iolake_proto::metadata::DeltaCreateShareRequest {
             name: name.clone(),
             comment: body["comment"].as_str().unwrap_or_default().to_string(),
             tenant,
@@ -2413,7 +2413,7 @@ pub async fn admin_list_recipients_tenant(
     let mut client = state.meta_client.clone();
     // List all recipients, then filter by shares that belong to tenant's shares
     match client
-        .delta_list_recipients(objectio_proto::metadata::DeltaListRecipientsRequest {
+        .delta_list_recipients(iolake_proto::metadata::DeltaListRecipientsRequest {
             max_results: 0,
             page_token: String::new(),
         })
@@ -2435,7 +2435,7 @@ pub async fn admin_list_recipients_tenant(
             // access to tenant's shares; unable to filter, show none.
             if !tenant.is_empty() {
                 let shares_resp = match client
-                    .delta_list_shares(objectio_proto::metadata::DeltaListSharesRequest {
+                    .delta_list_shares(iolake_proto::metadata::DeltaListSharesRequest {
                         max_results: 0,
                         page_token: String::new(),
                         tenant: tenant.clone(),
@@ -2473,7 +2473,7 @@ pub async fn admin_list_recipients_tenant(
 /// API answers it; 507 when meta has no room for a write; 500 otherwise.
 /// The body is meta's message.
 pub(crate) fn meta_failure(e: &tonic::Status) -> Response {
-    let status = if objectio_proto::is_no_room(e) {
+    let status = if iolake_proto::is_no_room(e) {
         StatusCode::INSUFFICIENT_STORAGE
     } else if crate::s3::S3Error::is_unavailable(e) {
         StatusCode::SERVICE_UNAVAILABLE
@@ -2487,7 +2487,7 @@ pub(crate) fn meta_failure(e: &tonic::Status) -> Response {
 async fn connect_osd(
     addr: &str,
 ) -> Result<StorageServiceClient<tonic::transport::Channel>, String> {
-    let channel = objectio_proto::transport::connect(&objectio_proto::transport::endpoint(addr)?)
+    let channel = iolake_proto::transport::connect(&iolake_proto::transport::endpoint(addr)?)
         .await
         .map_err(|e| e.to_string())?;
     Ok(StorageServiceClient::new(channel))
@@ -2534,7 +2534,7 @@ pub async fn admin_list_nodes(
         let status = match connect_osd(addr).await {
             Ok(mut client) => {
                 match client
-                    .get_status(objectio_proto::storage::GetStatusRequest {
+                    .get_status(iolake_proto::storage::GetStatusRequest {
                         answer_while_counting: true,
                         ..Default::default()
                     })
@@ -2779,7 +2779,7 @@ pub async fn admin_reboot_osd(
 
     // Resolve node_id → pod/hostname via meta + the OSD's get_status.
     // We need a concrete hostname to hand to the platform provider;
-    // `host_provider.reboot("objectio-osd-2")` is how the k8s
+    // `host_provider.reboot("iolake-osd-2")` is how the k8s
     // implementation knows which pod to delete.
     let mut meta = state.meta_client.clone();
     let nodes = match meta
@@ -2814,7 +2814,7 @@ pub async fn admin_reboot_osd(
     let osd_addr = addr;
     let pod_name = match connect_osd(&osd_addr).await {
         Ok(mut client) => match client
-            .get_status(objectio_proto::storage::GetStatusRequest {
+            .get_status(iolake_proto::storage::GetStatusRequest {
                 answer_while_counting: true,
                 ..Default::default()
             })
@@ -3044,14 +3044,14 @@ pub async fn admin_cluster_info(
         .iter()
         .map(|n| {
             let fd = n.failure_domain.clone().unwrap_or_default();
-            let peer = objectio_placement::FailureDomainInfo::new_full(
+            let peer = iolake_placement::FailureDomainInfo::new_full(
                 &fd.region,
                 &fd.zone,
                 &fd.datacenter,
                 &fd.rack,
                 &fd.host,
             );
-            let dist = objectio_placement::distance(me, &peer);
+            let dist = iolake_placement::distance(me, &peer);
             serde_json::json!({
                 "node_id": hex::encode(&n.node_id),
                 "address": n.address,
@@ -3412,11 +3412,11 @@ pub async fn admin_usage(auth: Option<Extension<AuthResult>>, headers: HeaderMap
     .into_response()
 }
 
-// ---- Deduplication policy (objectio-docs architecture/design/core/dedup.md) ----
+// ---- Deduplication policy (iolake-docs architecture/design/core/dedup.md) ----
 
 fn status_response(e: &tonic::Status) -> Response {
     let code = match e.code() {
-        _ if objectio_proto::is_no_room(e) => StatusCode::INSUFFICIENT_STORAGE,
+        _ if iolake_proto::is_no_room(e) => StatusCode::INSUFFICIENT_STORAGE,
         tonic::Code::NotFound => StatusCode::NOT_FOUND,
         tonic::Code::InvalidArgument => StatusCode::BAD_REQUEST,
         tonic::Code::Aborted => StatusCode::CONFLICT,
@@ -3429,8 +3429,8 @@ fn status_response(e: &tonic::Status) -> Response {
     (code, e.message().to_string()).into_response()
 }
 
-fn dedup_policy_json(p: &objectio_proto::metadata::GetDedupPolicyResponse) -> serde_json::Value {
-    use objectio_proto::dedup::{mode_name, scope_name, to_json};
+fn dedup_policy_json(p: &iolake_proto::metadata::GetDedupPolicyResponse) -> serde_json::Value {
+    use iolake_proto::dedup::{mode_name, scope_name, to_json};
     serde_json::json!({
         "bucket": p.bucket.as_ref().map(to_json),
         "tenant": p.tenant.as_ref().map(to_json),
@@ -3448,7 +3448,7 @@ fn dedup_policy_json(p: &objectio_proto::metadata::GetDedupPolicyResponse) -> se
 async fn fetch_dedup_policy(state: &AppState, bucket: &str) -> Response {
     let mut meta = state.meta_client.clone();
     match meta
-        .get_dedup_policy(objectio_proto::metadata::GetDedupPolicyRequest {
+        .get_dedup_policy(iolake_proto::metadata::GetDedupPolicyRequest {
             bucket: bucket.to_string(),
         })
         .await
@@ -3480,8 +3480,8 @@ pub async fn admin_put_dedup(
     if let Some(deny) = require_system_admin(&auth, &headers) {
         return deny;
     }
-    let policy = match objectio_proto::dedup::from_json(&body)
-        .and_then(|p| objectio_proto::dedup::validate(&p).map(|()| p))
+    let policy = match iolake_proto::dedup::from_json(&body)
+        .and_then(|p| iolake_proto::dedup::validate(&p).map(|()| p))
     {
         Ok(p) => p,
         Err(e) => return (StatusCode::BAD_REQUEST, e).into_response(),
@@ -3492,8 +3492,8 @@ pub async fn admin_put_dedup(
     let mut meta = state.meta_client.clone();
     if let Err(e) = meta
         .set_config(SetConfigRequest {
-            key: objectio_proto::dedup::CLUSTER_KEY.to_string(),
-            value: objectio_proto::dedup::to_json(&policy)
+            key: iolake_proto::dedup::CLUSTER_KEY.to_string(),
+            value: iolake_proto::dedup::to_json(&policy)
                 .to_string()
                 .into_bytes(),
             updated_by: who,
@@ -3522,11 +3522,11 @@ pub async fn admin_get_bucket_dedup(
 async fn set_bucket_dedup(
     state: &AppState,
     bucket: &str,
-    policy: Option<objectio_proto::metadata::DedupPolicy>,
+    policy: Option<iolake_proto::metadata::DedupPolicy>,
 ) -> Response {
     let mut meta = state.meta_client.clone();
     if let Err(e) = meta
-        .set_bucket_dedup(objectio_proto::metadata::SetBucketDedupRequest {
+        .set_bucket_dedup(iolake_proto::metadata::SetBucketDedupRequest {
             bucket: bucket.to_string(),
             policy,
         })
@@ -3549,7 +3549,7 @@ pub async fn admin_put_bucket_dedup(
     if let Some(deny) = require_bucket_tenant_admin(&state, &auth, &headers, &bucket).await {
         return deny;
     }
-    match objectio_proto::dedup::from_json(&body) {
+    match iolake_proto::dedup::from_json(&body) {
         Ok(p) => set_bucket_dedup(&state, &bucket, Some(p)).await,
         Err(e) => (StatusCode::BAD_REQUEST, e).into_response(),
     }
@@ -3602,7 +3602,7 @@ pub async fn admin_reset_dedup_dry_run(
                 .await
                 .map_err(|e| e.to_string())?;
             client
-                .reset_chunk_notes(objectio_proto::storage::ResetChunkNotesRequest {})
+                .reset_chunk_notes(iolake_proto::storage::ResetChunkNotesRequest {})
                 .await
                 .map(|r| r.into_inner().forgotten)
                 .map_err(|e| e.message().to_string())
@@ -3624,7 +3624,7 @@ fn json_error(status: StatusCode, msg: &str) -> Response {
 
 fn grpc_error(e: &tonic::Status) -> Response {
     let status = match e.code() {
-        _ if objectio_proto::is_no_room(e) => StatusCode::INSUFFICIENT_STORAGE,
+        _ if iolake_proto::is_no_room(e) => StatusCode::INSUFFICIENT_STORAGE,
         tonic::Code::NotFound => StatusCode::NOT_FOUND,
         tonic::Code::AlreadyExists | tonic::Code::Aborted => StatusCode::CONFLICT,
         tonic::Code::InvalidArgument | tonic::Code::FailedPrecondition => StatusCode::BAD_REQUEST,
@@ -3634,7 +3634,7 @@ fn grpc_error(e: &tonic::Status) -> Response {
     json_error(status, e.message())
 }
 
-fn user_json(u: &objectio_proto::metadata::UserMeta) -> serde_json::Value {
+fn user_json(u: &iolake_proto::metadata::UserMeta) -> serde_json::Value {
     serde_json::json!({
         "user_id": u.user_id,
         "display_name": u.display_name,
@@ -3673,7 +3673,7 @@ pub async fn admin_get_user(
     match state
         .meta_client
         .clone()
-        .get_user(objectio_proto::metadata::GetUserRequest { user_id })
+        .get_user(iolake_proto::metadata::GetUserRequest { user_id })
         .await
     {
         Ok(r) => r.into_inner().user.map_or_else(
@@ -3699,8 +3699,8 @@ pub async fn admin_update_user(
     }
     let status = match body["status"].as_str() {
         None => None,
-        Some("active") => Some(objectio_proto::metadata::UserStatus::UserActive as i32),
-        Some("suspended") => Some(objectio_proto::metadata::UserStatus::UserSuspended as i32),
+        Some("active") => Some(iolake_proto::metadata::UserStatus::UserActive as i32),
+        Some("suspended") => Some(iolake_proto::metadata::UserStatus::UserSuspended as i32),
         Some(other) => {
             return json_error(
                 StatusCode::BAD_REQUEST,
@@ -3709,7 +3709,7 @@ pub async fn admin_update_user(
         }
     };
     // Nobody suspends themselves out of the cluster.
-    if status == Some(objectio_proto::metadata::UserStatus::UserSuspended as i32)
+    if status == Some(iolake_proto::metadata::UserStatus::UserSuspended as i32)
         && extract_caller(&auth, &headers).user_id == user_id
     {
         return json_error(StatusCode::BAD_REQUEST, "you can't suspend yourself");
@@ -3718,7 +3718,7 @@ pub async fn admin_update_user(
     match state
         .meta_client
         .clone()
-        .update_user(objectio_proto::metadata::UpdateUserRequest {
+        .update_user(iolake_proto::metadata::UpdateUserRequest {
             user_id,
             status,
             display_name: body["display_name"].as_str().map(str::to_string),
@@ -3750,7 +3750,7 @@ pub async fn admin_update_access_key(
     // Whose key, whatever its status: a tenant admin reactivates its own
     // tenant's inactive keys.
     let owner = match client
-        .get_access_key(objectio_proto::metadata::GetAccessKeyRequest {
+        .get_access_key(iolake_proto::metadata::GetAccessKeyRequest {
             access_key_id: access_key_id.clone(),
         })
         .await
@@ -3771,11 +3771,11 @@ pub async fn admin_update_access_key(
         return deny;
     }
     let status = match body["status"].as_str() {
-        Some("active") => objectio_proto::metadata::KeyStatus::KeyActive as i32,
-        Some("inactive") => objectio_proto::metadata::KeyStatus::KeyInactive as i32,
+        Some("active") => iolake_proto::metadata::KeyStatus::KeyActive as i32,
+        Some("inactive") => iolake_proto::metadata::KeyStatus::KeyInactive as i32,
         _ => return json_error(StatusCode::BAD_REQUEST, "status must be active or inactive"),
     };
-    if status == objectio_proto::metadata::KeyStatus::KeyInactive as i32
+    if status == iolake_proto::metadata::KeyStatus::KeyInactive as i32
         && auth
             .as_ref()
             .is_some_and(|Extension(a)| a.access_key_id == access_key_id)
@@ -3786,7 +3786,7 @@ pub async fn admin_update_access_key(
         );
     }
     match client
-        .update_access_key(objectio_proto::metadata::UpdateAccessKeyRequest {
+        .update_access_key(iolake_proto::metadata::UpdateAccessKeyRequest {
             access_key_id,
             status,
         })
@@ -3809,7 +3809,7 @@ pub async fn admin_update_access_key(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use objectio_auth::scope::{CredentialScope, Operation};
+    use iolake_auth::scope::{CredentialScope, Operation};
 
     fn auth_with(scope: Option<&str>) -> Option<Extension<AuthResult>> {
         Some(Extension(AuthResult {

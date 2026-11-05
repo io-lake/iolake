@@ -1,9 +1,9 @@
 //! A bucket is put in a pool when it's created, and stays there: chosen
-//! explicitly (`x-objectio-pool`, or `pool` on the admin API), or the
+//! explicitly (`x-iolake-pool`, or `pool` on the admin API), or the
 //! tenant's default pool. A tenant may only use the pools it's allowed, and
 //! a pool can't be deleted while anything uses it.
 
-use objectio_e2e::{Cluster, Response};
+use iolake_e2e::{Cluster, Response};
 use serde_json::{Value, json};
 
 fn pool(c: &Cluster, name: &str) {
@@ -30,7 +30,7 @@ fn bucket_pool(c: &Cluster, bucket: &str) -> String {
 }
 
 fn create_in(c: &Cluster, keys: Option<(&str, &str)>, bucket: &str, pool: &str) -> Response {
-    let headers = [("x-objectio-pool", pool)];
+    let headers = [("x-iolake-pool", pool)];
     let headers: &[(&str, &str)] = if pool.is_empty() { &[] } else { &headers };
     match keys {
         None => c.request_with_headers("PUT", &format!("/{bucket}"), &[], headers),

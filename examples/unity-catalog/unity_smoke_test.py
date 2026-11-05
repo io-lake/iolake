@@ -1,5 +1,5 @@
 """
-ObjectIO Unity Catalog REST API — smoke test.
+IOLake Unity Catalog REST API — smoke test.
 
 Walks the full Databricks-style lifecycle against the gateway:
   1. List catalogs (sanity ping)
@@ -10,7 +10,7 @@ Walks the full Databricks-style lifecycle against the gateway:
   6. Request temporary table credentials (vended STS)
   7. Tear everything down (table -> schema -> catalog with force)
 
-Run against a gateway (OBJECTIO_HOST, a local objectio-aio by default):
+Run against a gateway (IOLAKE_HOST, a local iolake-aio by default):
 
   python3 -m venv .venv && source .venv/bin/activate
   pip install -r requirements.txt
@@ -38,7 +38,7 @@ import botocore.awsrequest
 import botocore.credentials
 import requests
 
-HOST = os.environ.get("OBJECTIO_HOST", "http://localhost:9000")
+HOST = os.environ.get("IOLAKE_HOST", "http://localhost:9000")
 REGION = os.environ.get("AWS_REGION", "us-east-1")
 ACCESS_KEY = os.environ.get("AWS_ACCESS_KEY_ID", "")
 SECRET_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
@@ -136,7 +136,7 @@ def main() -> None:
 
     parsed = urlparse(HOST)
     if not parsed.scheme or not parsed.netloc:
-        fail(f"OBJECTIO_HOST must be an absolute URL, got {HOST!r}")
+        fail(f"IOLAKE_HOST must be an absolute URL, got {HOST!r}")
 
     print(f"Host:    {HOST}")
     print(f"Region:  {REGION}")

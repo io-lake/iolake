@@ -1,4 +1,4 @@
-//! Core type definitions for ObjectIO
+//! Core type definitions for IOLake
 //!
 //! This module defines the fundamental types used throughout the system
 //! including identifiers, metadata structures, and configuration types.

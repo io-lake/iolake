@@ -1,4 +1,4 @@
-// API client for ObjectIO gateway
+// API client for IOLake gateway
 // Uses SigV4 signing for /_admin/* endpoints and plain fetch for /iceberg/*
 
 const BASE = "";

@@ -126,7 +126,7 @@ impl MetaService {
         let new_bytes = resp.encode_to_vec();
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::IcebergNamespaces,
@@ -239,7 +239,7 @@ impl MetaService {
         };
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::IcebergNamespaces,
@@ -405,7 +405,7 @@ impl MetaService {
         };
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::IcebergNamespaces,
@@ -492,7 +492,7 @@ impl MetaService {
         let new_bytes = entry.encode_to_vec();
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::IcebergTables,
@@ -598,7 +598,7 @@ impl MetaService {
         // `raft_write_to_status` turns into a leader-hint Status; the
         // iceberg REST handler retries against the leader.
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::IcebergTables,
@@ -672,11 +672,11 @@ impl MetaService {
             return Err(Status::invalid_argument("table_changes is empty"));
         }
         // One compare-and-set per table, all in one command.
-        if req.table_changes.len() > objectio_meta_store::MAX_OPS {
+        if req.table_changes.len() > iolake_meta_store::MAX_OPS {
             return Err(Status::invalid_argument(format!(
                 "{} table changes in one transaction; at most {}",
                 req.table_changes.len(),
-                objectio_meta_store::MAX_OPS
+                iolake_meta_store::MAX_OPS
             )));
         }
 
@@ -739,7 +739,7 @@ impl MetaService {
         // atomically or none do; a stale expected on any row rolls the
         // whole transaction back.
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let ops: Vec<CasOp> = prepared
                 .iter()
                 .map(|p| CasOp {
@@ -841,7 +841,7 @@ impl MetaService {
         };
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::IcebergTables,
@@ -917,7 +917,7 @@ impl MetaService {
         };
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![
                     CasOp {
@@ -1068,7 +1068,7 @@ impl MetaService {
         let new_bytes = new_entry.encode_to_vec();
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::IcebergTables,
@@ -1194,7 +1194,7 @@ impl MetaService {
         // the half-state where a warehouse exists without its bucket
         // (or a lingering orphan bucket from a failed warehouse create).
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![
                     CasOp {
@@ -1314,7 +1314,7 @@ impl MetaService {
         // bucket has already been removed separately, skip its op so
         // we don't spuriously fail on expected=Some but actual=None.
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let mut ops = vec![CasOp {
                 table: CasTable::IcebergWarehouses,
                 key: name.clone(),
@@ -1358,7 +1358,7 @@ impl MetaService {
             store.delete_warehouse(&name);
             store.delete_bucket(&wh.bucket);
             for (table, key, _) in &config_rows {
-                store.write_named(objectio_meta_store::cas_table_name(table), key, None);
+                store.write_named(iolake_meta_store::cas_table_name(table), key, None);
             }
         }
 

@@ -1,4 +1,4 @@
-//! Peering (B31 phase 2, objectio-docs `core/pg-recovery.md`): what each
+//! Peering (B31 phase 2, iolake-docs `core/pg-recovery.md`): what each
 //! placement group's members hold of it, compared, and the PG's state
 //! recorded. Observed only: nothing is rebuilt from it yet (phase 3).
 //!
@@ -28,8 +28,8 @@ use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use objectio_proto::metadata::{PgMemberState, PgState};
-use objectio_proto::storage::{
+use iolake_proto::metadata::{PgMemberState, PgState};
+use iolake_proto::storage::{
     GetPgInfoRequest, ListPgRequest, PgEntry, PgSummary,
     storage_service_client::StorageServiceClient,
 };
@@ -107,25 +107,25 @@ pub fn render_metrics(out: &mut String) {
     let latest = LATEST.lock();
     let _ = writeln!(
         out,
-        "# HELP objectio_meta_pgs Placement groups by the state peering last found \
-         (the leader's)\n# TYPE objectio_meta_pgs gauge"
+        "# HELP iolake_meta_pgs Placement groups by the state peering last found \
+         (the leader's)\n# TYPE iolake_meta_pgs gauge"
     );
     for state in STATES {
         let n = latest.values().filter(|s| s.state == state).count();
-        let _ = writeln!(out, "objectio_meta_pgs{{state=\"{state}\"}} {n}");
+        let _ = writeln!(out, "iolake_meta_pgs{{state=\"{state}\"}} {n}");
     }
     let now = MetaService::current_timestamp();
     let not_clean: Vec<&PgState> = latest.values().filter(|s| s.state != "Clean").collect();
     for (name, help, v) in [
         (
-            "objectio_meta_pgs_not_clean",
+            "iolake_meta_pgs_not_clean",
             "Placement groups in any state but Clean",
             not_clean.len() as u64,
         ),
         (
-            "objectio_meta_pg_not_clean_oldest_seconds",
+            "iolake_meta_pg_not_clean_oldest_seconds",
             "How long the placement group longest out of Clean has been: alert when it passes \
-             an hour while objectio_meta_osds_down is 0",
+             an hour while iolake_meta_osds_down is 0",
             not_clean
                 .iter()
                 .map(|s| now.saturating_sub(s.since))
@@ -133,27 +133,27 @@ pub fn render_metrics(out: &mut String) {
                 .unwrap_or(0),
         ),
         (
-            "objectio_meta_osds_down",
+            "iolake_meta_osds_down",
             "OSDs in service (In) that aren't up",
             OSDS_DOWN.load(Ordering::Relaxed),
         ),
         (
-            "objectio_meta_pg_objects_degraded",
+            "iolake_meta_pg_objects_degraded",
             "Objects some acting member of their placement group lacks something of",
             latest.values().map(|s| s.objects_degraded).sum::<u64>(),
         ),
         (
-            "objectio_meta_pg_objects_unfound",
+            "iolake_meta_pg_objects_unfound",
             "Objects with fewer complete copies than a read needs among the members that answered",
             latest.values().map(|s| s.objects_unfound).sum::<u64>(),
         ),
         (
-            "objectio_meta_pg_copies_missing",
+            "iolake_meta_pg_copies_missing",
             "Metadata copies acting members lack",
             latest.values().map(|s| s.copies_missing).sum::<u64>(),
         ),
         (
-            "objectio_meta_pg_shards_missing",
+            "iolake_meta_pg_shards_missing",
             "Shards acting members should hold at their position and don't",
             latest.values().map(|s| s.shards_missing).sum::<u64>(),
         ),
@@ -162,22 +162,22 @@ pub fn render_metrics(out: &mut String) {
     }
     for (name, help, v) in [
         (
-            "objectio_meta_pg_peered_total",
+            "iolake_meta_pg_peered_total",
             "Placement groups peered",
             PEERED.load(Ordering::Relaxed),
         ),
         (
-            "objectio_meta_pg_listed_total",
+            "iolake_meta_pg_listed_total",
             "Placement groups whose members disagreed by summary, so were listed",
             LISTED.load(Ordering::Relaxed),
         ),
         (
-            "objectio_meta_pg_listings_added_total",
+            "iolake_meta_pg_listings_added_total",
             "Listing entries a listing peering put back: their copies hold the object",
             LISTINGS_ADDED.load(Ordering::Relaxed),
         ),
         (
-            "objectio_meta_pg_listings_removed_total",
+            "iolake_meta_pg_listings_removed_total",
             "Listing entries a listing peering removed: their copies hold the key deleted",
             LISTINGS_REMOVED.load(Ordering::Relaxed),
         ),
@@ -260,7 +260,7 @@ pub(crate) fn listing_fix(
 }
 
 /// Why a PG is Down, Incomplete or Undersized, for the admin API and
-/// `obioctl pg`: what an operator has to bring back. Empty otherwise.
+/// `iolakectl pg`: what an operator has to bring back. Empty otherwise.
 fn stuck_reason(
     state: &PgState,
     members: &[Member],
@@ -525,7 +525,7 @@ impl MetaService {
             .osd_nodes
             .read()
             .iter()
-            .filter(|n| n.admin_state == objectio_common::OsdAdminState::In)
+            .filter(|n| n.admin_state == iolake_common::OsdAdminState::In)
             .map(|n| n.node_id)
             .collect();
         let down = self
@@ -534,7 +534,7 @@ impl MetaService {
             .all_nodes()
             .filter(|n| {
                 in_service.contains(n.id.as_bytes())
-                    && n.status != objectio_common::NodeStatus::Active
+                    && n.status != iolake_common::NodeStatus::Active
             })
             .count();
         OSDS_DOWN.store(down as u64, Ordering::Relaxed);
@@ -846,7 +846,7 @@ impl MetaService {
     /// A restore's listing of `key`'s PG is done: its `pg_relist` row
     /// (`row`, as read) goes.
     async fn relisted(&self, key: &str, row: Vec<u8>) {
-        let op = objectio_meta_store::CasOp {
+        let op = iolake_meta_store::CasOp {
             table: CasTable::Named(super::restored::PG_RELIST_TABLE.into()),
             key: key.to_string(),
             expected: Some(row),
@@ -895,7 +895,7 @@ impl MetaService {
                 .as_ref()
                 .and_then(|s| s.read_object_listing(&format!("{bucket}\0{key}\0")))
                 .and_then(|b| {
-                    objectio_proto::metadata::ObjectListingEntry::decode(b.as_slice()).ok()
+                    iolake_proto::metadata::ObjectListingEntry::decode(b.as_slice()).ok()
                 });
             let listed_at = listed
                 .as_ref()
@@ -975,7 +975,7 @@ impl MetaService {
             if remove {
                 let r = MetadataService::delete_object(
                     self,
-                    tonic::Request::new(objectio_proto::metadata::DeleteObjectRequest {
+                    tonic::Request::new(iolake_proto::metadata::DeleteObjectRequest {
                         bucket: bucket.clone(),
                         key: key.to_string(),
                         version_id: String::new(),
@@ -1004,7 +1004,7 @@ impl MetaService {
         self.osd_nodes
             .read()
             .iter()
-            .find(|n| n.node_id == id && n.admin_state == objectio_common::OsdAdminState::In)
+            .find(|n| n.node_id == id && n.admin_state == iolake_common::OsdAdminState::In)
             .map(|n| n.address.clone())
             .filter(|a| !a.is_empty())
     }
@@ -1014,7 +1014,7 @@ impl MetaService {
     /// Recovery's progress (cursor, counts, unfound keys, retry time) is
     /// kept from what is there, until the PG is clean.
     pub(crate) async fn record_pg_state(&self, mut state: PgState) {
-        use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+        use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
         let key = MetaStore::pg_key(&state.pool, state.pg_id);
         let held_bytes = self
             .store
@@ -1137,7 +1137,7 @@ async fn current_meta(
         RPC_TIMEOUT,
         StorageServiceClient::new(channel)
             .max_decoding_message_size(100 * 1024 * 1024)
-            .get_object_meta(objectio_proto::storage::GetObjectMetaRequest {
+            .get_object_meta(iolake_proto::storage::GetObjectMetaRequest {
                 bucket: bucket.to_string(),
                 key: key.to_string(),
                 version_id: String::new(),

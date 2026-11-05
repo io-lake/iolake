@@ -1,12 +1,12 @@
 //! Quotas (A8b): a bucket's and a tenant's byte quotas refuse writes past
 //! them with 403 `QuotaExceeded`, under concurrent writers, and deletes make
-//! room again once the usage report shows them (objectio-docs
+//! room again once the usage report shows them (iolake-docs
 //! `s3/quotas.md`). One gateway: admission is then exact.
 
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 const OBJECT: usize = 64 * 1024;

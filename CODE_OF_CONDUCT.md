@@ -1,6 +1,6 @@
 # Code of conduct
 
-ObjectIO follows the [Contributor Covenant, version 2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
+IOLake follows the [Contributor Covenant, version 2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
 It applies in the project's issues, pull requests, discussions and any
 other place someone represents the project.
 

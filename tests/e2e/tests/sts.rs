@@ -10,7 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64;
-use objectio_e2e::{Cluster, Response};
+use iolake_e2e::{Cluster, Response};
 use ring::rand::SystemRandom;
 use ring::signature::{ECDSA_P256_SHA256_FIXED_SIGNING, EcdsaKeyPair, KeyPair};
 use serde_json::{Value, json};
@@ -84,7 +84,7 @@ impl Idp {
         .unwrap();
         let header = json!({"alg": "ES256", "typ": "JWT", "kid": kid});
         let claims = json!({
-            "iss": self.issuer, "aud": "objectio", "sub": sub,
+            "iss": self.issuer, "aud": "iolake", "sub": sub,
             "iat": now - 10, "exp": now + ttl, "groups": ["eng"],
         });
         let signing_input = format!(
@@ -101,7 +101,7 @@ impl Idp {
 }
 
 fn provider(idp: &Idp, system_admin: bool) -> Value {
-    json!({"issuer_url": idp.issuer, "client_id": "objectio", "system_admin": system_admin})
+    json!({"issuer_url": idp.issuer, "client_id": "iolake", "system_admin": system_admin})
 }
 
 fn trust(idp: &Idp, sub: &str) -> Value {

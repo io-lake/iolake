@@ -5,14 +5,14 @@
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-use objectio_e2e::{await_exit, binary, free_port, tls};
+use iolake_e2e::{await_exit, binary, free_port, tls};
 
 /// Start a lone meta node with `metrics` and `admin` as its ports, and wait
 /// for it to exit: its status, or `None` if it was still running (it is
 /// stopped then).
 fn meta_exit(metrics: u16, admin: u16) -> Option<std::process::ExitStatus> {
     let dir = tempfile::tempdir().unwrap();
-    let mut cmd = Command::new(binary("objectio-meta"));
+    let mut cmd = Command::new(binary("iolake-meta"));
     tls::apply(&mut cmd, tls::META);
     let grpc = free_port();
     let mut meta = cmd
@@ -33,7 +33,7 @@ fn meta_exit(metrics: u16, admin: u16) -> Option<std::process::ExitStatus> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .expect("spawn objectio-meta");
+        .expect("spawn iolake-meta");
     await_exit(&mut meta, Duration::from_secs(30))
 }
 

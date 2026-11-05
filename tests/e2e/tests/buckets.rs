@@ -2,7 +2,7 @@
 //! deleted, nothing is written into one that doesn't exist, and a listing
 //! paged any way returns each key once.
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::json;
 
 #[test]

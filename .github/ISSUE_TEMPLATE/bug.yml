@@ -1,5 +1,5 @@
 name: Bug
-description: Something ObjectIO does wrong.
+description: Something IOLake does wrong.
 labels: [bug]
 body:
   - type: markdown
@@ -17,21 +17,21 @@ body:
     id: repro
     attributes:
       label: How to reproduce it
-      description: The smallest steps that show it, from a fresh cluster if you can (`objectio-aio` is the quickest).
+      description: The smallest steps that show it, from a fresh cluster if you can (`iolake-aio` is the quickest).
     validations:
       required: true
   - type: input
     id: release
     attributes:
       label: Release
-      description: "`objectio-gateway --version`, the image tag, or the commit you built."
+      description: "`iolake-gateway --version`, the image tag, or the commit you built."
     validations:
       required: true
   - type: textarea
     id: deployment
     attributes:
       label: Deployment
-      description: objectio-aio, binaries or Helm; nodes and disks; the pool's erasure-coding scheme; OS and architecture; the client (aws-cli, boto3, an SDK) and its version.
+      description: iolake-aio, binaries or Helm; nodes and disks; the pool's erasure-coding scheme; OS and architecture; the client (aws-cli, boto3, an SDK) and its version.
     validations:
       required: true
   - type: textarea

@@ -208,38 +208,38 @@ fn family(out: &mut String, name: &str, help: &str) {
 
 impl UsageReport {
     /// Render as Prometheus gauges. `per_bucket` controls the
-    /// `objectio_bucket_*` families, which carry one series per bucket.
+    /// `iolake_bucket_*` families, which carry one series per bucket.
     pub fn write_prometheus(&self, out: &mut String, per_bucket: bool) {
         let c = &self.cluster;
         for (name, help, v) in [
             (
-                "objectio_cluster_usable_capacity_bytes",
+                "iolake_cluster_usable_capacity_bytes",
                 "Raw capacity scaled by the default protection efficiency",
                 c.usable_capacity_bytes,
             ),
             (
-                "objectio_cluster_logical_bytes",
+                "iolake_cluster_logical_bytes",
                 "Bytes of current objects as uploaded, all buckets",
                 c.logical_bytes,
             ),
             (
-                "objectio_cluster_stored_bytes",
+                "iolake_cluster_stored_bytes",
                 "Bytes on disk for all object versions incl. parity",
                 c.stored_bytes,
             ),
             (
-                "objectio_cluster_objects",
+                "iolake_cluster_objects",
                 "Current objects across all buckets",
                 c.objects,
             ),
-            ("objectio_cluster_buckets", "Buckets", c.buckets),
+            ("iolake_cluster_buckets", "Buckets", c.buckets),
             (
-                "objectio_usage_osds_stale",
+                "iolake_usage_osds_stale",
                 "OSDs whose usage is carried over from an earlier poll",
                 c.osds_stale,
             ),
             (
-                "objectio_usage_last_update_timestamp_seconds",
+                "iolake_usage_last_update_timestamp_seconds",
                 "When usage was last refreshed",
                 self.updated_at,
             ),
@@ -251,28 +251,28 @@ impl UsageReport {
         type TenantField = fn(&TenantUsageRow) -> u64;
         let tenant_families: [(&str, &str, TenantField); 6] = [
             (
-                "objectio_tenant_buckets",
+                "iolake_tenant_buckets",
                 "Buckets owned by the tenant",
                 |t| t.buckets,
             ),
-            ("objectio_tenant_objects", "Current objects", |t| t.objects),
+            ("iolake_tenant_objects", "Current objects", |t| t.objects),
             (
-                "objectio_tenant_logical_bytes",
+                "iolake_tenant_logical_bytes",
                 "Bytes of current objects as uploaded",
                 |t| t.logical_bytes,
             ),
             (
-                "objectio_tenant_stored_bytes",
+                "iolake_tenant_stored_bytes",
                 "Bytes on disk for all versions incl. parity",
                 |t| t.stored_bytes,
             ),
             (
-                "objectio_tenant_quota_bytes",
+                "iolake_tenant_quota_bytes",
                 "Storage quota (0 = unlimited)",
                 |t| t.quota_bytes,
             ),
             (
-                "objectio_tenant_last_modified_timestamp_seconds",
+                "iolake_tenant_last_modified_timestamp_seconds",
                 "Newest write or delete in any of the tenant's buckets",
                 |t| t.last_modified,
             ),
@@ -289,34 +289,34 @@ impl UsageReport {
         }
         type BucketField = fn(&BucketUsageRow) -> u64;
         let bucket_families: [(&str, &str, BucketField); 7] = [
-            ("objectio_bucket_objects", "Current objects", |b| b.objects),
+            ("iolake_bucket_objects", "Current objects", |b| b.objects),
             (
-                "objectio_bucket_logical_bytes",
+                "iolake_bucket_logical_bytes",
                 "Bytes of current objects as uploaded",
                 |b| b.logical_bytes,
             ),
             (
-                "objectio_bucket_stored_bytes",
+                "iolake_bucket_stored_bytes",
                 "Bytes on disk for all versions incl. parity",
                 |b| b.stored_bytes,
             ),
             (
-                "objectio_bucket_noncurrent_versions",
+                "iolake_bucket_noncurrent_versions",
                 "Noncurrent object versions",
                 |b| b.noncurrent_versions,
             ),
             (
-                "objectio_bucket_noncurrent_bytes",
+                "iolake_bucket_noncurrent_bytes",
                 "Bytes of noncurrent versions as uploaded",
                 |b| b.noncurrent_bytes,
             ),
             (
-                "objectio_bucket_quota_bytes",
+                "iolake_bucket_quota_bytes",
                 "Storage quota (0 = unlimited)",
                 |b| b.quota_bytes,
             ),
             (
-                "objectio_bucket_last_modified_timestamp_seconds",
+                "iolake_bucket_last_modified_timestamp_seconds",
                 "Newest write or delete in the bucket",
                 |b| b.last_modified,
             ),
@@ -418,18 +418,18 @@ mod tests {
         let mut out = String::new();
         report().write_prometheus(&mut out, true);
         assert!(
-            out.contains(r#"objectio_bucket_logical_bytes{bucket="a",tenant="acme"} 150"#),
+            out.contains(r#"iolake_bucket_logical_bytes{bucket="a",tenant="acme"} 150"#),
             "{out}"
         );
         assert!(
-            out.contains(r#"objectio_tenant_stored_bytes{tenant="acme"} 825"#),
+            out.contains(r#"iolake_tenant_stored_bytes{tenant="acme"} 825"#),
             "{out}"
         );
-        assert!(out.contains("objectio_cluster_objects 7"), "{out}");
+        assert!(out.contains("iolake_cluster_objects 7"), "{out}");
 
         let mut out = String::new();
         report().write_prometheus(&mut out, false);
-        assert!(!out.contains("objectio_bucket_"), "{out}");
-        assert!(out.contains("objectio_tenant_objects"), "{out}");
+        assert!(!out.contains("iolake_bucket_"), "{out}");
+        assert!(out.contains("iolake_tenant_objects"), "{out}");
     }
 }

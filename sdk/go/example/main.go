@@ -1,10 +1,10 @@
 // Command example provisions a bucket end to end against a running
-// ObjectIO, then tears it down. It is the Go mirror of the README walkthrough.
+// IOLake, then tears it down. It is the Go mirror of the README walkthrough.
 //
 //	go run ./example -endpoint http://127.0.0.1:9000 -access-key AKIA… -secret-key …
 //
-// Or with no flags at all, from OBJECTIO_URL / OBJECTIO_ACCESS_KEY[_FILE] /
-// OBJECTIO_SECRET_KEY[_FILE].
+// Or with no flags at all, from IOLAKE_URL / IOLAKE_ACCESS_KEY[_FILE] /
+// IOLAKE_SECRET_KEY[_FILE].
 package main
 
 import (
@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/object-io/objectio-go-sdk"
+	"github.com/io-lake/iolake-go-sdk"
 )
 
 func main() {
@@ -26,19 +26,19 @@ func main() {
 
 	// Flags win when given; otherwise fall back to the environment, which is
 	// how this runs in a cluster.
-	var root *objectio.Client
+	var root *iolake.Client
 	var err error
 	if *ak != "" && *sk != "" {
-		root, err = objectio.New(objectio.Config{Endpoint: *endpoint, AccessKey: *ak, SecretKey: *sk})
+		root, err = iolake.New(iolake.Config{Endpoint: *endpoint, AccessKey: *ak, SecretKey: *sk})
 	} else {
-		root, err = objectio.NewFromEnv()
+		root, err = iolake.NewFromEnv()
 	}
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	fmt.Println("== as system admin ==")
-	if _, err := root.CreateTenant(ctx, objectio.Tenant{Name: "platform", DisplayName: "Platform", Enabled: true}); err != nil && !objectio.IsAlreadyExists(err) {
+	if _, err := root.CreateTenant(ctx, iolake.Tenant{Name: "platform", DisplayName: "Platform", Enabled: true}); err != nil && !iolake.IsAlreadyExists(err) {
 		log.Fatal(err)
 	}
 	tenants, err := root.ListTenants(ctx)
@@ -58,7 +58,7 @@ func main() {
 	if err := root.AddTenantAdmin(ctx, "platform", prov.UserID); err != nil {
 		log.Fatal(err)
 	}
-	pk, err := root.CreateAccessKey(ctx, prov.UserID, objectio.CreateAccessKeyInput{})
+	pk, err := root.CreateAccessKey(ctx, prov.UserID, iolake.CreateAccessKeyInput{})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -66,11 +66,11 @@ func main() {
 		prov.UserID, pk.AccessKeyID, pk.Scoped())
 
 	fmt.Println("== as the provisioner ==")
-	app, err := objectio.New(objectio.Config{Endpoint: *endpoint, AccessKey: pk.AccessKeyID, SecretKey: pk.SecretKey})
+	app, err := iolake.New(iolake.Config{Endpoint: *endpoint, AccessKey: pk.AccessKeyID, SecretKey: pk.SecretKey})
 	if err != nil {
 		log.Fatal(err)
 	}
-	ba, err := app.ProvisionBucket(ctx, objectio.ProvisionBucketInput{
+	ba, err := app.ProvisionBucket(ctx, iolake.ProvisionBucketInput{
 		Bucket:            "app-go",
 		ProvisionerUserID: prov.UserID,
 	})
@@ -90,14 +90,14 @@ func main() {
 	fmt.Println()
 
 	fmt.Println("== the bucket credential is confined ==")
-	bc, err := objectio.New(objectio.Config{Endpoint: *endpoint, AccessKey: ba.AccessKeyID, SecretKey: ba.SecretKey})
+	bc, err := iolake.New(iolake.Config{Endpoint: *endpoint, AccessKey: ba.AccessKeyID, SecretKey: ba.SecretKey})
 	if err != nil {
 		log.Fatal(err)
 	}
 	if _, err := bc.ListBuckets(ctx); err == nil {
 		fmt.Println("  management API   : ALLOWED  <-- would be a bug")
 	} else {
-		fmt.Printf("  management API   : refused, forbidden=%v\n    %v\n", objectio.IsForbidden(err), err)
+		fmt.Printf("  management API   : refused, forbidden=%v\n    %v\n", iolake.IsForbidden(err), err)
 	}
 
 	fmt.Println("== deprovision ==")

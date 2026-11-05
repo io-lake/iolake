@@ -41,7 +41,7 @@ use axum::response::{IntoResponse, Response};
 use bytes::BytesMut;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use futures::StreamExt as _;
-use objectio_auth::{AuthMode, AuthResult};
+use iolake_auth::{AuthMode, AuthResult};
 use serde::Deserialize;
 use tracing::debug;
 

@@ -3,13 +3,13 @@
 //!
 //! Served on `--metrics-listen` when the block gateway runs on its own;
 //! under aio, added to the gateway's `/metrics` through
-//! `objectio_common::metrics_registry`.
+//! `iolake_common::metrics_registry`.
 
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
-use objectio_block::WriteCache;
-use objectio_common::histogram::{CounterVec, HistogramVec, LATENCY_BUCKETS};
+use iolake_block::WriteCache;
+use iolake_common::histogram::{CounterVec, HistogramVec, LATENCY_BUCKETS};
 
 static IO_SECONDS: LazyLock<HistogramVec> = LazyLock::new(|| HistogramVec::new(LATENCY_BUCKETS));
 static IO_BYTES: LazyLock<CounterVec> = LazyLock::new(CounterVec::new);
@@ -108,79 +108,79 @@ pub fn render(cache: &WriteCache) -> String {
     let mut out = String::new();
     IO_SECONDS.render(
         &mut out,
-        "objectio_block_io_seconds",
+        "iolake_block_io_seconds",
         "Time to serve one block request, by protocol and operation",
         "",
     );
     IO_BYTES.render(
         &mut out,
-        "objectio_block_io_bytes_total",
+        "iolake_block_io_bytes_total",
         "Bytes read or written by block requests that succeeded, by protocol and operation",
     );
     IO_ERRORS.render(
         &mut out,
-        "objectio_block_io_errors_total",
+        "iolake_block_io_errors_total",
         "Block requests that failed, by protocol and operation",
     );
     CHUNK_READS.render(
         &mut out,
-        "objectio_block_chunk_reads_total",
+        "iolake_block_chunk_reads_total",
         "Chunks a read had to fetch, not in the cache: stored (from their stripe) or unwritten (zeros)",
     );
     FLUSHED.render(
         &mut out,
-        "objectio_block_chunks_flushed_total",
+        "iolake_block_chunks_flushed_total",
         "Chunk flushes, by result: stored, conflict (changed meanwhile, retried) or failed (retried)",
     );
     FLUSH_SECONDS.render(
         &mut out,
-        "objectio_block_chunk_flush_seconds",
+        "iolake_block_chunk_flush_seconds",
         "Time to store one chunk: encode, write its shards, record it in meta",
         "",
     );
     STRIPES_FREED.render(
         &mut out,
-        "objectio_block_stripes_freed_total",
+        "iolake_block_stripes_freed_total",
         "Stripes deleted because nothing uses them any more, by reason (overwrite, volume, snapshot)",
     );
     FREE_FAILURES.render(
         &mut out,
-        "objectio_block_shard_delete_failures_total",
+        "iolake_block_shard_delete_failures_total",
         "Shard deletes that failed while freeing stripes, leaving space allocated, by reason",
     );
 
     let s = cache.stats();
     for (name, help, v) in [
         (
-            "objectio_block_cache_dirty_bytes",
+            "iolake_block_cache_dirty_bytes",
             "Bytes written and journaled but not yet stored as stripes",
             s.dirty_bytes,
         ),
         (
-            "objectio_block_cache_dirty_chunks",
+            "iolake_block_cache_dirty_chunks",
             "Chunks written and journaled but not yet stored as stripes",
             s.dirty_chunks as u64,
         ),
         (
-            "objectio_block_cache_clean_bytes",
+            "iolake_block_cache_clean_bytes",
             "Bytes of stored chunks held in the cache for reads",
             s.clean_bytes,
         ),
         (
-            "objectio_block_cache_volumes",
+            "iolake_block_cache_volumes",
             "Volumes with a cache on this gateway",
             s.volume_count as u64,
         ),
     ] {
         let _ = writeln!(out, "# HELP {name} {help}\n# TYPE {name} gauge\n{name} {v}");
     }
-    objectio_block::journal::render_metrics(&mut out);
+    iolake_block::journal::render_metrics(&mut out);
     out
 }
 
 /// Add the block gateway's metrics to this process's `/metrics` (aio).
 pub fn register(cache: Arc<WriteCache>) {
-    objectio_common::metrics_registry::register("block-gateway", move || render(&cache));
+    iolake_common::metrics_registry::register("block-gateway", move || render(&cache));
 }
 
 #[cfg(test)]
@@ -192,19 +192,19 @@ mod tests {
         drop(Io::start(Protocol::Nbd, "test-op"));
         Io::start(Protocol::Nbd, "test-op").done(512);
         let cache = WriteCache::new(
-            Arc::new(objectio_block::chunk::ChunkMapper::default()),
-            objectio_block::CacheConfig::default(),
+            Arc::new(iolake_block::chunk::ChunkMapper::default()),
+            iolake_block::CacheConfig::default(),
         )
         .unwrap();
         let out = render(&cache);
         assert!(
-            out.contains("objectio_block_io_errors_total{protocol=\"nbd\",op=\"test-op\"} 1"),
+            out.contains("iolake_block_io_errors_total{protocol=\"nbd\",op=\"test-op\"} 1"),
             "{out}"
         );
         assert!(
-            out.contains("objectio_block_io_bytes_total{protocol=\"nbd\",op=\"test-op\"} 512"),
+            out.contains("iolake_block_io_bytes_total{protocol=\"nbd\",op=\"test-op\"} 512"),
             "{out}"
         );
-        objectio_common::exposition::check(&out).unwrap();
+        iolake_common::exposition::check(&out).unwrap();
     }
 }

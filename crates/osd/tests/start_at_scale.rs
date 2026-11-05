@@ -1,5 +1,5 @@
 //! An OSD of many shards back in seconds after a power cut (roadmap B32;
-//! objectio-docs `core/osd-start.md`). Grow an OSD to N shards through its
+//! iolake-docs `core/osd-start.md`). Grow an OSD to N shards through its
 //! own handlers, stop it without a clean shutdown, then start it: it must
 //! serve at once, take writes while it counts its PG summaries and bucket
 //! usage in the background, and count what a count from scratch gives.
@@ -9,7 +9,7 @@
 //! ```text
 //! export B32_DIR=/b32
 //! B32_SHARDS=10000000 B32_MODE=grow \
-//!   cargo test --release -p objectio-osd --test start_at_scale -- --ignored --nocapture
+//!   cargo test --release -p iolake-osd --test start_at_scale -- --ignored --nocapture
 //! # evict the directory from the page cache here, for a cold start
 //! B32_MODE=start cargo test …   # serve, write while counting, record the counts
 //! B32_MODE=verify cargo test …  # count again from scratch, compare
@@ -29,10 +29,10 @@
 //! summary and the bucket usage. `verify` starts again and asserts the
 //! counts equal those.
 
-use objectio_osd::service::OsdService;
-use objectio_proto::metadata::{ObjectMeta, ShardLocation, StripeMeta};
-use objectio_proto::storage::storage_service_server::StorageService;
-use objectio_proto::storage::{
+use iolake_osd::service::OsdService;
+use iolake_proto::metadata::{ObjectMeta, ShardLocation, StripeMeta};
+use iolake_proto::storage::storage_service_server::StorageService;
+use iolake_proto::storage::{
     Checksum, DeleteObjectMetaRequest, GetObjectMetaRequest, GetPgInfoRequest, GetStatusRequest,
     PutObjectMetaRequest, ReadShardRequest, ShardId, SmallShard, WriteShardRequest,
 };

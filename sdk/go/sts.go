@@ -1,4 +1,4 @@
-package objectio
+package iolake
 
 import (
 	"context"
@@ -59,8 +59,8 @@ type assumeRoleWithWebIdentityResponse struct {
 // Client built with an Endpoint alone, which is the point: a workload
 // holding only its identity token has no key to sign with yet.
 //
-//	sts, _ := objectio.New(objectio.Config{Endpoint: endpoint})
-//	creds, err := sts.AssumeRoleWithWebIdentity(ctx, objectio.AssumeRoleWithWebIdentityInput{...})
+//	sts, _ := iolake.New(iolake.Config{Endpoint: endpoint})
+//	creds, err := sts.AssumeRoleWithWebIdentity(ctx, iolake.AssumeRoleWithWebIdentityInput{...})
 //
 // Which identity providers may vouch for a role depends on its scope: a
 // tenant's role trusts only that tenant's own provider
@@ -87,11 +87,11 @@ func (c *Client) AssumeRoleWithWebIdentity(ctx context.Context, in AssumeRoleWit
 	}
 	var resp assumeRoleWithWebIdentityResponse
 	if err := xml.Unmarshal(raw, &resp); err != nil {
-		return nil, fmt.Errorf("objectio: decoding STS response: %w", err)
+		return nil, fmt.Errorf("iolake: decoding STS response: %w", err)
 	}
 	cr := resp.Result.Credentials
 	if cr.AccessKeyID == "" {
-		return nil, fmt.Errorf("objectio: STS response carried no credentials")
+		return nil, fmt.Errorf("iolake: STS response carried no credentials")
 	}
 	out := &Credentials{
 		AccessKeyID:     cr.AccessKeyID,
@@ -102,7 +102,7 @@ func (c *Client) AssumeRoleWithWebIdentity(ctx context.Context, in AssumeRoleWit
 	if cr.Expiration != "" {
 		exp, err := time.Parse(time.RFC3339, cr.Expiration)
 		if err != nil {
-			return nil, fmt.Errorf("objectio: STS Expiration %q: %w", cr.Expiration, err)
+			return nil, fmt.Errorf("iolake: STS Expiration %q: %w", cr.Expiration, err)
 		}
 		out.Expiration = exp
 	}

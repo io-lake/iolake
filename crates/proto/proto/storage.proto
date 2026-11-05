@@ -251,7 +251,7 @@ message ListPgResponse {
 // Memory in another process that a shard moves through over Mooncake
 // Transfer Engine (RDMA, or TCP in development). The OSD always initiates:
 // it reads PUT shards from here and writes GET shards to here. See
-// objectio-docs architecture/design/rdma-data-plane.md.
+// iolake-docs architecture/design/rdma-data-plane.md.
 message RdmaBuffer {
     string segment = 1;     // Owning process's Transfer Engine segment, "ip:port"
     uint64 addr = 2;        // Start address in that process
@@ -340,7 +340,7 @@ message GetStatusRequest {
     // the objects it owns against it and fills `safety`. Empty = skip.
     repeated bytes up_nodes = 1;
     // Answer at once while the OSD is still counting its bucket usage after
-    // a start (objectio-docs `core/osd-start.md`), with no usage and
+    // a start (iolake-docs `core/osd-start.md`), with no usage and
     // `usage_counting` set. Unset (a caller from before), the answer waits
     // until the count is done, so a partial count is never taken as usage.
     bool answer_while_counting = 2;
@@ -361,7 +361,7 @@ message GetStatusResponse {
     string hostname = 11;           // Real hostname
     uint64 cpu_cores = 12;          // Number of CPU cores
     uint64 memory_bytes = 13;       // Total RAM in bytes
-    string version = 14;            // ObjectIO version
+    string version = 14;            // IOLake version
     // Per-bucket usage of the objects this OSD is the `usage_owner` of.
     // ObjectMeta is copied to every OSD in the key's placement and exactly
     // one of them owns it, so a caller can sum across OSDs without counting
@@ -553,7 +553,7 @@ message DeleteObjectMetaRequest {
     string bucket = 1;
     string key = 2;
     string version_id = 3;  // Optional: delete specific version
-    // The delete's stamp (objectio_common::stamp). The copy records it as a
+    // The delete's stamp (iolake_common::stamp). The copy records it as a
     // tombstone, so a copy that missed this delete is outvoted and a late,
     // older write is refused. 0 = unstamped (a previous-release writer).
     uint64 stamp = 4;

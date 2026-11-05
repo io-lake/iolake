@@ -1,4 +1,4 @@
-//! ObjectIO Gateway - S3 API Gateway
+//! IOLake Gateway - S3 API Gateway
 //!
 //! This binary provides the S3-compatible HTTP API.
 //! Credentials are managed by the metadata service for persistence.
@@ -69,9 +69,9 @@ use axum::{
 };
 use clap::Parser;
 use console_auth::ListenerKind;
-use objectio_auth::policy::PolicyEvaluator;
-use objectio_delta_sharing::{DeltaSharingConfig, router as delta_router};
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_auth::policy::PolicyEvaluator;
+use iolake_delta_sharing::{DeltaSharingConfig, router as delta_router};
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
 use osd_pool::OsdPool;
 use s3::AppState;
 use scatter_gather::ScatterGatherEngine;
@@ -87,14 +87,14 @@ use tracing::{info, warn};
 /// cannot be reached — the previous report is better than one in which
 /// every bucket has vanished.
 pub(crate) async fn build_usage_report(
-    mut meta: objectio_proto::metadata::metadata_service_client::MetadataServiceClient<
+    mut meta: iolake_proto::metadata::metadata_service_client::MetadataServiceClient<
         tonic::transport::Channel,
     >,
     nodes: &[crate::s3_metrics::metrics::NodeCapacity],
     usage: &HashMap<String, Vec<crate::s3_metrics::usage::OsdBucketUsage>>,
 ) -> Option<crate::s3_metrics::usage::UsageReport> {
     use crate::s3_metrics::usage::{BucketInfo, ClusterUsage, TenantInfo, build_report};
-    use objectio_proto::metadata::{ListBucketsRequest, ListTenantsRequest};
+    use iolake_proto::metadata::{ListBucketsRequest, ListTenantsRequest};
 
     let buckets = meta
         .list_buckets(ListBucketsRequest::default())
@@ -170,8 +170,8 @@ async fn metrics_handler() -> impl IntoResponse {
 }
 
 #[derive(Parser, Debug)]
-#[command(name = "objectio-gateway")]
-#[command(about = "ObjectIO S3 API Gateway")]
+#[command(name = "iolake-gateway")]
+#[command(about = "IOLake S3 API Gateway")]
 #[command(version)]
 pub struct Args {
     /// Listen address for the data plane (S3 + Iceberg + Delta Sharing).
@@ -190,7 +190,7 @@ pub struct Args {
 
     /// Optional dedicated listener for the **ops** console (full
     /// surface — pools, OSDs, balancer, tenants, billing). Mounts the
-    /// SPA from `OBJECTIO_OPS_CONSOLE_DIR` plus the `/_admin/*` API
+    /// SPA from `IOLAKE_OPS_CONSOLE_DIR` plus the `/_admin/*` API
     /// (so the browser stays same-origin — no CORS). Bind to a mgmt
     /// interface in production. Empty = ops console is served on
     /// `--listen` (single-port) or omitted entirely if `--tenant-console-listen`
@@ -200,7 +200,7 @@ pub struct Args {
 
     /// Optional dedicated listener for the **tenant** console
     /// (self-service: my buckets, my keys, my catalogs). Mounts the
-    /// SPA from `OBJECTIO_TENANT_CONSOLE_DIR` plus the same `/_admin/*`
+    /// SPA from `IOLAKE_TENANT_CONSOLE_DIR` plus the same `/_admin/*`
     /// surface (server-side tenant-scoped). Safe to expose publicly so
     /// end users can self-serve. Empty = tenant console is not served
     /// separately (ops console covers both surfaces in single-port mode).
@@ -250,7 +250,7 @@ pub struct Args {
     /// Prometheus, which already scrapes the gateway, the meta nodes and the
     /// OSDs. Leave empty to run without it: the console falls back to the live
     /// scrape and says so.
-    #[arg(long, env = "OBJECTIO_PROMETHEUS_URL", default_value = "")]
+    #[arg(long, env = "IOLAKE_PROMETHEUS_URL", default_value = "")]
     pub prometheus_url: String,
 
     /// Objects of at most this many bytes are stored inside their metadata
@@ -264,7 +264,7 @@ pub struct Args {
     /// An erasure-coded object of one stripe whose shards are at most this
     /// many bytes is written with its shards in its metadata copies: one
     /// call and one flush per OSD (B21). At most 16384; 0 turns it off.
-    #[arg(long, default_value_t = objectio_common::version::SMALL_SHARD_MAX)]
+    #[arg(long, default_value_t = iolake_common::version::SMALL_SHARD_MAX)]
     pub small_shard_max: usize,
 
     /// Move shards over Mooncake Transfer Engine to OSDs that offer it:
@@ -293,11 +293,11 @@ pub struct Args {
     #[arg(long, default_value_t = 64)]
     pub rdma_read_slots: usize,
 
-    /// Leave the per-bucket usage series (`objectio_bucket_*`) out of
+    /// Leave the per-bucket usage series (`iolake_bucket_*`) out of
     /// `/metrics`. They carry one series per bucket, which is fine into the
     /// tens of thousands; beyond that, tenant and cluster totals are still
     /// exported and `/_admin/usage` still has every bucket.
-    #[arg(long, env = "OBJECTIO_NO_BUCKET_METRICS", default_value_t = false)]
+    #[arg(long, env = "IOLAKE_NO_BUCKET_METRICS", default_value_t = false)]
     pub no_bucket_metrics: bool,
 
     /// Leave the OSDs' and meta's metrics out of `/metrics`. By default the
@@ -305,12 +305,12 @@ pub struct Args {
     /// target covers the cluster (aio, one gateway). With several gateways,
     /// or Prometheus scraping each OSD (:9201) and meta node (:9101), set
     /// this: otherwise every gateway exports a copy and sums multiply.
-    #[arg(long, env = "OBJECTIO_NO_REEXPORT_METRICS", default_value_t = false)]
+    #[arg(long, env = "IOLAKE_NO_REEXPORT_METRICS", default_value_t = false)]
     pub no_reexport_metrics: bool,
 
     /// Name of the `--listen` endpoint, for policies (`aws:SourceVpce`).
     /// Empty: unnamed, as a request over the internet is in AWS.
-    #[arg(long, env = "OBJECTIO_ENDPOINT_NAME", default_value = "")]
+    #[arg(long, env = "IOLAKE_ENDPOINT_NAME", default_value = "")]
     pub endpoint_name: String,
 
     /// A further data-plane listener (S3, Iceberg, Delta Sharing; no admin
@@ -323,77 +323,73 @@ pub struct Args {
     /// Proxies (CIDRs or addresses, comma-separated) whose
     /// `X-Forwarded-For` is believed for the client's address
     /// (`aws:SourceIp`). Empty: the connection's peer is the client.
-    #[arg(long, env = "OBJECTIO_TRUSTED_PROXIES", default_value = "")]
+    #[arg(long, env = "IOLAKE_TRUSTED_PROXIES", default_value = "")]
     pub trusted_proxies: String,
 
     /// Append every request's audit event, as JSON lines, to this file
     /// (`-` for stdout). Further targets are configured at
     /// `/_admin/audit`.
-    #[arg(long, env = "OBJECTIO_AUDIT_LOG")]
+    #[arg(long, env = "IOLAKE_AUDIT_LOG")]
     pub audit_log: Option<String>,
 
     /// Keep audit events in this directory before they are delivered
     /// (A8c): a gateway killed or a receiver down loses none. A local
     /// directory that survives restarts.
-    #[arg(long, env = "OBJECTIO_AUDIT_SPOOL")]
+    #[arg(long, env = "IOLAKE_AUDIT_SPOOL")]
     pub audit_spool: Option<std::path::PathBuf>,
 
     /// The most the spool holds; past it, new events are dropped and
-    /// counted (`objectio_audit_dropped_total{target="spool"}`).
-    #[arg(long, env = "OBJECTIO_AUDIT_SPOOL_MAX_BYTES", default_value_t = 10 << 30)]
+    /// counted (`iolake_audit_dropped_total{target="spool"}`).
+    #[arg(long, env = "IOLAKE_AUDIT_SPOOL_MAX_BYTES", default_value_t = 10 << 30)]
     pub audit_spool_max_bytes: u64,
 
     /// The system always audits: every event also goes to this bucket in
     /// the cluster (created if missing), as JSON-lines objects by hour.
     /// Needs `--audit-spool`.
-    #[arg(long, env = "OBJECTIO_AUDIT_SYSTEM_BUCKET")]
+    #[arg(long, env = "IOLAKE_AUDIT_SYSTEM_BUCKET")]
     pub audit_system_bucket: Option<String>,
 
     /// On shutdown, how long to wait for the audit spool to be delivered.
-    #[arg(long, env = "OBJECTIO_AUDIT_DRAIN_SECS", default_value_t = 20)]
+    #[arg(long, env = "IOLAKE_AUDIT_DRAIN_SECS", default_value_t = 20)]
     pub audit_drain_secs: u64,
 
     /// On shutdown (SIGTERM), how long `/_ready` answers 503 while the
     /// gateway still serves, before it stops taking connections: time for
     /// load balancers and Kubernetes endpoints to stop sending it requests.
-    #[arg(long, env = "OBJECTIO_SHUTDOWN_DELAY_SECS", default_value_t = 5)]
+    #[arg(long, env = "IOLAKE_SHUTDOWN_DELAY_SECS", default_value_t = 5)]
     pub shutdown_delay_secs: u64,
 
     /// On shutdown, how long requests in flight are given to finish once
     /// the gateway stops taking connections.
-    #[arg(long, env = "OBJECTIO_SHUTDOWN_DRAIN_SECS", default_value_t = 20)]
+    #[arg(long, env = "IOLAKE_SHUTDOWN_DRAIN_SECS", default_value_t = 20)]
     pub shutdown_drain_secs: u64,
 
     /// Keep bucket access-log records here before they are delivered (A12):
     /// a gateway killed loses none. Default: `bucket-logging` inside
     /// `--audit-spool`. Without either, this gateway refuses
     /// `PutBucketLogging` and drops the records of logged buckets.
-    #[arg(long, env = "OBJECTIO_BUCKET_LOG_SPOOL")]
+    #[arg(long, env = "IOLAKE_BUCKET_LOG_SPOOL")]
     pub bucket_log_spool: Option<std::path::PathBuf>,
 
     /// The most the bucket-logging spool holds; past it, new records are
-    /// dropped and counted (`objectio_bucket_logging_dropped_total`). Records
+    /// dropped and counted (`iolake_bucket_logging_dropped_total`). Records
     /// leave it once delivered (a roll time), so it fills only while
     /// targets can't be written.
-    #[arg(long, env = "OBJECTIO_BUCKET_LOG_SPOOL_MAX_BYTES", default_value_t = 1 << 30)]
+    #[arg(long, env = "IOLAKE_BUCKET_LOG_SPOOL_MAX_BYTES", default_value_t = 1 << 30)]
     pub bucket_log_spool_max_bytes: u64,
 
     /// Seconds a log object collects records before it is written into its
     /// target bucket.
-    #[arg(long, env = "OBJECTIO_BUCKET_LOG_ROLL_SECS", default_value_t = 300)]
+    #[arg(long, env = "IOLAKE_BUCKET_LOG_ROLL_SECS", default_value_t = 300)]
     pub bucket_log_roll_secs: u64,
 
     /// A log object is written once it holds this many records, however
     /// young.
-    #[arg(
-        long,
-        env = "OBJECTIO_BUCKET_LOG_MAX_RECORDS",
-        default_value_t = 50_000
-    )]
+    #[arg(long, env = "IOLAKE_BUCKET_LOG_MAX_RECORDS", default_value_t = 50_000)]
     pub bucket_log_max_records: usize,
 
     /// Days the system bucket keeps events (0: kept).
-    #[arg(long, env = "OBJECTIO_AUDIT_RETENTION_DAYS", default_value_t = 365)]
+    #[arg(long, env = "IOLAKE_AUDIT_RETENTION_DAYS", default_value_t = 365)]
     pub audit_retention_days: u32,
 
     /// How often the lifecycle worker scans buckets with lifecycle rules.
@@ -445,7 +441,7 @@ pub struct Args {
     /// SSE-S3 requests on PUT will be rejected; plaintext writes/reads are
     /// unaffected. In `--no-auth` mode only, a random key is generated
     /// when the env var is missing (dev convenience, objects are lost on restart).
-    #[arg(long, default_value = "OBJECTIO_MASTER_KEY")]
+    #[arg(long, default_value = "IOLAKE_MASTER_KEY")]
     pub master_key_env: String,
 
     /// KMS backend used for SSE-KMS operations: `local` (keys stored in meta,
@@ -479,7 +475,7 @@ pub struct Args {
     /// or separate domains with commas. Path-style addressing works with or
     /// without it. Wildcard DNS and a wildcard TLS certificate for the
     /// domain are the operator's to provide.
-    #[arg(long = "s3-domain", env = "OBJECTIO_S3_DOMAIN", value_delimiter = ',')]
+    #[arg(long = "s3-domain", env = "IOLAKE_S3_DOMAIN", value_delimiter = ',')]
     pub s3_domains: Vec<String>,
 
     /// Admin access key ID for Delta Sharing presigned URL generation.
@@ -535,16 +531,16 @@ pub struct Args {
     /// Gateway's own topology position — used by locality-aware read routing
     /// to prefer shards on nearby OSDs (Phase 2). Empty string at any level
     /// means "inherit / unknown". Also configurable via
-    /// OBJECTIO_TOPOLOGY_{REGION,ZONE,DATACENTER,RACK,HOST} env vars.
-    #[arg(long, env = "OBJECTIO_TOPOLOGY_REGION", default_value = "")]
+    /// IOLAKE_TOPOLOGY_{REGION,ZONE,DATACENTER,RACK,HOST} env vars.
+    #[arg(long, env = "IOLAKE_TOPOLOGY_REGION", default_value = "")]
     pub topology_region: String,
-    #[arg(long, env = "OBJECTIO_TOPOLOGY_ZONE", default_value = "")]
+    #[arg(long, env = "IOLAKE_TOPOLOGY_ZONE", default_value = "")]
     pub topology_zone: String,
-    #[arg(long, env = "OBJECTIO_TOPOLOGY_DATACENTER", default_value = "")]
+    #[arg(long, env = "IOLAKE_TOPOLOGY_DATACENTER", default_value = "")]
     pub topology_datacenter: String,
-    #[arg(long, env = "OBJECTIO_TOPOLOGY_RACK", default_value = "")]
+    #[arg(long, env = "IOLAKE_TOPOLOGY_RACK", default_value = "")]
     pub topology_rack: String,
-    #[arg(long, env = "OBJECTIO_TOPOLOGY_HOST", default_value = "")]
+    #[arg(long, env = "IOLAKE_TOPOLOGY_HOST", default_value = "")]
     pub topology_host: String,
 
     /// Host lifecycle backend for /_admin/hosts and /_admin/osds/*/reboot.
@@ -552,7 +548,7 @@ pub struct Args {
     /// in-cluster Kubernetes API (requires a ServiceAccount with
     /// patch-scale on the OSD StatefulSet + delete-pod). Future values:
     /// `linux-ssh`, `appliance`.
-    #[arg(long, env = "OBJECTIO_HOST_PROVIDER", default_value = "noop")]
+    #[arg(long, env = "IOLAKE_HOST_PROVIDER", default_value = "noop")]
     pub host_provider: String,
 
     /// Namespace the OSD StatefulSet lives in. Only read when
@@ -561,13 +557,13 @@ pub struct Args {
     #[arg(long, env = "POD_NAMESPACE", default_value = "default")]
     pub host_provider_namespace: String,
 
-    /// Name of the OSD StatefulSet — the chart's `objectio.osd.fullname`
-    /// helper renders this as `{release}-osd` (e.g. `objectio-osd`).
+    /// Name of the OSD StatefulSet — the chart's `iolake.osd.fullname`
+    /// helper renders this as `{release}-osd` (e.g. `iolake-osd`).
     /// Override if you've customised the release name.
     #[arg(
         long,
-        env = "OBJECTIO_HOST_PROVIDER_OSD_STS",
-        default_value = "objectio-osd"
+        env = "IOLAKE_HOST_PROVIDER_OSD_STS",
+        default_value = "iolake-osd"
     )]
     pub host_provider_osd_sts: String,
 
@@ -575,25 +571,25 @@ pub struct Args {
     /// `512MiB` or `2GiB`: a request that does not fit is answered 503
     /// SlowDown. Unset: half the process's memory limit (its cgroup's, a
     /// container's limit) when it has one, otherwise 512 MiB.
-    #[arg(long, env = "OBJECTIO_MEMORY_BUDGET", value_parser = admission::parse_size)]
+    #[arg(long, env = "IOLAKE_MEMORY_BUDGET", value_parser = admission::parse_size)]
     pub memory_budget: Option<u64>,
 
     /// Requests served at once, a response's body included until it is
     /// sent; more are answered 503 SlowDown. Health, readiness and metrics
     /// are not counted.
-    #[arg(long, env = "OBJECTIO_MAX_REQUESTS", default_value_t = 1024)]
+    #[arg(long, env = "IOLAKE_MAX_REQUESTS", default_value_t = 1024)]
     pub max_requests: usize,
 
     /// Seconds a request's headers may take to arrive, and an idle
     /// keep-alive connection waits for its next request, before the
     /// connection is closed.
-    #[arg(long, env = "OBJECTIO_HEADER_TIMEOUT_SECS", default_value_t = 30)]
+    #[arg(long, env = "IOLAKE_HEADER_TIMEOUT_SECS", default_value_t = 30)]
     pub header_timeout_secs: u64,
 
     /// Seconds a request body may go without sending a byte (400
     /// RequestTimeout), and a client may go without reading a byte of a
     /// response (the connection is closed).
-    #[arg(long, env = "OBJECTIO_BODY_TIMEOUT_SECS", default_value_t = 30)]
+    #[arg(long, env = "IOLAKE_BODY_TIMEOUT_SECS", default_value_t = 30)]
     pub body_timeout_secs: u64,
 
     /// Log level
@@ -602,7 +598,7 @@ pub struct Args {
 
     /// mTLS between services (A8a).
     #[command(flatten)]
-    pub tls: objectio_proto::transport::TlsArgs,
+    pub tls: iolake_proto::transport::TlsArgs,
 }
 
 /// Each worker thread's stack. A request's handler is polled on a worker,
@@ -632,7 +628,7 @@ pub async fn run(
     args: Args,
     shutdown: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
-    objectio_proto::transport::configure_tls(&args.tls).map_err(anyhow::Error::msg)?;
+    iolake_proto::transport::configure_tls(&args.tls).map_err(anyhow::Error::msg)?;
     let s3_domains = addressing::S3Domains::parse(&args.s3_domains).map_err(anyhow::Error::msg)?;
     if !s3_domains.is_empty() {
         info!(
@@ -641,9 +637,9 @@ pub async fn run(
         );
     }
     if args.test_clock_offset_ms != 0 {
-        objectio_common::stamp::set_test_offset_ms(args.test_clock_offset_ms);
+        iolake_common::stamp::set_test_offset_ms(args.test_clock_offset_ms);
     }
-    info!("Starting ObjectIO Gateway");
+    info!("Starting IOLake Gateway");
     info!("Metadata endpoint: {}", args.meta_endpoint);
 
     // Register protection config for Prometheus metrics
@@ -711,7 +707,7 @@ pub async fn run(
 
     // Connect to metadata service
     let meta_client = MetadataServiceClient::new(
-        objectio_proto::transport::meta_channel(&args.meta_endpoint)
+        iolake_proto::transport::meta_channel(&args.meta_endpoint)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to connect to metadata service: {e}"))?,
     );
@@ -721,7 +717,7 @@ pub async fn run(
 
     // Report this binary's release and format level (rolling upgrades).
     // A gateway has no stable id; its host and listen address name it.
-    objectio_proto::transport::spawn_version_reporter(
+    iolake_proto::transport::spawn_version_reporter(
         args.meta_endpoint.clone(),
         "gateway",
         format!(
@@ -741,7 +737,7 @@ pub async fn run(
     let cluster_secret = load_cluster_secret(meta_client.clone()).await;
     console_auth::set_session_key(derive_key(&cluster_secret, "console-session"));
     let sts_provider =
-        objectio_auth::sts::StsProvider::new(&derive_key(&cluster_secret, "sts-session"));
+        iolake_auth::sts::StsProvider::new(&derive_key(&cluster_secret, "sts-session"));
 
     // Create auth state using metadata service for credential lookup
     let auth_state =
@@ -782,7 +778,7 @@ pub async fn run(
             .as_deref()
             .unwrap_or(client_id)
             .to_string();
-        let oidc_config = objectio_auth::OidcConfig {
+        let oidc_config = iolake_auth::OidcConfig {
             issuer_url: issuer_url.clone(),
             client_id: client_id.clone(),
             client_secret: args.oidc_client_secret.clone().unwrap_or_default(),
@@ -797,7 +793,7 @@ pub async fn run(
             "OIDC configured: issuer={} client={}",
             issuer_url, client_id
         );
-        Some(std::sync::Arc::new(objectio_auth::OidcProvider::new(
+        Some(std::sync::Arc::new(iolake_auth::OidcProvider::new(
             oidc_config,
         )))
     } else {
@@ -817,7 +813,7 @@ pub async fn run(
     // the same iceberg auth layer — Unity is just an alternate REST surface
     // over the same catalog metadata.
     let iceberg_router = {
-        let router = objectio_iceberg::router(
+        let router = iolake_iceberg::router(
             meta_client.clone(),
             PolicyEvaluator::new(),
             admin_principals.clone(),
@@ -864,7 +860,7 @@ pub async fn run(
     // at the gateway root so its `/api/2.1/unity-catalog/*` paths land where
     // Databricks-style clients expect them.
     let unity_router = {
-        let router = objectio_unity_catalog::router(
+        let router = iolake_unity_catalog::router(
             meta_client.clone(),
             PolicyEvaluator::new(),
             admin_principals,
@@ -945,7 +941,7 @@ pub async fn run(
     // Load the SSE master key. Order of preference: env var, dev fallback,
     // otherwise leave disabled. When a bucket has default encryption set
     // but `master_key` is None, PUT will fail — that's the intended gate.
-    let master_key = match objectio_kms::MasterKey::from_env(&args.master_key_env) {
+    let master_key = match iolake_kms::MasterKey::from_env(&args.master_key_env) {
         Ok(k) => {
             info!(
                 "SSE master key loaded from env var {} — SSE-S3 enabled",
@@ -954,7 +950,7 @@ pub async fn run(
             Some(k)
         }
         Err(e) if args.no_auth => {
-            let k = objectio_kms::MasterKey::generate_random();
+            let k = iolake_kms::MasterKey::generate_random();
             warn!(
                 "SSE master key env var not usable ({}); generated a random key for dev mode. \
                  Objects encrypted with this key will be UNREADABLE after gateway restart. \
@@ -993,7 +989,7 @@ pub async fn run(
 
     // Build this gateway's self-topology from CLI flags / env so read
     // routing can prefer locally-adjacent OSDs.
-    let self_topology = objectio_placement::FailureDomainInfo::new_full(
+    let self_topology = iolake_placement::FailureDomainInfo::new_full(
         &args.topology_region,
         &args.topology_zone,
         &args.topology_datacenter,
@@ -1132,7 +1128,7 @@ pub async fn run(
         inline_max_size: args.inline_max_size,
         small_shard_max: args
             .small_shard_max
-            .min(objectio_common::version::SMALL_SHARD_MAX),
+            .min(iolake_common::version::SMALL_SHARD_MAX),
         dedup: dedup::DryRun::start(dedup_meta, Arc::clone(&dedup_pool)),
         trusted_proxies,
         auth_state: Arc::clone(&auth_state),
@@ -1618,14 +1614,14 @@ pub async fn run(
     }
 
     // SPA dirs.
-    //   OBJECTIO_CONSOLE_DIR        — where both bundles live (ops/, tenant/)
-    //   OBJECTIO_OPS_CONSOLE_DIR    — the ops bundle, if elsewhere
-    //   OBJECTIO_TENANT_CONSOLE_DIR — the tenant bundle, if elsewhere
-    let console_root = std::env::var("OBJECTIO_CONSOLE_DIR")
+    //   IOLAKE_CONSOLE_DIR        — where both bundles live (ops/, tenant/)
+    //   IOLAKE_OPS_CONSOLE_DIR    — the ops bundle, if elsewhere
+    //   IOLAKE_TENANT_CONSOLE_DIR — the tenant bundle, if elsewhere
+    let console_root = std::env::var("IOLAKE_CONSOLE_DIR")
         .unwrap_or_else(|_| "/usr/share/objectio/console".to_string());
     let ops_console_dir =
-        std::env::var("OBJECTIO_OPS_CONSOLE_DIR").unwrap_or_else(|_| format!("{console_root}/ops"));
-    let tenant_console_dir = std::env::var("OBJECTIO_TENANT_CONSOLE_DIR")
+        std::env::var("IOLAKE_OPS_CONSOLE_DIR").unwrap_or_else(|_| format!("{console_root}/ops"));
+    let tenant_console_dir = std::env::var("IOLAKE_TENANT_CONSOLE_DIR")
         .unwrap_or_else(|_| format!("{console_root}/tenant"));
 
     let console_service = |dir: &str| {
@@ -2024,7 +2020,7 @@ pub async fn run(
 /// Start Transfer Engine and register the pools OSDs move shards through.
 #[cfg(feature = "rdma")]
 fn start_rdma(args: &Args, protocol: &str) -> Result<rdma::GatewayRdma> {
-    use objectio_transport_te::Protocol;
+    use iolake_transport_te::Protocol;
     let protocol = match protocol {
         "rdma" => Protocol::Rdma,
         "tcp" => Protocol::Tcp,
@@ -2073,14 +2069,14 @@ fn start_rdma(args: &Args, protocol: &str) -> Result<rdma::GatewayRdma> {
 /// which anyone can know. Without meta answering, a random key for this
 /// gateway only: secure, though other gateways won't accept what it signs.
 async fn load_cluster_secret(
-    meta: objectio_proto::metadata::metadata_service_client::MetadataServiceClient<
+    meta: iolake_proto::metadata::metadata_service_client::MetadataServiceClient<
         tonic::transport::Channel,
     >,
 ) -> Vec<u8> {
     for attempt in 0..30 {
         match meta
             .clone()
-            .get_sts_signing_key(objectio_proto::metadata::GetStsSigningKeyRequest {})
+            .get_sts_signing_key(iolake_proto::metadata::GetStsSigningKeyRequest {})
             .await
         {
             Ok(r) => return r.into_inner().key,

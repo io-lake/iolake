@@ -1,5 +1,5 @@
 //! Room on the filesystem under meta's data directory, and what meta may
-//! still write there (objectio-docs `core/meta.md`, "A full disk").
+//! still write there (iolake-docs `core/meta.md`, "A full disk").
 //!
 //! Meta can't meet a full filesystem and carry on. openraft 0.9 stops a
 //! node for good on any storage error from its log or state machine, and
@@ -229,21 +229,21 @@ impl DiskSpace {
         let free = self.free().map_or(-1.0, |f| f as f64);
         let _ = write!(
             out,
-            "# HELP objectio_meta_disk_free_bytes Bytes free on the filesystem of meta's data directory (-1: unknown)\n\
-             # TYPE objectio_meta_disk_free_bytes gauge\n\
-             objectio_meta_disk_free_bytes {free}\n\
-             # HELP objectio_meta_disk_reserve_bytes Bytes meta keeps free: below it the leader refuses writes\n\
-             # TYPE objectio_meta_disk_reserve_bytes gauge\n\
-             objectio_meta_disk_reserve_bytes {}\n\
-             # HELP objectio_meta_disk_full 1 while this node has less than its reserve free, or a write found its filesystem full lately\n\
-             # TYPE objectio_meta_disk_full gauge\n\
-             objectio_meta_disk_full {}\n\
-             # HELP objectio_meta_writes_refused_no_room_total Writes this node refused, as leader, for want of room\n\
-             # TYPE objectio_meta_writes_refused_no_room_total counter\n\
-             objectio_meta_writes_refused_no_room_total {}\n\
-             # HELP objectio_meta_disk_out_of_space_total Writes to the log or a snapshot that found the filesystem full\n\
-             # TYPE objectio_meta_disk_out_of_space_total counter\n\
-             objectio_meta_disk_out_of_space_total {}\n",
+            "# HELP iolake_meta_disk_free_bytes Bytes free on the filesystem of meta's data directory (-1: unknown)\n\
+             # TYPE iolake_meta_disk_free_bytes gauge\n\
+             iolake_meta_disk_free_bytes {free}\n\
+             # HELP iolake_meta_disk_reserve_bytes Bytes meta keeps free: below it the leader refuses writes\n\
+             # TYPE iolake_meta_disk_reserve_bytes gauge\n\
+             iolake_meta_disk_reserve_bytes {}\n\
+             # HELP iolake_meta_disk_full 1 while this node has less than its reserve free, or a write found its filesystem full lately\n\
+             # TYPE iolake_meta_disk_full gauge\n\
+             iolake_meta_disk_full {}\n\
+             # HELP iolake_meta_writes_refused_no_room_total Writes this node refused, as leader, for want of room\n\
+             # TYPE iolake_meta_writes_refused_no_room_total counter\n\
+             iolake_meta_writes_refused_no_room_total {}\n\
+             # HELP iolake_meta_disk_out_of_space_total Writes to the log or a snapshot that found the filesystem full\n\
+             # TYPE iolake_meta_disk_out_of_space_total counter\n\
+             iolake_meta_disk_out_of_space_total {}\n",
             self.reserve,
             u8::from(full),
             self.refused.load(Ordering::Relaxed),
@@ -291,10 +291,10 @@ mod tests {
         let mut m = String::new();
         s.render_metrics(&mut m);
         assert!(
-            m.contains("objectio_meta_writes_refused_no_room_total 1"),
+            m.contains("iolake_meta_writes_refused_no_room_total 1"),
             "{m}"
         );
-        assert!(m.contains("objectio_meta_disk_full 0"), "{m}");
+        assert!(m.contains("iolake_meta_disk_full 0"), "{m}");
     }
 
     /// A write that met ENOSPC is no room for a while, whatever the

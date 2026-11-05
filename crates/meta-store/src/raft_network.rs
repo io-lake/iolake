@@ -55,13 +55,13 @@ impl ChannelCache {
         // two seconds, not after the kernel's retransmission timeout: on
         // Raft's timescale (elections in under a second) a hung connection
         // otherwise blocks votes and replication for minutes.
-        let endpoint = objectio_proto::transport::endpoint(addr)?
+        let endpoint = iolake_proto::transport::endpoint(addr)?
             .connect_timeout(std::time::Duration::from_secs(1))
             .tcp_keepalive(Some(std::time::Duration::from_secs(5)))
             .http2_keep_alive_interval(std::time::Duration::from_secs(1))
             .keep_alive_timeout(std::time::Duration::from_secs(2))
             .keep_alive_while_idle(true);
-        let channel = objectio_proto::transport::connect_lazy(&endpoint);
+        let channel = iolake_proto::transport::connect_lazy(&endpoint);
         self.inner.lock().insert(addr.to_string(), channel.clone());
         Ok(channel)
     }
@@ -156,14 +156,12 @@ pub struct MetaRaftNetwork {
 impl MetaRaftNetwork {
     fn client(
         &self,
-    ) -> Result<objectio_proto::raft::raft_rpc_client::RaftRpcClient<Channel>, TransportErr> {
+    ) -> Result<iolake_proto::raft::raft_rpc_client::RaftRpcClient<Channel>, TransportErr> {
         let ch = self
             .channels
             .get_or_connect(&self.target_addr)
             .map_err(TransportErr)?;
-        Ok(objectio_proto::raft::raft_rpc_client::RaftRpcClient::new(
-            ch,
-        ))
+        Ok(iolake_proto::raft::raft_rpc_client::RaftRpcClient::new(ch))
     }
 
     /// One RPC, bounded by openraft's deadline for it. A timeout or a
@@ -172,11 +170,11 @@ impl MetaRaftNetwork {
         &self,
         option: &RPCOption,
         rpc: F,
-    ) -> Result<tonic::Response<objectio_proto::raft::RaftEnvelope>, RpcErr>
+    ) -> Result<tonic::Response<iolake_proto::raft::RaftEnvelope>, RpcErr>
     where
-        F: FnOnce(objectio_proto::raft::raft_rpc_client::RaftRpcClient<Channel>) -> Fut,
+        F: FnOnce(iolake_proto::raft::raft_rpc_client::RaftRpcClient<Channel>) -> Fut,
         Fut: std::future::Future<
-                Output = Result<tonic::Response<objectio_proto::raft::RaftEnvelope>, tonic::Status>,
+                Output = Result<tonic::Response<iolake_proto::raft::RaftEnvelope>, tonic::Status>,
             >,
     {
         let client = self.client().map_err(|e| RpcErr::from(e.0))?;
@@ -199,8 +197,8 @@ impl MetaRaftNetwork {
         }
     }
 
-    fn envelope(&self, payload: Vec<u8>) -> objectio_proto::raft::RaftEnvelope {
-        objectio_proto::raft::RaftEnvelope {
+    fn envelope(&self, payload: Vec<u8>) -> iolake_proto::raft::RaftEnvelope {
+        iolake_proto::raft::RaftEnvelope {
             from: self.self_id,
             payload,
         }
@@ -218,7 +216,7 @@ struct TransportErr(String);
 #[error("{message}")]
 struct RpcErr {
     message: String,
-    /// The peer refused for want of room (`objectio_proto::no_room`).
+    /// The peer refused for want of room (`iolake_proto::no_room`).
     no_room: bool,
 }
 
@@ -235,7 +233,7 @@ impl From<tonic::Status> for RpcErr {
     fn from(s: tonic::Status) -> Self {
         Self {
             message: format!("{}: {}", s.code(), s.message()),
-            no_room: objectio_proto::is_no_room(&s),
+            no_room: iolake_proto::is_no_room(&s),
         }
     }
 }

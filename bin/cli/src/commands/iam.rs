@@ -309,7 +309,7 @@ pub async fn key(cmd: KeyCmd, ctx: &mut Ctx<'_, '_>) -> Result<()> {
             read_only,
         } => {
             if let Some(s) = &scope
-                && let Err(e) = objectio_auth::validate_scope(s)
+                && let Err(e) = iolake_auth::validate_scope(s)
             {
                 bail!("--scope {s}: {e}");
             }

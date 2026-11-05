@@ -406,7 +406,7 @@ export default function Identity() {
                 onChange={(e) => setForm({ ...form, tenancy: e.target.value })}
                 hint="Multi-tenant keys on the tid claim: the first login from an organisation registers a tenant for it automatically."
               >
-                <option value="single">Single tenant — this provider serves one ObjectIO tenant</option>
+                <option value="single">Single tenant — this provider serves one IOLake tenant</option>
                 <option value="multi">Multi-tenant — each signing-in organisation gets its own tenant</option>
               </Select>
             </div>
@@ -426,7 +426,7 @@ export default function Identity() {
                   label="Tenant admin role"
                   value={form.tenant_admin_role}
                   onChange={(e) => setForm({ ...form, tenant_admin_role: e.target.value })}
-                  placeholder="objectio-admin"
+                  placeholder="iolake-admin"
                   hint="A user whose token carries this role administers their own tenant. Empty means only you can."
                 />
                 <div className="md:col-span-2">

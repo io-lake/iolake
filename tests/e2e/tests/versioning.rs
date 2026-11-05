@@ -2,7 +2,7 @@
 //! leaves a marker, deleting a version by id brings the previous one back,
 //! and `ListObjectVersions` lists what is there, newest first.
 
-use objectio_e2e::{Cluster, Response};
+use iolake_e2e::{Cluster, Response};
 use serde_json::json;
 
 fn body(i: usize, len: usize) -> Vec<u8> {

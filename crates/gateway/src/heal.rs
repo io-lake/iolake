@@ -45,11 +45,11 @@ pub(crate) fn report_degraded(
     let mut unreadable = unreadable.to_vec();
     unreadable.sort_unstable();
     unreadable.dedup();
-    let req = objectio_proto::metadata::ReportDegradedRequest {
+    let req = iolake_proto::metadata::ReportDegradedRequest {
         bucket: bucket.to_string(),
         key: key.to_string(),
         object_id: object_id.to_vec(),
-        stripes: vec![objectio_proto::metadata::DegradedStripe {
+        stripes: vec![iolake_proto::metadata::DegradedStripe {
             stripe_id,
             missing: unreadable,
             present: u32::try_from(read).unwrap_or(u32::MAX),

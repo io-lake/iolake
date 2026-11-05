@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use objectio_e2e::Cluster;
+use iolake_e2e::Cluster;
 use serde_json::{Value, json};
 
 /// A webhook receiver on `listener`: every event it is sent.
@@ -421,7 +421,7 @@ fn spooled_events_survive_a_killed_gateway_and_a_receiver_down() {
 /// emptyDir in Kubernetes) went with the pod.
 #[test]
 fn a_gateway_stopped_by_sigterm_delivers_its_spool_first() {
-    use objectio_e2e::ha::{HaCluster, Node};
+    use iolake_e2e::ha::{HaCluster, Node};
 
     let (port, events, up) = held_receiver();
     let mut ha = HaCluster::start(1, 6, 1);

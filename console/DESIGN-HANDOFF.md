@@ -1,4 +1,4 @@
-# ObjectIO Console — design handoff
+# IOLake Console — design handoff
 
 This folder is the source of truth for the console redesign. It is written to be read by
 Claude Code (or any engineer) working in `console/`. Everything here maps onto the existing
@@ -13,14 +13,14 @@ design/
   brand/                logo SVGs (type outlined), favicon.ico, README banner
 ```
 
-Live, editable version of the same screens: the "ObjectIO Console Design" artifact on claude.ai
+Live, editable version of the same screens: the "IOLake Console Design" artifact on claude.ai
 (ask the owner for the link). The mockup HTML here is exported from it.
 
 ## 1. Brand
 
 Mark: the **Shard Ring** — an O of eight shards, six data (ink/paper) and two parity (amber,
-at 12 and 6 o'clock). `brand/objectio-mark*.svg`. Never rotate, never recolor the parity pair.
-Under 48 px use `brand/favicon-small.svg` (solid ring). Wordmark: "ObjectIO" in Sora 600 with
+at 12 and 6 o'clock). `brand/iolake-mark*.svg`. Never rotate, never recolor the parity pair.
+Under 48 px use `brand/favicon-small.svg` (solid ring). Wordmark: "IOLake" in Sora 600 with
 "IO" in accent blue; use the outlined SVGs, do not set it as live text.
 
 Fonts (Google Fonts): **Sora** 500/600 (page titles, big numbers), **IBM Plex Sans** 400/500/600
@@ -145,9 +145,9 @@ Grid = `--oio-border`, axis text = `--oio-faint` mono 10px, line 2px with end do
 when >1 series, tooltip = surface bg + border-strong, crosshair dashed muted. Legend only for ≥2
 series. Every ChartCard exposes a "table view" in its ⋯ menu.
 
-Metric sources (already in `/metrics`): `objectio_s3_requests_total{operation}`,
-`objectio_s3_request_duration_seconds` (p50/p95/p99 from the histogram),
-`objectio_http_responses_total{status}`, `objectio_iceberg_requests_total`.
+Metric sources (already in `/metrics`): `iolake_s3_requests_total{operation}`,
+`iolake_s3_request_duration_seconds` (p50/p95/p99 from the histogram),
+`iolake_http_responses_total{status}`, `iolake_iceberg_requests_total`.
 Needed for per-tenant / per-node charts: add `tenant` and `node` labels to those counters.
 
 ## 7. Suggested prompt for Claude Code

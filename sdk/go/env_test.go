@@ -1,4 +1,4 @@
-package objectio
+package iolake
 
 import (
 	"os"
@@ -27,7 +27,7 @@ func cleanEnv(t *testing.T) {
 	}
 }
 
-func TestConfigFromEnvReadsTheObjectIONames(t *testing.T) {
+func TestConfigFromEnvReadsTheIOLakeNames(t *testing.T) {
 	cleanEnv(t)
 	t.Setenv(EnvEndpoint, "https://s3.example.com")
 	t.Setenv(EnvAccessKey, "AKIA1")
@@ -44,7 +44,7 @@ func TestConfigFromEnvReadsTheObjectIONames(t *testing.T) {
 	}
 }
 
-func TestObjectIOURLIsASynonym(t *testing.T) {
+func TestIOLakeURLIsASynonym(t *testing.T) {
 	cleanEnv(t)
 	t.Setenv(EnvURL, "https://s3.example.com")
 	t.Setenv(EnvAccessKey, "AKIA1")
@@ -77,7 +77,7 @@ func TestFallsBackToTheAWSNames(t *testing.T) {
 	}
 }
 
-func TestObjectIONamesWinOverAWS(t *testing.T) {
+func TestIOLakeNamesWinOverAWS(t *testing.T) {
 	cleanEnv(t)
 	t.Setenv(EnvEndpoint, "https://s3.example.com")
 	t.Setenv(EnvAccessKey, "AKIAOWN")

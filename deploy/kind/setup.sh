@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# ObjectIO Kind Cluster Setup
+# IOLake Kind Cluster Setup
 #
-# Spins up a full ObjectIO cluster in Kind (Kubernetes in Docker):
+# Spins up a full IOLake cluster in Kind (Kubernetes in Docker):
 #   - 4+2 EC (4 data + 2 parity shards)
 #   - S3 API (gateway on localhost:${PF_PORT} via port-forward)
 #   - Iceberg REST Catalog (/iceberg/v1/)
@@ -17,21 +17,21 @@
 # Usage:
 #   ./deploy/kind/setup.sh                  # create cluster + deploy
 #   ./deploy/kind/setup.sh --skip-build     # skip docker build, use existing images
-#   ./deploy/kind/setup.sh --registry ghcr.io/object-io  # pull from registry instead
+#   ./deploy/kind/setup.sh --registry ghcr.io/io-lake  # pull from registry instead
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-CLUSTER_NAME="objectio"
-NAMESPACE="objectio"
+CLUSTER_NAME="iolake"
+NAMESPACE="iolake"
 # Local port the gateway is forwarded to (PF_PORT=19000 if 9000 is taken).
 PF_PORT="${PF_PORT:-9000}"
-RELEASE="objectio"
+RELEASE="iolake"
 REGISTRY=""
 SKIP_BUILD=false
-IMAGES=(objectio-gateway objectio-meta objectio-osd objectio-cli objectio-block-gateway)
+IMAGES=(iolake-gateway iolake-meta iolake-osd iolake-cli iolake-block-gateway)
 
 # ── Parse args ────────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -83,10 +83,10 @@ build_and_load() {
     info "Skipping build (--skip-build)"
   else
     info "Building Docker images (this takes a few minutes)..."
-    docker build --target all -t objectio:latest "${REPO_ROOT}"
+    docker build --target all -t iolake:latest "${REPO_ROOT}"
     # Extract individual images from the all-in-one build
     for img in "${IMAGES[@]}"; do
-      docker build --target "${img#objectio-}" \
+      docker build --target "${img#iolake-}" \
         -t "${img}:latest" \
         "${REPO_ROOT}" 2>/dev/null || \
       docker build --target "${img}" \
@@ -114,19 +114,19 @@ deploy_helm() {
       kubectl create secret docker-registry ghcr-secret \
         --namespace "${NAMESPACE}" \
         --docker-server=ghcr.io \
-        --docker-username="${GITHUB_ACTOR:-objectio}" \
+        --docker-username="${GITHUB_ACTOR:-iolake}" \
         --docker-password="${GITHUB_TOKEN}" \
         --dry-run=client -o yaml | kubectl apply -f -
     fi
   else
-    # The images kind loaded: built here as objectio-<svc>:latest, which
-    # kind knows as docker.io/library/objectio-<svc>:latest.
+    # The images kind loaded: built here as iolake-<svc>:latest, which
+    # kind knows as docker.io/library/iolake-<svc>:latest.
     IMAGE_REGISTRY="docker.io/library"
   fi
 
-  info "Deploying ObjectIO Helm chart..."
+  info "Deploying IOLake Helm chart..."
   helm upgrade --install "${RELEASE}" \
-    "${REPO_ROOT}/deploy/helm/objectio" \
+    "${REPO_ROOT}/deploy/helm/iolake" \
     --namespace "${NAMESPACE}" \
     --values "${SCRIPT_DIR}/values.yaml" \
     --set "global.imageRegistry=${IMAGE_REGISTRY}" \
@@ -170,8 +170,8 @@ start_portforward() {
   info "Starting port-forward: localhost:${PF_PORT} → gateway S3"
   kubectl port-forward \
     -n "${NAMESPACE}" "svc/${GW_SVC}" "${PF_PORT}:9000" \
-    &>/tmp/objectio-pf-gateway.log &
-  echo $! > /tmp/objectio-pf-gateway.pid
+    &>/tmp/iolake-pf-gateway.log &
+  echo $! > /tmp/iolake-pf-gateway.pid
 
   GF_SVC=$(kubectl get svc -n "${NAMESPACE}" \
     -l app.kubernetes.io/component=grafana \
@@ -180,8 +180,8 @@ start_portforward() {
     info "Starting port-forward: localhost:3000 → Grafana"
     kubectl port-forward \
       -n "${NAMESPACE}" "svc/${GF_SVC}" 3000:3000 \
-      &>/tmp/objectio-pf-grafana.log &
-    echo $! > /tmp/objectio-pf-grafana.pid
+      &>/tmp/iolake-pf-grafana.log &
+    echo $! > /tmp/iolake-pf-grafana.pid
   fi
 
   # Wait for gateway to respond
@@ -205,7 +205,7 @@ smoke_test() {
       --region us-east-1 \
       --no-sign-request \
       s3 mb s3://test-bucket 2>/dev/null || true
-  echo "hello objectio" | aws --endpoint-url http://localhost:${PF_PORT} \
+  echo "hello iolake" | aws --endpoint-url http://localhost:${PF_PORT} \
       --region us-east-1 \
       --no-sign-request \
       s3 cp - s3://test-bucket/hello.txt
@@ -213,7 +213,7 @@ smoke_test() {
       --region us-east-1 \
       --no-sign-request \
       s3 cp s3://test-bucket/hello.txt -)
-  [[ "${RESULT}" == "hello objectio" ]] || die "S3 round-trip failed"
+  [[ "${RESULT}" == "hello iolake" ]] || die "S3 round-trip failed"
   ok "S3: bucket create + put + get OK"
 
   # Iceberg REST Catalog: every request names a warehouse, so one
@@ -235,12 +235,12 @@ print_summary() {
   cat <<EOF
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  ObjectIO is running on Kind cluster '${CLUSTER_NAME}'
+  IOLake is running on Kind cluster '${CLUSTER_NAME}'
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Endpoints (via kubectl port-forward):
   S3 / Iceberg / Delta Sharing  http://localhost:${PF_PORT}
-  Grafana                       http://localhost:3000  (admin / objectio)
+  Grafana                       http://localhost:3000  (admin / iolake)
 
 EC scheme: 4+2  |  Meta: 3 nodes  |  OSDs: 6 nodes
 

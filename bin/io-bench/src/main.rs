@@ -1,9 +1,9 @@
-//! I/O backend benchmark — pread (what ObjectIO uses today) vs io_uring
+//! I/O backend benchmark — pread (what IOLake uses today) vs io_uring
 //! (what we're evaluating for Phase D / hot-path workloads).
 //!
 //! Usage:
 //!
-//!   objectio-io-bench \
+//!   iolake-io-bench \
 //!       --file /mnt/nvme/bench.bin \
 //!       --size-mb 1024 \
 //!       --block-size 4096 \
@@ -46,7 +46,7 @@ use rand::{Rng, SeedableRng, rngs::StdRng};
 // -------------------------------------------------------------------
 
 #[derive(Parser, Debug)]
-#[command(name = "objectio-io-bench", about, version)]
+#[command(name = "iolake-io-bench", about, version)]
 struct Args {
     /// Test file path. Created + filled if absent; reused if already at
     /// the requested size.
@@ -149,7 +149,7 @@ fn main() -> Result<()> {
 
     println!();
     println!(
-        "ObjectIO IO bench — op={} block_size={} iterations={} file_size_mb={}",
+        "IOLake IO bench — op={} block_size={} iterations={} file_size_mb={}",
         args.op, args.block_size, args.iterations, args.size_mb
     );
     println!("file: {}", args.file.display());
@@ -276,7 +276,7 @@ fn print_stats(backend: Backend, s: &RunStats) {
 // pread backend — sync pread/pwrite under tokio::spawn_blocking
 // -------------------------------------------------------------------
 //
-// This is what ObjectIO's raw_io.rs does today. Each read/write is a
+// This is what IOLake's raw_io.rs does today. Each read/write is a
 // full syscall through the kernel, bounced through the blocking thread
 // pool from the async runtime.
 

@@ -1,6 +1,6 @@
 #cloud-config
 #
-# ObjectIO Test VM Cloud-Init Configuration
+# IOLake Test VM Cloud-Init Configuration
 # Creates an Ubuntu 24.04 VM with 8 virtual disks for testing storage nodes
 #
 package_update: true
@@ -16,12 +16,12 @@ packages:
 
 write_files:
   # Main disk setup script
-  - path: /usr/local/bin/setup-objectio-disks.sh
+  - path: /usr/local/bin/setup-iolake-disks.sh
     permissions: '0755'
     content: |
       #!/bin/bash
       #
-      # Setup script for ObjectIO virtual disks
+      # Setup script for IOLake virtual disks
       # Creates sparse files and loop devices for testing storage nodes
       #
       set -euo pipefail
@@ -73,7 +73,7 @@ write_files:
 
           log_info "Writing superblock placeholder to disk $disk_num"
 
-          # Create a 4KB superblock with ObjectIO magic number and metadata
+          # Create a 4KB superblock with IOLake magic number and metadata
           # Layout:
           #   Bytes 0-7:   Magic number "OBJIO001" (8 bytes)
           #   Bytes 8-11:  Version (uint32 LE) = 1
@@ -160,7 +160,7 @@ write_files:
       show_disk_status() {
           echo ""
           echo "========================================"
-          echo "   ObjectIO Virtual Disk Status"
+          echo "   IOLake Virtual Disk Status"
           echo "========================================"
           echo ""
           echo "Disk Files:"
@@ -208,7 +208,7 @@ write_files:
 
           case "$action" in
               setup)
-                  log_info "Setting up ObjectIO virtual disks..."
+                  log_info "Setting up IOLake virtual disks..."
                   create_disk_directory
 
                   for i in $(seq 0 $((NUM_DISKS - 1))); do
@@ -223,7 +223,7 @@ write_files:
                   show_disk_status
                   log_info "Disk setup complete!"
                   echo ""
-                  echo "Disks are ready for ObjectIO testing:"
+                  echo "Disks are ready for IOLake testing:"
                   echo "  - Raw files: ${DISK_DIR}/disk{0-7}.img"
                   echo "  - Loop devices: /dev/loop{10-17}"
                   ;;
@@ -233,7 +233,7 @@ write_files:
                   ;;
 
               cleanup)
-                  log_info "Cleaning up ObjectIO virtual disks..."
+                  log_info "Cleaning up IOLake virtual disks..."
                   for i in $(seq 0 $((NUM_DISKS - 1))); do
                       local loop_num=$((LOOP_BASE + i))
                       local loop_device="/dev/loop${loop_num}"
@@ -271,19 +271,19 @@ write_files:
     content: |
       #!/bin/bash
       # Quick disk status script
-      sudo /usr/local/bin/setup-objectio-disks.sh status
+      sudo /usr/local/bin/setup-iolake-disks.sh status
 
   # Systemd service to restore loop devices on boot
-  - path: /etc/systemd/system/objectio-disks.service
+  - path: /etc/systemd/system/iolake-disks.service
     permissions: '0644'
     content: |
       [Unit]
-      Description=Setup ObjectIO disk loop devices
+      Description=Setup IOLake disk loop devices
       After=local-fs.target
 
       [Service]
       Type=oneshot
-      ExecStart=/usr/local/bin/setup-objectio-disks.sh setup
+      ExecStart=/usr/local/bin/setup-iolake-disks.sh setup
       RemainAfterExit=yes
 
       [Install]
@@ -296,7 +296,7 @@ runcmd:
 
   # Enable the systemd service for boot persistence
   - systemctl daemon-reload
-  - systemctl enable objectio-disks.service
+  - systemctl enable iolake-disks.service
 
   # Install Rust for the ubuntu user
   - su - ubuntu -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable'

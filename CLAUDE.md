@@ -2,20 +2,20 @@
 
 How to work in this repository: the rules, the commands, the map, and
 where to look. It holds no design: how each part works is in the docs repo
-(`../objectio-docs/`, below), which is the one place it is written down.
+(`../iolake-docs/`, below), which is the one place it is written down.
 
 The rules every contributor follows, and how a change gets in, are in
 `CONTRIBUTING.md`; this file adds what a maintainer's agent needs on top
 (the docs repo, the tracking). Two skills in `.claude/skills/` walk the
-work: `objectio-contribute` (issue to merge) and `objectio-testing`.
+work: `iolake-contribute` (issue to merge) and `iolake-testing`.
 
 ## Rules
 
 - **Issue first.** Work is tracked as issues on this repo, labelled
   `area:<domain>` (s3, core, datalake, security, block, file, platform,
   ci, docs), milestoned to a release and on the
-  [ObjectIO project](https://github.com/orgs/object-io/projects/1); each
-  is a line in `../objectio-docs/ROADMAP.md` linking it. Before any work
+  [IOLake project](https://github.com/orgs/io-lake/projects/1); each
+  is a line in `../iolake-docs/ROADMAP.md` linking it. Before any work
   on a new feature, even one asked for directly, find or open its issue
   (and its roadmap line), set it In progress, then start; the PR closes
   it. The docs PR that documents it moves its line from `ROADMAP.md` into
@@ -37,7 +37,7 @@ work: `objectio-contribute` (issue to merge) and `objectio-testing`.
 
 ## Where to look
 
-In `../objectio-docs/` (clone it next to this repo):
+In `../iolake-docs/` (clone it next to this repo):
 
 | For | Read |
 |---|---|
@@ -57,9 +57,9 @@ explanation; if they're wrong, fix them in the same PR.
 
 ```bash
 make build | build-release | test | lint | fmt | fmt-fix | ci | coverage
-cargo test -p objectio-erasure                          # one crate
-cargo test -p objectio-e2e --test <file>                # e2e: spawns target/debug binaries; build them first
-cargo build --bin objectio-aio --bin obioctl --bin objectio-meta --bin objectio-osd --bin objectio-gateway --bin objectio-block-gateway --bin objectio-install
+cargo test -p iolake-erasure                          # one crate
+cargo test -p iolake-e2e --test <file>                # e2e: spawns target/debug binaries; build them first
+cargo build --bin iolake-aio --bin iolakectl --bin iolake-meta --bin iolake-osd --bin iolake-gateway --bin iolake-block-gateway --bin iolake-install
 ```
 
 - Needs `protoc`, and for ISA-L (every build erasure-codes with it, on
@@ -69,9 +69,9 @@ cargo build --bin objectio-aio --bin obioctl --bin objectio-meta --bin objectio-
   only where a crate opts into `[lints] workspace = true` (today 5 of the
   17 library crates and 3 of the 10 binaries).
 - Without local Rust: `docker compose run --rm build|test|lint|fmt|dev`.
-- Local cluster: `objectio-aio` (meta + OSD + gateway in one process; see
+- Local cluster: `iolake-aio` (meta + OSD + gateway in one process; see
   the README quickstart), or kind: `make kind-up | kind-up-registry |
-  kind-load | kind-down` (`deploy/kind/`, chart in `deploy/helm/objectio/`).
+  kind-load | kind-down` (`deploy/kind/`, chart in `deploy/helm/iolake/`).
 - Console: `cd console && npm install && npm run build | dev | lint`
   (see `console/README.md`).
 - Docs repo: `python3 scripts/docs.py index` then `check` before a docs PR.
@@ -80,10 +80,10 @@ cargo build --bin objectio-aio --bin obioctl --bin objectio-meta --bin objectio-
 
 Every library is in `crates/`, the services' code included; `bin/` holds
 the binaries: a service's is a thin `main.rs` around its crate's `run()`,
-so `objectio-aio` can run them all in one process. Directories drop the
+so `iolake-aio` can run them all in one process. Directories drop the
 prefix; packages and binaries keep it: `crates/gateway` is the package
-`objectio-gateway` (`use objectio_gateway`), `bin/gateway` is the package
-`objectio-gateway-bin` that builds the binary `objectio-gateway`.
+`iolake-gateway` (`use iolake_gateway`), `bin/gateway` is the package
+`iolake-gateway-bin` that builds the binary `iolake-gateway`.
 
 | | Port | What |
 |---|---|---|
@@ -93,7 +93,7 @@ prefix; packages and binaries keep it: `crates/gateway` is the package
 | `crates/block-gateway` | 9300 gRPC, 10809 NBD | Block volumes |
 | `bin/{gateway,meta,osd,block-gateway}` | | Their binaries |
 | `bin/aio` | | All of the above in one process |
-| `bin/cli` | | `obioctl`, the admin CLI: a SigV4 client of the gateway's admin API only (`bin/cli/README.md`) |
+| `bin/cli` | | `iolakectl`, the admin CLI: a SigV4 client of the gateway's admin API only (`bin/cli/README.md`) |
 | `bin/{install,io-bench,s3-bench,dedup-estimate}` | | Tools |
 | `crates/common` | | `Error`/`Result`, shared types, metrics, format levels (`version`) |
 | `crates/proto` | | gRPC definitions (`proto/*.proto`, built by its `build.rs`); meta channel and mTLS (`transport`); which role may make each call (`peer_auth`) |
@@ -111,7 +111,7 @@ prefix; packages and binaries keep it: `crates/gateway` is the package
 ## Code conventions
 
 - Rust 2024, rustc ≥ 1.93; Tokio, Axum 0.8, Tonic 0.12 / Prost 0.13.
-- Errors: `objectio_common::Error` everywhere except `objectio-block`,
+- Errors: `iolake_common::Error` everywhere except `iolake-block`,
   which has its own `BlockError`/`BlockResult`; don't mix them.
 - Unit tests sit in their source file (`#[cfg(test)] mod tests`);
   `#[tokio::test]` for async. Behaviour across processes goes in

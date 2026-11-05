@@ -1,4 +1,4 @@
-package objectio
+package iolake
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 type Bucket struct {
 	Name      string `json:"name"`
 	CreatedAt int64  `json:"created_at,omitempty"`
-	// Owner is the creator's user_id. With no policy attached, ObjectIO
+	// Owner is the creator's user_id. With no policy attached, IOLake
 	// authorizes on ownership alone — so this decides who can reach the
 	// bucket by default.
 	Owner      string `json:"owner,omitempty"`
@@ -72,7 +72,7 @@ func (c *Client) SetBucketOwner(ctx context.Context, bucket, ownerUserID string)
 
 // GetBucketPolicy returns the attached policy, or nil when there is none.
 //
-// No policy does not mean open: ObjectIO then falls back to owner-only.
+// No policy does not mean open: IOLake then falls back to owner-only.
 func (c *Client) GetBucketPolicy(ctx context.Context, bucket string) (json.RawMessage, error) {
 	var out struct {
 		HasPolicy bool            `json:"has_policy"`
@@ -200,13 +200,13 @@ type ProvisionBucketInput struct {
 // CreateAccessKey directly when you only want to rotate the credential.
 func (c *Client) ProvisionBucket(ctx context.Context, in ProvisionBucketInput) (*BucketAccess, error) {
 	if in.Bucket == "" {
-		return nil, fmt.Errorf("objectio: Bucket is required")
+		return nil, fmt.Errorf("iolake: Bucket is required")
 	}
 	if in.ProvisionerUserID == "" {
-		return nil, fmt.Errorf("objectio: ProvisionerUserID is required")
+		return nil, fmt.Errorf("iolake: ProvisionerUserID is required")
 	}
 	if in.Prefix != "" && in.Prefix[len(in.Prefix)-1] != '/' {
-		return nil, fmt.Errorf("objectio: Prefix %q must end in /", in.Prefix)
+		return nil, fmt.Errorf("iolake: Prefix %q must end in /", in.Prefix)
 	}
 
 	if err := c.CreateBucket(ctx, in.Bucket, in.Tenant); err != nil {
@@ -226,7 +226,7 @@ func (c *Client) ProvisionBucket(ctx context.Context, in ProvisionBucketInput) (
 		// The bucket exists but has no credential. Leave it: deleting it here
 		// would destroy a bucket that may already be taking writes from an
 		// earlier run, and the caller can retry the key on its own.
-		return nil, fmt.Errorf("objectio: bucket %q created but minting its key failed: %w", in.Bucket, err)
+		return nil, fmt.Errorf("iolake: bucket %q created but minting its key failed: %w", in.Bucket, err)
 	}
 
 	return &BucketAccess{
@@ -252,7 +252,7 @@ func (c *Client) DeprovisionBucket(ctx context.Context, provisionerUserID, bucke
 	for _, k := range keys {
 		if k.Scope == want || (len(k.Scope) > len(want) && k.Scope[:len(want)] == want) {
 			if err := c.DeleteAccessKey(ctx, k.AccessKeyID); err != nil {
-				return fmt.Errorf("objectio: revoking %s: %w", k.AccessKeyID, err)
+				return fmt.Errorf("iolake: revoking %s: %w", k.AccessKeyID, err)
 			}
 		}
 	}

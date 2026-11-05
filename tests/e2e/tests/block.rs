@@ -2,11 +2,11 @@
 //! `--block-port`: what a VM's disk needs from it — what was written reads
 //! back, across restarts, whatever the size and alignment of the writes.
 
-use objectio_e2e::Cluster;
-use objectio_proto::block::block_service_client::BlockServiceClient;
+use iolake_e2e::Cluster;
+use iolake_proto::block::block_service_client::BlockServiceClient;
 use std::time::{Duration, Instant};
 
-use objectio_proto::block::{
+use iolake_proto::block::{
     AttachVolumeRequest, CloneVolumeRequest, CreateSnapshotRequest, CreateVolumeRequest,
     DeleteSnapshotRequest, DeleteVolumeRequest, DetachVolumeRequest, FlushRequest,
     ListVolumesRequest, ReadRequest, TargetType, TrimRequest, WriteRequest,
@@ -50,7 +50,7 @@ impl Block {
         let url = format!("127.0.0.1:{}", self.port);
         self.rt.block_on(async {
             for _ in 0..100 {
-                if let Ok(c) = objectio_e2e::tls::channel(&url).await {
+                if let Ok(c) = iolake_e2e::tls::channel(&url).await {
                     return BlockServiceClient::new(c).max_decoding_message_size(64 << 20);
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -264,7 +264,7 @@ fn io_past_the_end_of_a_volume_is_refused() {
 /// without it.
 #[test]
 fn unimplemented_calls_fail_as_unimplemented() {
-    use objectio_proto::block::{
+    use iolake_proto::block::{
         GetClusterMetricsRequest, GetIoTraceRequest, GetOsdMetricsRequest, GetVolumeStatsRequest,
         ListOsdMetricsRequest, UpdateVolumeQosRequest, VolumeQos,
     };
@@ -481,7 +481,7 @@ fn a_lost_disk_is_rebuilt_for_block_chunks_too() {
     let rebuilt = |b: &Block| {
         metric(
             &b.cluster,
-            "objectio_meta_repair_shards_rebuilt_total",
+            "iolake_meta_repair_shards_rebuilt_total",
             &["reason=\"missing\""],
         )
     };
@@ -914,7 +914,7 @@ fn a_volume_with_small_chunks_keeps_its_data_and_its_chunk_size() {
     let cloned =
         b.rt.block_on(
             b.client()
-                .get_volume(objectio_proto::block::GetVolumeRequest { volume_id: clone }),
+                .get_volume(iolake_proto::block::GetVolumeRequest { volume_id: clone }),
         )
         .unwrap()
         .into_inner()

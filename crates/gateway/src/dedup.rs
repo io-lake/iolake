@@ -1,6 +1,6 @@
 //! Deduplication: chunking, fingerprints, and the phase-1 dry-run.
 //!
-//! Design: objectio-docs `architecture/design/core/dedup.md`. Dry-run measures
+//! Design: iolake-docs `architecture/design/core/dedup.md`. Dry-run measures
 //! what dedup would save without changing how anything is stored: after a
 //! PUT or UploadPart has answered, its body is cut into content-defined
 //! chunks, each chunk fingerprinted within the bucket's dedup domain, and
@@ -12,9 +12,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use bytes::Bytes;
-use objectio_proto::metadata::LocateChunksRequest;
-use objectio_proto::metadata::metadata_service_client::MetadataServiceClient;
-use objectio_proto::storage::NoteChunksRequest;
+use iolake_proto::metadata::LocateChunksRequest;
+use iolake_proto::metadata::metadata_service_client::MetadataServiceClient;
+use iolake_proto::storage::NoteChunksRequest;
 use tokio::sync::mpsc;
 use tonic::transport::Channel;
 use tracing::debug;

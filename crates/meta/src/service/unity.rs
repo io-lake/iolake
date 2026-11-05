@@ -123,7 +123,7 @@ impl MetaService {
     pub(super) fn lookup_unity_function(
         &self,
         full_name: &str,
-    ) -> Result<objectio_proto::metadata::UnityFunction, Status> {
+    ) -> Result<iolake_proto::metadata::UnityFunction, Status> {
         let parts: Vec<&str> = full_name.split('.').collect();
         if parts.len() != 3 {
             return Err(Status::invalid_argument(format!(
@@ -197,7 +197,7 @@ impl MetaService {
         let catalog_bytes = catalog.encode_to_vec();
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![
                     CasOp {
@@ -311,7 +311,7 @@ impl MetaService {
         let new_bytes = updated.encode_to_vec();
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let cmd = MetaCommand::MultiCas {
                 ops: vec![CasOp {
                     table: CasTable::UnityCatalogs,
@@ -383,7 +383,7 @@ impl MetaService {
         }
 
         if let Some(raft) = self.raft_handle() {
-            use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
             let mut ops = vec![CasOp {
                 table: CasTable::UnityCatalogs,
                 key: req.name.clone(),
@@ -679,7 +679,7 @@ impl MetaService {
     /// there are no registered external locations granting more.
     #[allow(clippy::result_large_err)] // the Status the RPC returns, as is
     fn unity_confine(location: &str, catalog: &UnityCatalog) -> Result<(), Status> {
-        if objectio_common::location::within(location, &catalog.location) {
+        if iolake_common::location::within(location, &catalog.location) {
             Ok(())
         } else {
             Err(Status::invalid_argument(format!(

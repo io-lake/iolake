@@ -1,9 +1,9 @@
-//! Object metadata at quorum (objectio-docs core/object-metadata-quorum.md):
+//! Object metadata at quorum (iolake-docs core/object-metadata-quorum.md):
 //! the copies of an object's `ObjectMeta`, one per OSD of its placement.
 
 use std::time::Duration;
 
-use objectio_e2e::ha::HaCluster;
+use iolake_e2e::ha::HaCluster;
 
 fn payload(len: usize, seed: u8) -> Vec<u8> {
     (0..len)
@@ -55,7 +55,7 @@ fn a_copy_that_missed_a_write_never_wins_a_read() {
 }
 
 /// Wait until a PUT succeeds: every OSD up and reachable again.
-fn await_writable(c: &objectio_e2e::Cluster) {
+fn await_writable(c: &iolake_e2e::Cluster) {
     let deadline = std::time::Instant::now() + Duration::from_secs(60);
     while c.request("PUT", "/quorum/probe", b"probe").status != 200 {
         assert!(std::time::Instant::now() < deadline, "writes never resumed");
@@ -268,14 +268,14 @@ fn node_ids(ha: &HaCluster) -> Vec<String> {
 
 /// Each OSD's copy of `quorum/key`: its object id, or None.
 fn copies(ha: &HaCluster, key: &str) -> Vec<Option<Vec<u8>>> {
-    use objectio_proto::storage::GetObjectMetaRequest;
-    use objectio_proto::storage::storage_service_client::StorageServiceClient;
+    use iolake_proto::storage::GetObjectMetaRequest;
+    use iolake_proto::storage::storage_service_client::StorageServiceClient;
     let rt = tokio::runtime::Runtime::new().unwrap();
     (0..6)
         .map(|i| {
             let address = ha.osd_endpoint(i).trim_start_matches("http://").to_string();
             rt.block_on(async {
-                let r = StorageServiceClient::new(objectio_e2e::tls::channel(&address).await.ok()?)
+                let r = StorageServiceClient::new(iolake_e2e::tls::channel(&address).await.ok()?)
                     .get_object_meta(GetObjectMetaRequest {
                         bucket: "quorum".to_string(),
                         key: key.to_string(),
@@ -530,14 +530,14 @@ fn overwrites_racing_a_drives_fill_leave_nothing_behind() {
 
 /// Every OSD's shards: (object id prefix, position, size).
 fn shards(ha: &HaCluster) -> Vec<Vec<(String, u32, u32)>> {
-    use objectio_proto::storage::ListShardsRequest;
-    use objectio_proto::storage::storage_service_client::StorageServiceClient;
+    use iolake_proto::storage::ListShardsRequest;
+    use iolake_proto::storage::storage_service_client::StorageServiceClient;
     let rt = tokio::runtime::Runtime::new().unwrap();
     (0..6)
         .map(|i| {
             let address = ha.osd_endpoint(i).trim_start_matches("http://").to_string();
             rt.block_on(async {
-                let Ok(channel) = objectio_e2e::tls::channel(&address).await else {
+                let Ok(channel) = iolake_e2e::tls::channel(&address).await else {
                     return Vec::new();
                 };
                 let Ok(r) = StorageServiceClient::new(channel)

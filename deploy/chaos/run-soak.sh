@@ -116,9 +116,9 @@ echo "$(date +%T) run $run: $profile soak of ${commit:0:8} $subject"
 
 cd "$repo"
 cargo build --release --features io-uring \
-    --bin objectio-meta --bin objectio-osd --bin objectio-gateway > "$dir/build.log" 2>&1 ||
+    --bin iolake-meta --bin iolake-osd --bin iolake-gateway > "$dir/build.log" 2>&1 ||
     { echo "run $run: the build failed, $dir/build.log" >&2; exit 1; }
-cp target/release/objectio-meta target/release/objectio-osd target/release/objectio-gateway "$home/bin/"
+cp target/release/iolake-meta target/release/iolake-osd target/release/iolake-gateway "$home/bin/"
 "$harness/cluster.sh" down > "$dir/cluster-down.log" 2>&1
 "$harness/cluster.sh" up "$home/bin" > "$dir/cluster-up.log" 2>&1
 

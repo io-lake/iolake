@@ -2,8 +2,8 @@
 
 use crate::shard_store::{BlockStore, Disks, ShardInfo, ShardStore, write_failed};
 use futures::stream::Stream;
-use objectio_proto::metadata::ObjectMeta;
-use objectio_proto::storage::{
+use iolake_proto::metadata::ObjectMeta;
+use iolake_proto::storage::{
     AffectedObject,
     AffectedShardRef,
     BlockLocation,
@@ -59,7 +59,7 @@ use objectio_proto::storage::{
     health_check_response::Status as HealthStatus,
     storage_service_server::StorageService,
 };
-use objectio_storage::metadata::{MetaIndex, MetadataKey, MetadataOp, MetadataStoreConfig};
+use iolake_storage::metadata::{MetaIndex, MetadataKey, MetadataOp, MetadataStoreConfig};
 use prost::Message;
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -128,13 +128,13 @@ impl GrpcMetrics {
         ];
         for (name, help, load) in [
             (
-                "objectio_osd_grpc_bytes_received_total",
+                "iolake_osd_grpc_bytes_received_total",
                 "Bytes of shard requests received, by method",
                 (|m: &GrpcMethodMetrics| m.bytes_received.load(Ordering::Relaxed))
                     as fn(&GrpcMethodMetrics) -> u64,
             ),
             (
-                "objectio_osd_grpc_bytes_sent_total",
+                "iolake_osd_grpc_bytes_sent_total",
                 "Bytes of shard responses sent, by method",
                 |m: &GrpcMethodMetrics| m.bytes_sent.load(Ordering::Relaxed),
             ),
@@ -196,7 +196,7 @@ fn blocking<T>(f: impl FnOnce() -> T) -> T {
 }
 
 /// Dedup dry-run: chunk fingerprints this OSD has been told about, each
-/// with how many times. See objectio-docs `architecture/design/core/dedup.md`.
+/// with how many times. See iolake-docs `architecture/design/core/dedup.md`.
 const DEDUP_NOTE_PREFIX: &[u8] = b"dedup_note:";
 
 fn dedup_note_key(fingerprint: &[u8]) -> MetadataKey {
@@ -210,7 +210,7 @@ pub use crate::shard_store::DEFAULT_FULL_RATIO;
 const SAFETY_EVERY: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// A count of objects at risk: when, and for which nodes up.
-type SafetyCount = (Instant, Vec<Vec<u8>>, objectio_proto::storage::ObjectSafety);
+type SafetyCount = (Instant, Vec<Vec<u8>>, iolake_proto::storage::ObjectSafety);
 
 /// The last count of objects at risk, for which set of nodes up, and when;
 /// and the one scan that may be running.
@@ -324,7 +324,7 @@ impl OsdService {
         let mut meta_config = MetadataStoreConfig::with_data_dir(&data_dir);
         tune(&mut meta_config);
         let meta_dir = meta_config.data_dir.clone();
-        let meta_store = objectio_storage::metadata::open(meta_config)
+        let meta_store = iolake_storage::metadata::open(meta_config)
             .map_err(|e| format!("Failed to open metadata store: {}", e))?;
         let disks = Disks::open(&disk_paths, block_size, meta_store.as_ref())?;
         let node_id = disks.identity(&data_dir.join("node_id"))?;
@@ -336,7 +336,7 @@ impl OsdService {
         );
         let meta_store: Arc<dyn MetaIndex> = Arc::clone(&pg_index) as Arc<dyn MetaIndex>;
         // PG summaries and bucket usage are counted after the OSD serves,
-        // a chunk of the index at a time while writes go on (objectio-docs
+        // a chunk of the index at a time while writes go on (iolake-docs
         // `core/osd-start.md`).
         let usage = Arc::new(UsageTracker::new(node_id));
         usage.start_counting();
@@ -411,7 +411,7 @@ impl OsdService {
         &self,
         src: &RdmaBuffer,
         checksum: Option<&Checksum>,
-    ) -> Result<(objectio_transport_te::Slot, usize), Status> {
+    ) -> Result<(iolake_transport_te::Slot, usize), Status> {
         #[cfg(feature = "rdma")]
         {
             let staging = self
@@ -460,7 +460,7 @@ impl OsdService {
     /// second gets the last count, whatever it was for. Every gateway polls
     /// every OSD, every few seconds with quotas set: each poll was a scan
     /// of every ObjectMeta here.
-    fn object_safety(&self, up: Vec<Vec<u8>>) -> objectio_proto::storage::ObjectSafety {
+    fn object_safety(&self, up: Vec<Vec<u8>>) -> iolake_proto::storage::ObjectSafety {
         let cached = || {
             self.safety
                 .last
@@ -505,7 +505,7 @@ impl OsdService {
     }
 
     /// Per-bucket usage of the objects this OSD is primary for.
-    pub fn bucket_usage(&self) -> Vec<objectio_proto::storage::BucketUsage> {
+    pub fn bucket_usage(&self) -> Vec<iolake_proto::storage::BucketUsage> {
         self.usage.snapshot()
     }
 
@@ -562,13 +562,13 @@ impl OsdService {
     /// passes its checksum: sent with the object's metadata, so a small GET
     /// needs no shard read. A shard that fails is marked for rebuilding and
     /// not sent; the reader then reads the others.
-    fn small_shard_of(&self, object: &ObjectMeta) -> Option<objectio_proto::storage::SmallShard> {
+    fn small_shard_of(&self, object: &ObjectMeta) -> Option<iolake_proto::storage::SmallShard> {
         let stripe = object.stripes.first().filter(|s| s.shards_in_metadata)?;
         let mine = stripe
             .shards
             .iter()
             .find(|s| s.node_id.as_slice() == self.node_id.as_slice())?;
-        self.shards.small_shard(&objectio_proto::storage::ShardId {
+        self.shards.small_shard(&iolake_proto::storage::ShardId {
             object_id: stripe.object_id.clone(),
             stripe_id: stripe.stripe_id,
             position: mine.position,
@@ -624,31 +624,31 @@ impl OsdService {
         let corrupt_now = self.shards.corrupt_now();
         for (name, kind, help, v) in [
             (
-                "objectio_osd_scrub_passes_total",
+                "iolake_osd_scrub_passes_total",
                 "counter",
                 "Completed scrub passes",
                 self.scrub.passes.load(Ordering::Relaxed),
             ),
             (
-                "objectio_osd_scrub_shards_total",
+                "iolake_osd_scrub_shards_total",
                 "counter",
                 "Shards read and checked by the scrubber",
                 self.scrub.shards.load(Ordering::Relaxed),
             ),
             (
-                "objectio_osd_scrub_bytes_total",
+                "iolake_osd_scrub_bytes_total",
                 "counter",
                 "Bytes read and checked by the scrubber",
                 self.scrub.bytes.load(Ordering::Relaxed),
             ),
             (
-                "objectio_osd_corrupt_shards_found_total",
+                "iolake_osd_corrupt_shards_found_total",
                 "counter",
                 "Shards found failing their checksum, by the scrubber or a read",
                 self.shards.corrupt_found(),
             ),
             (
-                "objectio_osd_corrupt_shards",
+                "iolake_osd_corrupt_shards",
                 "gauge",
                 "Corrupt shards on this OSD not yet rebuilt",
                 corrupt_now,
@@ -660,12 +660,12 @@ impl OsdService {
         }
         for (name, help, v) in [
             (
-                "objectio_osd_scrub_last_pass_seconds",
+                "iolake_osd_scrub_last_pass_seconds",
                 "How long the last completed scrub pass took",
                 self.scrub.last_pass_ms.load(Ordering::Relaxed) as f64 / 1000.0,
             ),
             (
-                "objectio_osd_scrub_last_pass_timestamp_seconds",
+                "iolake_osd_scrub_last_pass_timestamp_seconds",
                 "When the last scrub pass completed (Unix time; 0: none yet)",
                 self.scrub.last_pass_end.load(Ordering::Relaxed) as f64,
             ),
@@ -678,7 +678,7 @@ impl OsdService {
     /// Scrub what entry `e` names on this OSD: read back each of its shards
     /// here, checking it (a read that fails marks it corrupt), and add what
     /// was read, and what is missing or bad, to `out`.
-    async fn scrub_entry(&self, e: &objectio_proto::storage::PgEntry, out: &mut ScrubPgResponse) {
+    async fn scrub_entry(&self, e: &iolake_proto::storage::PgEntry, out: &mut ScrubPgResponse) {
         let at = if e.version_id.is_empty() {
             MetadataKey::object_meta(&e.bucket, &e.key)
         } else {
@@ -702,16 +702,16 @@ impl OsdService {
                 stripe.object_id.clone()
             };
             for position in mine {
-                let id = objectio_proto::storage::ShardId {
+                let id = iolake_proto::storage::ShardId {
                     object_id: shard_object.clone(),
                     stripe_id: stripe.stripe_id,
                     position,
                 };
                 out.shards += 1;
                 let bad = match self.shards.state(&id) {
-                    objectio_proto::storage::ShardState::Missing => Some(false),
-                    objectio_proto::storage::ShardState::Corrupt => Some(true),
-                    objectio_proto::storage::ShardState::Ok => match self.shards.read(&id).await {
+                    iolake_proto::storage::ShardState::Missing => Some(false),
+                    iolake_proto::storage::ShardState::Corrupt => Some(true),
+                    iolake_proto::storage::ShardState::Ok => match self.shards.read(&id).await {
                         Ok((data, _)) => {
                             out.bytes += data.len() as u64;
                             None
@@ -760,12 +760,12 @@ impl OsdService {
                 stripe.object_id.clone()
             };
             for position in mine {
-                let id = objectio_proto::storage::ShardId {
+                let id = iolake_proto::storage::ShardId {
                     object_id: shard_object.clone(),
                     stripe_id: stripe.stripe_id,
                     position,
                 };
-                if self.shards.state(&id) == objectio_proto::storage::ShardState::Ok {
+                if self.shards.state(&id) == iolake_proto::storage::ShardState::Ok {
                     held += 1;
                 }
             }
@@ -1272,8 +1272,8 @@ impl StorageService for OsdService {
 
     async fn purge(
         &self,
-        request: Request<objectio_proto::storage::PurgeRequest>,
-    ) -> Result<Response<objectio_proto::storage::PurgeResponse>, Status> {
+        request: Request<iolake_proto::storage::PurgeRequest>,
+    ) -> Result<Response<iolake_proto::storage::PurgeResponse>, Status> {
         let req = request.into_inner();
         if req.node_id.as_slice() != self.node_id.as_slice() {
             return Err(Status::invalid_argument("purge names another OSD; refused"));
@@ -1298,7 +1298,7 @@ impl StorageService for OsdService {
         }
         self.usage.rebuild(std::iter::empty());
         info!("Purged: {shards} shards, {entries} metadata entries");
-        Ok(Response::new(objectio_proto::storage::PurgeResponse {
+        Ok(Response::new(iolake_proto::storage::PurgeResponse {
             shards,
             entries,
         }))
@@ -1332,18 +1332,16 @@ impl StorageService for OsdService {
 
     async fn get_metrics(
         &self,
-        _request: Request<objectio_proto::metadata::GetMetricsRequest>,
-    ) -> Result<Response<objectio_proto::metadata::GetMetricsResponse>, Status> {
+        _request: Request<iolake_proto::metadata::GetMetricsRequest>,
+    ) -> Result<Response<iolake_proto::metadata::GetMetricsResponse>, Status> {
         let render = || self.metrics_renderer.get().map(|f| f()).unwrap_or_default();
         // SMART polling may shell out to smartctl; don't stall a runtime
         // worker on it where the runtime allows moving off.
         let text = blocking(render);
-        Ok(Response::new(
-            objectio_proto::metadata::GetMetricsResponse {
-                text,
-                process_instance: objectio_common::process_metrics::instance_id().to_string(),
-            },
-        ))
+        Ok(Response::new(iolake_proto::metadata::GetMetricsResponse {
+            text,
+            process_instance: iolake_common::process_metrics::instance_id().to_string(),
+        }))
     }
 
     async fn write_shard(
@@ -1610,7 +1608,7 @@ impl StorageService for OsdService {
             None
         } else {
             Some(
-                objectio_proto::storage::ShardId::decode(req.continuation_token.as_slice())
+                iolake_proto::storage::ShardId::decode(req.continuation_token.as_slice())
                     .map_err(|e| Status::invalid_argument(format!("continuation token: {e}")))?,
             )
         };
@@ -2203,7 +2201,7 @@ impl StorageService for OsdService {
             })
             .filter(|a| a.0 > prefix.0);
         let entries =
-            objectio_storage::metadata::iter_prefix(&*self.meta_store, prefix.clone(), after);
+            iolake_storage::metadata::iter_prefix(&*self.meta_store, prefix.clone(), after);
 
         let mut objects = Vec::new();
         let mut count = 0;
@@ -2313,7 +2311,7 @@ impl StorageService for OsdService {
             let Some((bucket, key)) = meta_key.parse_object_meta() else {
                 continue;
             };
-            let Ok(object) = objectio_proto::metadata::ObjectMeta::decode(&value[..]) else {
+            let Ok(object) = iolake_proto::metadata::ObjectMeta::decode(&value[..]) else {
                 continue;
             };
 
@@ -2381,7 +2379,7 @@ impl StorageService for OsdService {
             .then(|| MetadataKey::object_meta(&req.bucket, cursor))
             .filter(|a| a.0 > prefix.0);
         let entries =
-            objectio_storage::metadata::iter_prefix(Arc::clone(&self.meta_store), prefix, after);
+            iolake_storage::metadata::iter_prefix(Arc::clone(&self.meta_store), prefix, after);
 
         let stream = futures::stream::unfold(Some(entries), |state| async move {
             let mut entries = state?;
@@ -2461,7 +2459,7 @@ impl StorageService for OsdService {
         let mut v_keys = 0usize;
         let mut v_last = String::new();
         for (meta_key, value) in
-            objectio_storage::metadata::iter_prefix(&*self.meta_store, v_prefix.clone(), v_after)
+            iolake_storage::metadata::iter_prefix(&*self.meta_store, v_prefix.clone(), v_after)
         {
             let Some((_, key, _)) = meta_key.parse_object_version() else {
                 continue;
@@ -2496,7 +2494,7 @@ impl StorageService for OsdService {
         for (meta_key, value) in
             marker_current
                 .into_iter()
-                .chain(objectio_storage::metadata::iter_prefix(
+                .chain(iolake_storage::metadata::iter_prefix(
                     &*self.meta_store,
                     m_prefix.clone(),
                     m_after,
@@ -2567,7 +2565,7 @@ const NULL_VERSION: &str = "null";
 /// id (a UUIDv7 too) does; older ids fall back to the modification time,
 /// in seconds. The gateway orders versions the same way.
 /// Whether `stored` is a newer write than `incoming`, so this copy keeps it
-/// (objectio-docs core/object-metadata-quorum.md): the newer object wins
+/// (iolake-docs core/object-metadata-quorum.md): the newer object wins
 /// (higher stamp, then higher object id, so every copy picks the same), and
 /// between copies of one object the later update. An update keeps its
 /// object's stamp, so it never outranks a newer object written meanwhile.
@@ -2689,8 +2687,8 @@ mod grpc_write_tests {
 
     use super::*;
     use crate::shard_store::LOCATION_RECORDS_FAIL;
-    use objectio_proto::storage::ShardId;
-    use objectio_proto::storage::storage_service_server::StorageService;
+    use iolake_proto::storage::ShardId;
+    use iolake_proto::storage::storage_service_server::StorageService;
 
     fn osd() -> (tempfile::TempDir, OsdService) {
         let dir = tempfile::tempdir().unwrap();
@@ -2730,7 +2728,7 @@ mod grpc_write_tests {
         {
             let f = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
             f.write_all_at(&damage, 0).unwrap();
-            f.write_all_at(&damage, objectio_storage::layout::BACKUP_SUPERBLOCK_OFFSET)
+            f.write_all_at(&damage, iolake_storage::layout::BACKUP_SUPERBLOCK_OFFSET)
                 .unwrap();
             f.sync_all().unwrap();
         }
@@ -2823,9 +2821,9 @@ mod grpc_write_tests {
     #[tokio::test]
     async fn an_osd_dropped_while_it_counts_opens_again_at_once() {
         let (dir, osd) = osd();
-        let o = objectio_proto::metadata::ObjectMeta {
+        let o = iolake_proto::metadata::ObjectMeta {
             size: 1,
-            stripes: vec![objectio_proto::metadata::StripeMeta::default()],
+            stripes: vec![iolake_proto::metadata::StripeMeta::default()],
             ..Default::default()
         }
         .encode_to_vec();
@@ -2891,8 +2889,7 @@ mod grpc_write_tests {
         drop(osd);
         let osd = reopen(&dir);
         assert_eq!(&read_back(&osd).await.unwrap().data[..], &data[..]);
-        let one_shard =
-            objectio_storage::DiskManager::blocks_for(data.len(), 64 * 1024) * 64 * 1024;
+        let one_shard = iolake_storage::DiskManager::blocks_for(data.len(), 64 * 1024) * 64 * 1024;
         assert_eq!(
             free_space(&osd),
             free_before - one_shard,
@@ -2978,9 +2975,9 @@ mod integrity_tests {
 
     use super::*;
     use crate::shard_store::META_SPACE_LOW;
-    use objectio_proto::storage::ShardId;
-    use objectio_proto::storage::ShardState;
-    use objectio_proto::storage::storage_service_server::StorageService;
+    use iolake_proto::storage::ShardId;
+    use iolake_proto::storage::ShardState;
+    use iolake_proto::storage::storage_service_server::StorageService;
 
     fn osd() -> (tempfile::TempDir, OsdService) {
         let dir = tempfile::tempdir().unwrap();
@@ -3049,11 +3046,11 @@ mod integrity_tests {
     /// Store `data` as this OSD's small shard of object `b/k` (position 0),
     /// sent with its metadata as a gateway does (B21).
     async fn put_small(osd: &OsdService, data: &[u8]) {
-        use objectio_proto::storage::{PutObjectMetaRequest, SmallShard};
+        use iolake_proto::storage::{PutObjectMetaRequest, SmallShard};
         osd.put_object_meta(Request::new(PutObjectMetaRequest {
             bucket: "b".into(),
             key: "k".into(),
-            object: Some(objectio_proto::metadata::ObjectMeta {
+            object: Some(iolake_proto::metadata::ObjectMeta {
                 bucket: "b".into(),
                 key: "k".into(),
                 object_id: vec![7; 16],
@@ -3076,7 +3073,7 @@ mod integrity_tests {
     /// of its shards as asked for, not those of one unfiltered page.
     #[tokio::test]
     async fn list_shards_pages_by_its_token() {
-        use objectio_proto::storage::ListShardsRequest;
+        use iolake_proto::storage::ListShardsRequest;
         let (_dir, osd) = osd();
         let data = payload(1);
         let mut all = Vec::new();
@@ -3220,19 +3217,19 @@ mod integrity_tests {
     /// word for it is the cluster's.
     #[tokio::test]
     async fn a_small_shard_comes_with_its_metadata() {
-        use objectio_proto::storage::{GetObjectMetaRequest, PutObjectMetaRequest, SmallShard};
+        use iolake_proto::storage::{GetObjectMetaRequest, PutObjectMetaRequest, SmallShard};
         let (_dir, osd) = osd();
         let data: Vec<u8> = (0..12_000u32).map(|i| (i % 253) as u8).collect();
-        let object = objectio_proto::metadata::ObjectMeta {
+        let object = iolake_proto::metadata::ObjectMeta {
             bucket: "b".into(),
             key: "k".into(),
             object_id: vec![7; 16],
             size: 48_000,
             stamp: 10,
-            stripes: vec![objectio_proto::metadata::StripeMeta {
+            stripes: vec![iolake_proto::metadata::StripeMeta {
                 object_id: vec![7; 16],
                 shards_in_metadata: true,
-                shards: vec![objectio_proto::metadata::ShardLocation {
+                shards: vec![iolake_proto::metadata::ShardLocation {
                     position: 3,
                     node_id: osd.node_id.to_vec(),
                     ..Default::default()
@@ -3308,19 +3305,19 @@ mod integrity_tests {
     /// isn't sent with the metadata (the reader reads it).
     #[tokio::test]
     async fn a_small_shard_goes_to_a_block_when_the_index_is_short_of_room() {
-        use objectio_proto::storage::{GetObjectMetaRequest, PutObjectMetaRequest, SmallShard};
+        use iolake_proto::storage::{GetObjectMetaRequest, PutObjectMetaRequest, SmallShard};
         META_SPACE_LOW.with(|c| c.set(true));
         let (_dir, osd) = osd();
         let data: Vec<u8> = (0..11_000u32).map(|i| (i % 239) as u8).collect();
-        let object = objectio_proto::metadata::ObjectMeta {
+        let object = iolake_proto::metadata::ObjectMeta {
             bucket: "b".into(),
             key: "k".into(),
             object_id: vec![7; 16],
             stamp: 10,
-            stripes: vec![objectio_proto::metadata::StripeMeta {
+            stripes: vec![iolake_proto::metadata::StripeMeta {
                 object_id: vec![7; 16],
                 shards_in_metadata: true,
-                shards: vec![objectio_proto::metadata::ShardLocation {
+                shards: vec![iolake_proto::metadata::ShardLocation {
                     position: 1,
                     node_id: osd.node_id.to_vec(),
                     ..Default::default()
@@ -3372,14 +3369,14 @@ mod integrity_tests {
     /// any order) is kept as a version only, and its small shard with it.
     #[tokio::test]
     async fn an_older_replica_keeps_its_small_shard() {
-        use objectio_proto::storage::{PutObjectMetaRequest, SmallShard};
+        use iolake_proto::storage::{PutObjectMetaRequest, SmallShard};
         let (_dir, osd) = osd();
         let data: Vec<u8> = (0..9_000u32).map(|i| (i % 241) as u8).collect();
         let replica =
             |version_id: String, object_id: u8, shard: Option<SmallShard>| PutObjectMetaRequest {
                 bucket: "b".into(),
                 key: "k".into(),
-                object: Some(objectio_proto::metadata::ObjectMeta {
+                object: Some(iolake_proto::metadata::ObjectMeta {
                     bucket: "b".into(),
                     key: "k".into(),
                     version_id,
@@ -3429,7 +3426,7 @@ mod integrity_tests {
     #[test]
     fn a_missing_device_is_refused_not_created() {
         let dir = tempfile::tempdir().unwrap();
-        let path = "/dev/objectio-test-no-such-device";
+        let path = "/dev/iolake-test-no-such-device";
         let Err(e) = OsdService::new(vec![path.to_string()], 64 * 1024, dir.path().join("state"))
         else {
             panic!("an OSD started on a device that isn't there");
@@ -3849,7 +3846,7 @@ mod dedup_note_tests {
     //! The dedup dry-run's per-OSD fingerprint set.
 
     use super::*;
-    use objectio_proto::storage::storage_service_server::StorageService;
+    use iolake_proto::storage::storage_service_server::StorageService;
 
     fn osd_at(dir: &std::path::Path) -> OsdService {
         OsdService::new(
@@ -3920,24 +3917,24 @@ mod dedup_note_tests {
 #[cfg(all(test, feature = "rdma"))]
 mod rdma_tests {
     //! Shards in and out of a real `OsdService` over Transfer Engine. TCP
-    //! mode by default; `OBJECTIO_TE_TEST_PROTOCOL=rdma` with
-    //! `OBJECTIO_TE_TEST_HOST=<address on the RDMA interface>` runs them over
+    //! mode by default; `IOLAKE_TE_TEST_PROTOCOL=rdma` with
+    //! `IOLAKE_TE_TEST_HOST=<address on the RDMA interface>` runs them over
     //! verbs.
 
     use super::*;
     use crate::rdma::RdmaStaging;
-    use objectio_proto::storage::ShardId;
-    use objectio_proto::storage::storage_service_server::StorageService;
-    use objectio_transport_te::{Engine, EngineConfig, Protocol, Registration, SlotPool};
+    use iolake_proto::storage::ShardId;
+    use iolake_proto::storage::storage_service_server::StorageService;
+    use iolake_transport_te::{Engine, EngineConfig, Protocol, Registration, SlotPool};
 
     const MIB: usize = 1024 * 1024;
 
     fn protocol_and_host() -> (Protocol, String) {
-        let protocol = match std::env::var("OBJECTIO_TE_TEST_PROTOCOL").as_deref() {
+        let protocol = match std::env::var("IOLAKE_TE_TEST_PROTOCOL").as_deref() {
             Ok("rdma") => Protocol::Rdma,
             _ => Protocol::Tcp,
         };
-        let host = std::env::var("OBJECTIO_TE_TEST_HOST").unwrap_or_else(|_| "127.0.0.1".into());
+        let host = std::env::var("IOLAKE_TE_TEST_HOST").unwrap_or_else(|_| "127.0.0.1".into());
         (protocol, host)
     }
 
@@ -3987,7 +3984,7 @@ mod rdma_tests {
 
     fn write_request(
         rig: &Rig,
-        src: &objectio_transport_te::Slot,
+        src: &iolake_transport_te::Slot,
         data: &[u8],
         crc: Option<u32>,
     ) -> WriteShardRequest {
@@ -4102,7 +4099,7 @@ mod object_meta_tests {
     //! which is what the gateway frees.
 
     use super::*;
-    use objectio_proto::storage::storage_service_server::StorageService;
+    use iolake_proto::storage::storage_service_server::StorageService;
 
     fn osd() -> (tempfile::TempDir, OsdService) {
         let dir = tempfile::tempdir().unwrap();

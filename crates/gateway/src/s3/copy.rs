@@ -268,7 +268,7 @@ pub(crate) async fn upload_part_copy_internal(
 /// does, meta's registry keeps the stripes for the copy. If it is not, the
 /// source's stripes may already be freed, so the copy backs out.
 ///
-/// Meta registers at most [`objectio_common::META_MAX_OPS`] stripes in one call, all or
+/// Meta registers at most [`iolake_common::META_MAX_OPS`] stripes in one call, all or
 /// none: an object of more (a multipart upload of many parts) is shared in
 /// batches of that many, and the check above follows the last. A batch
 /// refused part way (the source let go meanwhile) backs out of the batches
@@ -282,8 +282,8 @@ pub(crate) async fn copy_by_reference(
     source_key: &str,
     copy_headers: &HeaderMap,
 ) -> Option<Response> {
-    use objectio_common::META_MAX_OPS;
-    use objectio_proto::metadata::ShareStripesRequest;
+    use iolake_common::META_MAX_OPS;
+    use iolake_proto::metadata::ShareStripesRequest;
     let mut meta_client = state.meta_client.clone();
 
     let src_placement = meta_client
@@ -483,7 +483,7 @@ pub(crate) async fn copy_by_reference(
     crate::replication::mark(state, &mut object_meta).await;
     let marked = (!object_meta.replication.is_empty()).then(|| object_meta.clone());
 
-    let listing_req = objectio_proto::metadata::CreateObjectRequest {
+    let listing_req = iolake_proto::metadata::CreateObjectRequest {
         bucket: dest_bucket.to_string(),
         key: dest_key.to_string(),
         size: source.size,

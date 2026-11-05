@@ -6,8 +6,8 @@
 //! # High-Level API
 //!
 //! ```
-//! use objectio_erasure::ErasureCodec;
-//! use objectio_common::ErasureConfig;
+//! use iolake_erasure::ErasureCodec;
+//! use iolake_common::ErasureConfig;
 //!
 //! let codec = ErasureCodec::new(ErasureConfig::new(4, 2)).unwrap();
 //! let data = b"Hello, World!";
@@ -19,7 +19,7 @@
 //! For more control, use the backend directly:
 //!
 //! ```
-//! use objectio_erasure::backend::{BackendConfig, BackendFactory};
+//! use iolake_erasure::backend::{BackendConfig, BackendFactory};
 //!
 //! let config = BackendConfig::mds(4, 2);
 //! let backend = BackendFactory::create_mds(&config).unwrap();
@@ -27,7 +27,7 @@
 
 use crate::backend::{BackendConfig, BackendFactory, ErasureBackend, LrcBackend, LrcConfig};
 use bytes::Bytes;
-use objectio_common::{ErasureConfig, ErasureType, Error as CommonError, Result};
+use iolake_common::{ErasureConfig, ErasureType, Error as CommonError, Result};
 use std::sync::Arc;
 use thiserror::Error;
 

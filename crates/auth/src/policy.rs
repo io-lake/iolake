@@ -378,7 +378,7 @@ pub const SYSTEM_ACCOUNT: &str = "objectio";
 /// use any of them:
 ///
 /// - the partition: policies are written for S3 with `arn:aws:` ARNs
-///   (every tool, tutorial and generated policy does), ObjectIO's own are
+///   (every tool, tutorial and generated policy does), IOLake's own are
 ///   `arn:obio:`, and users carry `arn:objectio:` ones. All name the same
 ///   buckets, keys and users;
 /// - a system-scope user: `arn:objectio:iam::user/<name>` has no account

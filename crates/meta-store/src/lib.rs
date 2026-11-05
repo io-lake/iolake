@@ -1,4 +1,4 @@
-//! ObjectIO Metadata Store — persistent metadata backed by redb.
+//! IOLake Metadata Store — persistent metadata backed by redb.
 
 pub mod commit_metrics;
 pub mod disk_space;

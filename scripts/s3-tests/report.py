@@ -7,7 +7,7 @@ Each failure is labelled from known-failures.csv (next to this script): why
 it fails, in one of these categories:
 
   not-implemented-by-design  left out on purpose (ACL grants, SigV2, IAM API...)
-  aws-compatible-already     ObjectIO does what AWS does; the test expects RGW
+  aws-compatible-already     IOLake does what AWS does; the test expects RGW
   test-environment           the test can't pass on this setup
   gap                        a feature we lack and could add
   bug                        wrong behaviour to fix
@@ -113,8 +113,8 @@ def main():
         by_file[r["file"]][r["outcome"]] += 1
     failures = [r for r in rows if r["outcome"] in FAILED]
     by_cat = collections.Counter(r["category"] for r in failures)
-    # Applicable: what a test can fairly ask of ObjectIO. Not skipped, and
-    # not failing for a reason that isn't ObjectIO's to fix (a feature left
+    # Applicable: what a test can fairly ask of IOLake. Not skipped, and
+    # not failing for a reason that isn't IOLake's to fix (a feature left
     # out by design, the test environment, a test expecting RGW over AWS).
     not_applicable = sum(by_cat[c] for c in NOT_APPLICABLE) + totals["skipped"]
     applicable = len(rows) - not_applicable
@@ -123,7 +123,7 @@ def main():
         "# ceph s3-tests results",
         "",
         f"- Date: {a.date}",
-        f"- ObjectIO commit: `{a.commit}`",
+        f"- IOLake commit: `{a.commit}`",
         f"- s3-tests commit: `{a.s3tests_commit}`",
         f"- Platform: {a.platform}",
         "",

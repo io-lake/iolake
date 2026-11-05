@@ -1,4 +1,4 @@
-//! Harness for end-to-end tests: boots a real `objectio-aio` cluster and
+//! Harness for end-to-end tests: boots a real `iolake-aio` cluster and
 //! drives it over HTTP the way a client does.
 //!
 //! Every test in this crate exercises a *seam* — gateway to OSD, meta to
@@ -8,7 +8,7 @@
 //! between two components and none of them could have been caught inside
 //! one. A unit test cannot see that the gateway never calls `DeleteShard`.
 //!
-//! `objectio-aio` runs meta, OSD and gateway as tokio tasks in one process,
+//! `iolake-aio` runs meta, OSD and gateway as tokio tasks in one process,
 //! which makes it an unusually cheap thing to boot per test — a few seconds,
 //! no containers, no ports to coordinate beyond the one we pick.
 
@@ -112,10 +112,10 @@ impl Drop for Cluster {
 }
 
 fn aio_binary() -> PathBuf {
-    binary("objectio-aio")
+    binary("iolake-aio")
 }
 
-/// A workspace binary, found the way the harness finds `objectio-aio`.
+/// A workspace binary, found the way the harness finds `iolake-aio`.
 ///
 /// `CARGO_BIN_EXE_` is only set for the package that declares the binary,
 /// so walk out of the test executable's directory instead: `cargo test`
@@ -382,11 +382,11 @@ impl Cluster {
             // Both discarded unless asked for. tracing writes to *stdout*
             // here, so an unread pipe wedges the child once its 64 KiB buffer
             // fills — which presents as the cluster hanging at startup with no
-            // clue why. Set OBJECTIO_E2E_LOGS=1 to watch it instead.
+            // clue why. Set IOLAKE_E2E_LOGS=1 to watch it instead.
             .stdout(Self::log_target(data_dir))
             .stderr(Self::log_target(data_dir))
             .spawn()
-            .expect("spawn objectio-aio")
+            .expect("spawn iolake-aio")
     }
 
     fn boot(osds: usize, ec: Option<(u8, u8)>, extra_args: Vec<String>) -> Self {
@@ -439,8 +439,8 @@ impl Cluster {
             }
         }
         panic!(
-            "objectio-aio did not start in {} attempts; last: {last}; \
-             set OBJECTIO_E2E_LOGS=1 to see why",
+            "iolake-aio did not start in {} attempts; last: {last}; \
+             set IOLAKE_E2E_LOGS=1 to see why",
             Self::START_ATTEMPTS
         );
     }
@@ -483,8 +483,8 @@ impl Cluster {
             std::thread::sleep(Duration::from_secs(1));
         }
         panic!(
-            "objectio-aio did not restart in {} attempts; last: {last}; \
-             set OBJECTIO_E2E_LOGS=1 to see why",
+            "iolake-aio did not restart in {} attempts; last: {last}; \
+             set IOLAKE_E2E_LOGS=1 to see why",
             Self::START_ATTEMPTS
         );
     }
@@ -584,7 +584,7 @@ impl Cluster {
     }
 
     /// What the cluster has logged so far (nothing with
-    /// `OBJECTIO_E2E_LOGS`, which sends it to the terminal instead).
+    /// `IOLAKE_E2E_LOGS`, which sends it to the terminal instead).
     pub fn log(&self) -> String {
         std::fs::read_to_string(self.data_dir.path().join("aio.log")).unwrap_or_default()
     }
@@ -597,11 +597,11 @@ impl Cluster {
             .join(format!("osd-{index}/disk0/disk.raw"))
     }
 
-    /// Where the cluster's output goes: inherited with `OBJECTIO_E2E_LOGS`,
+    /// Where the cluster's output goes: inherited with `IOLAKE_E2E_LOGS`,
     /// otherwise `aio.log` in its data directory (appended across restarts),
     /// kept only if the test fails (see `Drop`).
     fn log_target(data_dir: &std::path::Path) -> Stdio {
-        if std::env::var_os("OBJECTIO_E2E_LOGS").is_some() {
+        if std::env::var_os("IOLAKE_E2E_LOGS").is_some() {
             return Stdio::inherit();
         }
         std::fs::OpenOptions::new()
@@ -621,7 +621,7 @@ impl Cluster {
         let deadline = Instant::now() + Duration::from_secs(90);
         while Instant::now() < deadline {
             if let Ok(Some(status)) = child.try_wait() {
-                return Err(format!("objectio-aio exited during startup with {status}"));
+                return Err(format!("iolake-aio exited during startup with {status}"));
             }
             if let Ok(text) = std::fs::read_to_string(path) {
                 let mut access = String::new();
@@ -651,7 +651,7 @@ impl Cluster {
     /// Wait until the *gateway* is serving on this port.
     ///
     /// `/health` is not enough on its own: meta and the OSD each serve one on
-    /// their metrics listeners, so a 200 there proves only that some `ObjectIO`
+    /// their metrics listeners, so a 200 there proves only that some `IOLake`
     /// process holds the port. When a subsystem was handed the gateway's port
     /// this returned immediately and the first real request came back as a
     /// bare 404 — which reads like a missing route rather than the wrong
@@ -664,7 +664,7 @@ impl Cluster {
         while Instant::now() < deadline {
             // A child that has already exited will never become healthy.
             if let Ok(Some(status)) = self.child_mut().try_wait() {
-                return Err(format!("objectio-aio exited during startup with {status}"));
+                return Err(format!("iolake-aio exited during startup with {status}"));
             }
             match client.get(format!("{}/_admin/nodes", self.endpoint)).send() {
                 Ok(r) if r.status() == 401 => return self.wait_osds_online(deadline),
@@ -694,7 +694,7 @@ impl Cluster {
         let mut last = String::from("no answer");
         while Instant::now() < deadline {
             if let Ok(Some(status)) = self.child_mut().try_wait() {
-                return Err(format!("objectio-aio exited during startup with {status}"));
+                return Err(format!("iolake-aio exited during startup with {status}"));
             }
             let r = self.request("GET", "/_admin/nodes", &[]);
             if r.status == 200 {
@@ -742,8 +742,8 @@ impl Cluster {
     }
 
     fn wait_block_gateway(&mut self, deadline: Instant) -> Result<(), String> {
-        use objectio_proto::block::ListVolumesRequest;
-        use objectio_proto::block::block_service_client::BlockServiceClient;
+        use iolake_proto::block::ListVolumesRequest;
+        use iolake_proto::block::block_service_client::BlockServiceClient;
 
         let Some(port) = self.arg("--block-port").map(ToString::to_string) else {
             return Ok(());
@@ -752,7 +752,7 @@ impl Cluster {
         let mut last = String::from("no answer");
         while Instant::now() < deadline {
             if let Ok(Some(status)) = self.child_mut().try_wait() {
-                return Err(format!("objectio-aio exited during startup with {status}"));
+                return Err(format!("iolake-aio exited during startup with {status}"));
             }
             let answer = rt.block_on(async {
                 let mut client = BlockServiceClient::new(

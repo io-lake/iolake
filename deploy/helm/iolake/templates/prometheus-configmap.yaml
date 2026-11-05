@@ -1,0 +1,71 @@
+{{- if .Values.monitoring.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "iolake.prometheus.fullname" . }}
+  labels:
+    {{- include "iolake.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: {{ .Values.monitoring.prometheus.scrapeInterval }}
+      evaluation_interval: {{ .Values.monitoring.prometheus.scrapeInterval }}
+
+    rule_files:
+      - /etc/prometheus/iolake-rules.yaml
+
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      - job_name: 'iolake-gateway'
+        metrics_path: /metrics
+        scrape_interval: 10s
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names: [{{ .Release.Namespace | quote }}]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            regex: {{ include "iolake.gateway.fullname" . }}
+            action: keep
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            regex: http
+            action: keep
+
+      - job_name: 'iolake-meta'
+        scrape_interval: 15s
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names: [{{ .Release.Namespace | quote }}]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            regex: {{ include "iolake.meta.headless" . }}
+            action: keep
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            regex: grpc
+            action: drop
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: instance
+
+      - job_name: 'iolake-osd'
+        scrape_interval: 15s
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names: [{{ .Release.Namespace | quote }}]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            regex: {{ include "iolake.osd.headless" . }}
+            action: keep
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            regex: grpc
+            action: drop
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: osd_instance
+  iolake-rules.yaml: |
+    {{- .Files.Get "alerts/iolake-rules.yaml" | nindent 4 }}
+{{- end }}

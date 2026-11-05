@@ -30,7 +30,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use objectio_meta_store::MetaTypeConfig;
+use iolake_meta_store::MetaTypeConfig;
 use parking_lot::Mutex;
 use tonic::body::BoxBody;
 use tonic::codegen::http;
@@ -43,27 +43,27 @@ use crate::read_gate::ReadGate;
 const FORWARDED: &str = "x-objectio-forwarded";
 
 /// Marks a liveness probe from a client's meta channel
-/// (`objectio_proto::transport::meta_channel`): answered here at once,
+/// (`iolake_proto::transport::meta_channel`): answered here at once,
 /// never forwarded, so it says whether *this* node is up, and whether it
 /// can serve.
-const PROBE: &str = objectio_proto::transport::META_PROBE_HEADER;
+const PROBE: &str = iolake_proto::transport::META_PROBE_HEADER;
 
 /// The probe's answers: up, or up but unable to serve.
-const ALIVE: &str = objectio_proto::transport::META_PROBE_ALIVE;
-const NOT_SERVING: &str = objectio_proto::transport::META_PROBE_NOT_SERVING;
+const ALIVE: &str = iolake_proto::transport::META_PROBE_ALIVE;
+const NOT_SERVING: &str = iolake_proto::transport::META_PROBE_NOT_SERVING;
 
 /// The gRPC path prefix of Raft's own service: never forwarded.
 const RAFT_PREFIX: &str = "/objectio.raft.";
 
 /// A client whose format level is below the cluster's active level would
-/// misread what newer nodes write (objectio-docs core/upgrade-path.md):
+/// misread what newer nodes write (iolake-docs core/upgrade-path.md):
 /// refuse it, at the node it first reached. Raft's own calls, and calls a
 /// follower already checked and forwarded, pass.
 fn too_old(req: &http::Request<BoxBody>) -> Option<tonic::Status> {
     if req.uri().path().starts_with(RAFT_PREFIX) || req.headers().contains_key(FORWARDED) {
         return None;
     }
-    let active = objectio_common::version::active_level();
+    let active = iolake_common::version::active_level();
     if active == 0 {
         return None;
     }
@@ -71,7 +71,7 @@ fn too_old(req: &http::Request<BoxBody>) -> Option<tonic::Status> {
         .headers()
         .get(http::header::USER_AGENT)
         .and_then(|v| v.to_str().ok())
-        .map_or(0, objectio_common::version::level_of_user_agent);
+        .map_or(0, iolake_common::version::level_of_user_agent);
     (level < active).then(|| {
         tonic::Status::failed_precondition(format!(
             "this client is at format level {level} and the cluster at {active}: it is older \
@@ -168,11 +168,11 @@ impl ForwardToLeaderLayer {
         // the call forever: the client retries elsewhere. Its answer is
         // passed on as it arrives, so one that stopped after its headers
         // is noticed by the pings (`meta_endpoint`), not the call timeout.
-        let endpoint = objectio_proto::transport::meta_endpoint(addr)
+        let endpoint = iolake_proto::transport::meta_endpoint(addr)
             .map_err(|e| tonic::Status::internal(format!("leader address {addr}: {e}")))?
-            .initial_stream_window_size(objectio_proto::transport::STREAM_WINDOW)
-            .initial_connection_window_size(objectio_proto::transport::CONNECTION_WINDOW);
-        let channel = objectio_proto::transport::connect_lazy(&endpoint);
+            .initial_stream_window_size(iolake_proto::transport::STREAM_WINDOW)
+            .initial_connection_window_size(iolake_proto::transport::CONNECTION_WINDOW);
+        let channel = iolake_proto::transport::connect_lazy(&endpoint);
         channels.insert(addr.to_string(), channel.clone());
         Ok(channel)
     }

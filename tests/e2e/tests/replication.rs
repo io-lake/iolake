@@ -6,7 +6,7 @@
 
 use std::time::{Duration, Instant};
 
-use objectio_e2e::{Cluster, Response};
+use iolake_e2e::{Cluster, Response};
 use serde_json::json;
 
 fn payload(len: usize, seed: u8) -> Vec<u8> {

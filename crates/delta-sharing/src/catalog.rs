@@ -1,7 +1,7 @@
 //! Delta Sharing catalog — thin gRPC wrapper around the Meta service.
 
 use crate::error::DeltaError;
-use objectio_proto::metadata::{
+use iolake_proto::metadata::{
     DeltaGetRecipientByTokenRequest, DeltaGetShareRequest, DeltaListSharesRequest,
     DeltaListTablesRequest, DeltaRecipientEntry, DeltaShareEntry, DeltaShareTableEntry,
     GetTenantRequest, metadata_service_client::MetadataServiceClient,

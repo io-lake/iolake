@@ -11,11 +11,11 @@
 # The traffic runs in a pod (deploy/kind/meta_ha_load.py), so nothing
 # depends on a port-forward surviving the kills.
 #
-#   NAMESPACE  where the chart is installed (default: objectio)
+#   NAMESPACE  where the chart is installed (default: iolake)
 #   MAX_GAP    longest allowed stretch without a successful write (default: 60)
 set -euo pipefail
 
-NS=${NAMESPACE:-objectio}
+NS=${NAMESPACE:-iolake}
 MAX_GAP=${MAX_GAP:-60}
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 POD=meta-ha-load
@@ -35,7 +35,7 @@ say "meta: $STS ($REPLICAS replicas), gateway: $GW_SVC:$GW_PORT"
 k delete pod "$POD" --ignore-not-found --wait >/dev/null
 k create configmap "$POD" --from-file="$HERE/meta_ha_load.py" \
     --dry-run=client -o yaml | k apply -f - >/dev/null
-k run "$POD" --image=python:3.12-slim --restart=Never --labels=objectio-test=meta-ha-load --overrides='{
+k run "$POD" --image=python:3.12-slim --restart=Never --labels=iolake-test=meta-ha-load --overrides='{
   "spec": {
     "containers": [{
       "name": "load",

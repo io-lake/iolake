@@ -3,7 +3,7 @@
 //! `arn:obio:unity:::{catalog}/{schema}/{table}` resource ARNs.
 //!
 //! Reuses `BucketPolicy` / `PolicyEvaluator` / `RequestContext` from
-//! `objectio_auth::policy`. Differs from the Iceberg variant only in:
+//! `iolake_auth::policy`. Differs from the Iceberg variant only in:
 //! - Fixed three-level walk (catalog → schema → table) rather than
 //!   walking N namespace prefixes.
 //! - `unity:` action prefix and Unity-specific condition keys
@@ -11,7 +11,7 @@
 //!   `unity:operation`).
 
 use crate::error::UnityError;
-use objectio_auth::policy::{BucketPolicy, PolicyDecision, PolicyEvaluator, RequestContext};
+use iolake_auth::policy::{BucketPolicy, PolicyDecision, PolicyEvaluator, RequestContext};
 
 /// Build a Unity resource ARN for any of the three levels.
 ///

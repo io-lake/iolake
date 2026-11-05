@@ -1,5 +1,5 @@
 # Mirrors sdk/python/ to the standalone package repo
-# object-io/objectio-python-sdk, and optionally publishes to PyPI.
+# io-lake/iolake-python-sdk, and optionally publishes to PyPI.
 #
 # Same reasoning as the Go mirror: the package is published on its own, so it
 # gets a repo whose root is the package root. Unlike Go, Python does not
@@ -22,12 +22,12 @@
 #   3. With `tag`, tags v<tag>. With `publish`, uploads to PyPI.
 #
 # Required repo settings:
-#   - Target repo object-io/objectio-python-sdk must exist.
+#   - Target repo io-lake/iolake-python-sdk must exist.
 #   - Secret SDK_PYTHON_DEPLOY_KEY: the private half of a deploy key with write access
-#     on object-io/objectio-python-sdk. The default GITHUB_TOKEN cannot write to
+#     on io-lake/iolake-python-sdk. The default GITHUB_TOKEN cannot write to
 #     another repository.
 #   - To publish: configure PyPI Trusted Publishing for project
-#     "objectio-sdk", owner object-io, repo objectio, workflow
+#     "iolake-sdk", owner io-lake, repo iolake, workflow
 #     sdk-python-mirror.yml. That uses OIDC — no API token to store or leak.
 #     https://docs.pypi.org/trusted-publishers/
 #
@@ -53,7 +53,7 @@ on:
         default: false
 
 env:
-  TARGET_REPO: object-io/objectio-python-sdk
+  TARGET_REPO: io-lake/iolake-python-sdk
 
 jobs:
   mirror:
@@ -111,16 +111,16 @@ jobs:
       - name: Commit and push
         working-directory: target
         run: |
-          git config user.name  "objectio-bot"
-          git config user.email "noreply@object-io.dev"
+          git config user.name  "iolake-bot"
+          git config user.email "noreply@iolake.dev"
           git add -A
           if git diff --cached --quiet; then
             echo "No change to mirror."
           else
-            git commit -m "sync from object-io/objectio@${GITHUB_SHA:0:12}
+            git commit -m "sync from io-lake/iolake@${GITHUB_SHA:0:12}
 
           Mirrored from sdk/python/. Do not edit here — open pull requests
-          against object-io/objectio."
+          against io-lake/iolake."
             git push
           fi
 

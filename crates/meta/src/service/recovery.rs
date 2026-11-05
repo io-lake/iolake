@@ -1,4 +1,4 @@
-//! Recovery (B31 phase 3a, objectio-docs `core/pg-recovery.md`): peering
+//! Recovery (B31 phase 3a, iolake-docs `core/pg-recovery.md`): peering
 //! says what each placement group's members lack; recovery makes them
 //! whole. One operation does it all: bring every object of the PG to its
 //! acting set, position by position. That is
@@ -47,8 +47,8 @@ use std::sync::LazyLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
-use objectio_proto::metadata::{PgState, ShardLocation, StripeMeta};
-use objectio_proto::storage::{
+use iolake_proto::metadata::{PgState, ShardLocation, StripeMeta};
+use iolake_proto::storage::{
     CheckShardsRequest, DeleteObjectMetaRequest, GetObjectMetaRequest, GetStatusRequest, PgEntry,
     PgRef, PutObjectMetaRequest, ReadShardRequest, ShardId, ShardState, SmallShard,
     WriteShardRequest, storage_service_client::StorageServiceClient,
@@ -279,17 +279,17 @@ pub fn render_metrics(out: &mut String) {
         .fold((0, 0), |(o, b), (lo, lb)| (o + lo, b + lb));
     for (name, help, v) in [
         (
-            "objectio_meta_pg_reservations",
+            "iolake_meta_pg_reservations",
             "Recovery reservations held: (OSD, PG) pairs",
             held as u64,
         ),
         (
-            "objectio_meta_pg_recovering",
+            "iolake_meta_pg_recovering",
             "Placement groups being recovered on the leader",
             BUSY.lock().len() as u64,
         ),
         (
-            "objectio_meta_pg_recovery_backing_off",
+            "iolake_meta_pg_recovery_backing_off",
             "Placement groups whose recovery is waiting out a backoff",
             BACKOFF
                 .lock()
@@ -298,12 +298,12 @@ pub fn render_metrics(out: &mut String) {
                 .count() as u64,
         ),
         (
-            "objectio_meta_pg_recovery_objects_remaining",
+            "iolake_meta_pg_recovery_objects_remaining",
             "Objects recovery has left to do in the PGs it is working",
             objects,
         ),
         (
-            "objectio_meta_pg_recovery_bytes_remaining",
+            "iolake_meta_pg_recovery_bytes_remaining",
             "Bytes of the objects recovery has left to do in the PGs it is working",
             bytes,
         ),
@@ -312,42 +312,42 @@ pub fn render_metrics(out: &mut String) {
     }
     for (name, help, v) in [
         (
-            "objectio_meta_pg_reservations_refused_total",
+            "iolake_meta_pg_reservations_refused_total",
             "Times a PG could not reserve a slot on every OSD it needed",
             &REFUSED,
         ),
         (
-            "objectio_meta_pg_recovery_retries_total",
+            "iolake_meta_pg_recovery_retries_total",
             "Recovery passes that got nowhere (each waits twice as long for the next, to 5 min)",
             &RETRIES,
         ),
         (
-            "objectio_meta_pg_too_full_total",
+            "iolake_meta_pg_too_full_total",
             "Times a PG waited for a member to fill that was too full",
             &TOO_FULL,
         ),
         (
-            "objectio_meta_pg_recovered_objects_total",
+            "iolake_meta_pg_recovered_objects_total",
             "Objects recovery made whole",
             &OBJECTS,
         ),
         (
-            "objectio_meta_pg_recovered_shards_total",
+            "iolake_meta_pg_recovered_shards_total",
             "Shards recovery wrote to the member at their position",
             &SHARDS,
         ),
         (
-            "objectio_meta_pg_recovered_copies_total",
+            "iolake_meta_pg_recovered_copies_total",
             "Metadata copies recovery wrote",
             &COPIES,
         ),
         (
-            "objectio_meta_pg_remaps_total",
+            "iolake_meta_pg_remaps_total",
             "Placement groups moved to their up set",
             &REMAPS,
         ),
         (
-            "objectio_meta_pg_replica_copies_total",
+            "iolake_meta_pg_replica_copies_total",
             "Replicated copies recovery made from an intact one",
             &REPLICAS,
         ),
@@ -367,13 +367,13 @@ fn render_lrc(out: &mut String) {
     use std::fmt::Write as _;
     for (name, help, local, global) in [
         (
-            "objectio_meta_pg_lrc_rebuilds_total",
+            "iolake_meta_pg_lrc_rebuilds_total",
             "LRC shards recovery rebuilt, from their local group or the whole stripe",
             &LRC_LOCAL,
             &LRC_GLOBAL,
         ),
         (
-            "objectio_meta_pg_lrc_shards_read_total",
+            "iolake_meta_pg_lrc_shards_read_total",
             "Shards LRC rebuilds read, inside the local group or across the stripe",
             &LRC_LOCAL_READS,
             &LRC_GLOBAL_READS,
@@ -933,7 +933,7 @@ impl MetaService {
 
         let mut failed: Option<String> = None;
         let mut unfound: Vec<String> = Vec::new();
-        let mut lost: Vec<(String, objectio_proto::metadata::LostObject)> = Vec::new();
+        let mut lost: Vec<(String, iolake_proto::metadata::LostObject)> = Vec::new();
         let mut left = total;
         let wrote_before = SHARDS.load(Ordering::Relaxed) + COPIES.load(Ordering::Relaxed);
         // Urgent ones don't move the cursor; ordered ones move it past each
@@ -991,7 +991,7 @@ impl MetaService {
                         let name = w.name();
                         lost.push((
                             name.clone(),
-                            objectio_proto::metadata::LostObject {
+                            iolake_proto::metadata::LostObject {
                                 object_id: w.newest.object_id.clone(),
                                 stripe_id,
                                 good,
@@ -1628,7 +1628,7 @@ impl MetaService {
         if moved {
             // Ordered after the copies it changes; its stamp stays, so a
             // newer object still wins.
-            object.update_stamp = objectio_common::stamp::CLOCK.next_after(object.update_stamp);
+            object.update_stamp = iolake_common::stamp::CLOCK.next_after(object.update_stamp);
         }
 
         // The metadata: to every member when it changed, else to those
@@ -1718,7 +1718,7 @@ impl MetaService {
     /// may be a version kept on the others), and not `current` itself (a
     /// location update displaces the same object).
     async fn free_displaced(&self, bucket: &str, current: &[u8], displaced: Vec<ObjectMeta>) {
-        use objectio_proto::metadata::{ReleaseStripesRequest, VersioningState};
+        use iolake_proto::metadata::{ReleaseStripesRequest, VersioningState};
         let unversioned = self
             .buckets
             .read()
@@ -1891,9 +1891,7 @@ impl MetaService {
         missing: &[usize],
         in_place: &[u32],
     ) -> Result<HashMap<u32, Vec<u8>>, RebuildError> {
-        use objectio_erasure::backend::{
-            ErasureBackend, LrcBackend, LrcConfig, RustSimdLrcBackend,
-        };
+        use iolake_erasure::backend::{ErasureBackend, LrcBackend, LrcConfig, RustSimdLrcBackend};
         let (k, l, g) = (
             stripe.ec_k as usize,
             stripe.ec_local_parity as usize,
@@ -2104,7 +2102,7 @@ impl MetaService {
                 u32::try_from(count).unwrap_or(u32::MAX),
             ));
         }
-        let codec = objectio_erasure::ErasureCodec::new(objectio_common::ErasureConfig::new(
+        let codec = iolake_erasure::ErasureCodec::new(iolake_common::ErasureConfig::new(
             stripe.ec_k as u8,
             stripe.ec_m as u8,
         ))
@@ -2194,7 +2192,7 @@ impl MetaService {
     /// Record `state` as `pool/pg`'s, as it is (unlike peering's, which
     /// keeps recovery's progress from what is there).
     async fn replace_pg_state(&self, state: PgState) {
-        use objectio_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+        use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
         let key = MetaStore::pg_key(&state.pool, state.pg_id);
         let held = self
             .store
@@ -2466,7 +2464,7 @@ async fn write_shard(
     position: u32,
     bytes: Vec<u8>,
     pg: &PgRef,
-) -> anyhow::Result<objectio_proto::storage::BlockLocation> {
+) -> anyhow::Result<iolake_proto::storage::BlockLocation> {
     let channel = crate::drain_observer::open_channel(address).await?;
     let checksum = Some(crate::drain_observer::checksum_of(&bytes));
     tokio::time::timeout(
@@ -2503,7 +2501,7 @@ async fn delete_shard(address: &str, shard: ShardId) -> anyhow::Result<()> {
     tokio::time::timeout(
         RPC_TIMEOUT,
         StorageServiceClient::new(channel).delete_shard(
-            objectio_proto::storage::DeleteShardRequest {
+            iolake_proto::storage::DeleteShardRequest {
                 shard_id: Some(shard),
             },
         ),
@@ -2686,8 +2684,8 @@ mod tests {
     /// if up still wants it and 2 is free).
     #[tokio::test]
     async fn a_remap_never_moves_two_positions_onto_one_osd() {
-        use objectio_proto::metadata::RegisterOsdRequest;
-        use objectio_proto::metadata::metadata_service_server::MetadataService;
+        use iolake_proto::metadata::RegisterOsdRequest;
+        use iolake_proto::metadata::metadata_service_server::MetadataService;
         let svc = MetaService::new();
         for n in 1..=8u8 {
             MetadataService::register_osd(
@@ -2868,9 +2866,7 @@ mod tests {
     /// alone, and the stripe's parities encoded again from its data.
     #[test]
     fn local_and_global_lrc_rebuilds_give_back_the_shards_written() {
-        use objectio_erasure::backend::{
-            ErasureBackend, LrcBackend, LrcConfig, RustSimdLrcBackend,
-        };
+        use iolake_erasure::backend::{ErasureBackend, LrcBackend, LrcConfig, RustSimdLrcBackend};
         let backend = RustSimdLrcBackend::new(LrcConfig::new(4, 2, 1)).unwrap();
         let size = 64;
         let data: Vec<Vec<u8>> = (0..4u8)

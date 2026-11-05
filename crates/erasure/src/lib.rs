@@ -1,4 +1,4 @@
-//! ObjectIO erasure coding
+//! IOLake erasure coding
 //!
 //! # Code Types
 //!
@@ -10,8 +10,8 @@
 //! # Example
 //!
 //! ```
-//! use objectio_erasure::{ErasureCodec, backend::{BackendConfig, BackendFactory}};
-//! use objectio_common::ErasureConfig;
+//! use iolake_erasure::{ErasureCodec, backend::{BackendConfig, BackendFactory}};
+//! use iolake_common::ErasureConfig;
 //!
 //! // High-level API
 //! let codec = ErasureCodec::new(ErasureConfig::new(4, 2)).unwrap();

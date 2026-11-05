@@ -1,13 +1,13 @@
 [package]
-name = "objectio-meta-store"
-description = "Raft-based metadata storage for ObjectIO"
+name = "iolake-meta-store"
+description = "Raft-based metadata storage for IOLake"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-objectio-common = { workspace = true }
-objectio-proto = { workspace = true }
+iolake-common = { workspace = true }
+iolake-proto = { workspace = true }
 tokio = { workspace = true }
 openraft = { workspace = true }
 redb = { workspace = true }

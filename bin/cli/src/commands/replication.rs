@@ -1,4 +1,4 @@
-//! `obioctl replication`: targets, resyncs of existing objects, and the
+//! `iolakectl replication`: targets, resyncs of existing objects, and the
 //! operator's settings.
 
 use super::{Ctx, parse_size, q, seg, tenant_query};

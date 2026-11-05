@@ -1,6 +1,6 @@
 //! The gateway's side of shard transfers over Mooncake Transfer Engine.
 //!
-//! The OSD initiates every transfer (objectio-docs
+//! The OSD initiates every transfer (iolake-docs
 //! `architecture/design/core/rdma-data-plane.md`), so the gateway never calls
 //! Transfer Engine itself. It keeps two remote-accessible pools the OSDs
 //! reach into:
@@ -29,7 +29,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
-use objectio_transport_te::{Slot, SlotPool};
+use iolake_transport_te::{Slot, SlotPool};
 
 /// How long a slot stays out of use after its transfer failed. Longer than
 /// the OSD's gRPC timeouts (30 s write, 10 s read), after which it has
@@ -80,9 +80,9 @@ pub struct GatewayRdma {
     quarantine: Mutex<VecDeque<(Instant, Bytes)>>,
     // Keeps Transfer Engine running and the pools registered with it.
     #[cfg(feature = "rdma")]
-    _engine: std::sync::Arc<objectio_transport_te::Engine>,
+    _engine: std::sync::Arc<iolake_transport_te::Engine>,
     #[cfg(feature = "rdma")]
-    _registrations: Vec<objectio_transport_te::Registration>,
+    _registrations: Vec<iolake_transport_te::Registration>,
 }
 
 impl GatewayRdma {
@@ -94,13 +94,13 @@ impl GatewayRdma {
     /// registered.
     #[cfg(feature = "rdma")]
     pub fn start(
-        protocol: objectio_transport_te::Protocol,
+        protocol: iolake_transport_te::Protocol,
         host: &str,
         stripe_slot_size: usize,
         stripe_slots: usize,
         read_slots: usize,
     ) -> Result<Self, String> {
-        let engine = objectio_transport_te::Engine::start(&objectio_transport_te::EngineConfig {
+        let engine = iolake_transport_te::Engine::start(&iolake_transport_te::EngineConfig {
             protocol,
             host: host.to_string(),
         })
@@ -214,9 +214,9 @@ mod tests {
     }
 
     #[cfg(feature = "rdma")]
-    fn unreachable_engine() -> std::sync::Arc<objectio_transport_te::Engine> {
-        objectio_transport_te::Engine::start(&objectio_transport_te::EngineConfig {
-            protocol: objectio_transport_te::Protocol::Tcp,
+    fn unreachable_engine() -> std::sync::Arc<iolake_transport_te::Engine> {
+        iolake_transport_te::Engine::start(&iolake_transport_te::EngineConfig {
+            protocol: iolake_transport_te::Protocol::Tcp,
             host: "127.0.0.1".into(),
         })
         .unwrap()

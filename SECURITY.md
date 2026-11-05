@@ -3,10 +3,10 @@
 ## Reporting a vulnerability
 
 **Don't open a public issue.** Report it privately through GitHub:
-[Security → Report a vulnerability](https://github.com/object-io/objectio/security/advisories/new).
+[Security → Report a vulnerability](https://github.com/io-lake/iolake/security/advisories/new).
 Only the maintainers see it.
 
-Please include what you found, the release (`objectio-gateway --version`,
+Please include what you found, the release (`iolake-gateway --version`,
 or the image tag), how it is deployed, and the steps or a proof of
 concept that shows it. If you have a fix in mind, describe it in the
 report rather than opening a pull request.
@@ -40,5 +40,5 @@ Access), encryption (SSE, KMS, TLS and mTLS between services), the admin
 API and console, and data loss or corruption that a client can cause.
 
 A deployment that exposes the admin API or meta to the internet, or runs
-with `--no-auth`, isn't a vulnerability in ObjectIO; we still want to
+with `--no-auth`, isn't a vulnerability in IOLake; we still want to
 hear about defaults that make such a mistake easy.

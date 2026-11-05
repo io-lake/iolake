@@ -1,4 +1,4 @@
-//! `obioctl configure`: write a profile to the profile file.
+//! `iolakectl configure`: write a profile to the profile file.
 
 use crate::cli::ConfigureArgs;
 use crate::config::{DEFAULT_PROFILE, Flags, Profile, ProfileFile};

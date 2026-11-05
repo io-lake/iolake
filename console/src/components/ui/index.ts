@@ -1,4 +1,4 @@
-/// Console component library, built to design/HANDOFF.md §4.
+/// Console component library: the IOLake design system's controls (sizes, radii and colours from console-tokens.css).
 /// Import from here rather than the individual files.
 export { default as Button } from "./Button";
 export { default as Input } from "./Input";

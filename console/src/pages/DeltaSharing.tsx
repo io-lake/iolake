@@ -11,6 +11,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import PageHeader from "../components/PageHeader";
+import { recipientProfile } from "../api/deltaSharing";
 
 interface Share {
   name: string;
@@ -203,15 +204,7 @@ export default function DeltaSharing() {
   };
 
   const profileJson = newToken
-    ? JSON.stringify(
-        {
-          shareCredentialsVersion: 1,
-          endpoint: `${window.location.origin}/delta-sharing`,
-          bearerToken: newToken,
-        },
-        null,
-        2
-      )
+    ? JSON.stringify(recipientProfile(window.location.origin, newToken), null, 2)
     : "";
 
   return (

@@ -10,7 +10,8 @@
     "build:tenant": "APP=tenant vite build && mv dist/tenant/tenant.html dist/tenant/index.html",
     "build:legacy": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.2",
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "vitest": "^3.2.7",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

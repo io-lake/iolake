@@ -42,6 +42,8 @@ interface Tenant {
   quota_bytes: number;
   quota_buckets: number;
   quota_objects: number;
+  rate_limit_rps: number;
+  rate_limit_burst: number;
   admin_users: string[];
   oidc_provider: string;
   labels: Record<string, string>;
@@ -69,6 +71,8 @@ const emptyTenant = {
   quota_bytes: 0,
   quota_buckets: 0,
   quota_objects: 0,
+  rate_limit_rps: 0,
+  rate_limit_burst: 0,
   admin_users: [] as string[],
   oidc_provider: "",
   labels: {} as Record<string, string>,
@@ -409,6 +413,20 @@ export default function Tenants() {
               value={form.quota_buckets}
               onChange={(e) => setForm({ ...form, quota_buckets: Number(e.target.value) })}
               hint="0 = unlimited"
+            />
+            <Input
+              label="Request rate (req/s)"
+              type="number"
+              value={form.rate_limit_rps}
+              onChange={(e) => setForm({ ...form, rate_limit_rps: Number(e.target.value) })}
+              hint="Tenant-wide, per gateway. 0 = no limit"
+            />
+            <Input
+              label="Rate burst"
+              type="number"
+              value={form.rate_limit_burst}
+              onChange={(e) => setForm({ ...form, rate_limit_burst: Number(e.target.value) })}
+              hint="0 = equals the rate"
             />
             <Input
               label="OIDC provider"

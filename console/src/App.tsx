@@ -19,6 +19,7 @@ import Health from "./pages/Health";
 import Cluster from "./pages/Cluster";
 import PoolPlacement from "./pages/PoolPlacement";
 import MyAccount from "./pages/MyAccount";
+import AuditSearch from "./pages/AuditSearch";
 import { Navigate } from "react-router-dom";
 
 export default function App() {
@@ -84,6 +85,7 @@ export default function App() {
         <Route path="iceberg" element={<Navigate to="/catalog" replace />} />
         <Route path="unity" element={<UnityCatalog />} />
         <Route path="sharing" element={<DeltaSharing />} />
+        <Route path="audit" element={<AuditSearch systemAdmin={isSystemAdmin} />} />
         {isSystemAdmin && <Route path="monitoring" element={<Monitoring />} />}
         {isSystemAdmin && <Route path="encryption" element={<Encryption />} />}
         {/* Unified cluster page — Topology / Nodes & Drives / Pools /

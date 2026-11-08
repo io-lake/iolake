@@ -12,6 +12,7 @@ const COLUMNS: Column[] = [
   { key: "api", label: "API" },
   { key: "method", label: "Method" },
   { key: "status", label: "Status", align: "right" },
+  { key: "path", label: "Path" },
   { key: "action", label: "Action" },
   { key: "bucket", label: "Bucket" },
   { key: "key", label: "Key" },
@@ -108,6 +109,7 @@ export default function AuditSearch({ systemAdmin = false }: { systemAdmin?: boo
             <Cell>{e.api}</Cell>
             <Cell>{e.method}</Cell>
             <Cell align="right">{e.status}</Cell>
+            <Cell className="font-mono text-[11.5px]">{e.path}</Cell>
             <Cell>{e.action ?? ""}</Cell>
             <Cell>{e.bucket ?? ""}</Cell>
             <Cell className="font-mono text-[11.5px]">{e.key ?? ""}</Cell>

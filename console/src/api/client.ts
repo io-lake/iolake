@@ -175,6 +175,7 @@ export interface AuditEvent {
   time: string;
   api: string;
   method: string;
+  path: string;
   status: number;
   action?: string;
   bucket?: string;

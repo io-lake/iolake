@@ -1131,6 +1131,13 @@ impl MetadataService for MetaService {
         Self::set_bucket_quota(self, request).await
     }
 
+    async fn set_bucket_rate_limit(
+        &self,
+        request: Request<SetBucketRateLimitRequest>,
+    ) -> Result<Response<SetBucketRateLimitResponse>, Status> {
+        Self::set_bucket_rate_limit(self, request).await
+    }
+
     async fn set_bucket_owner(
         &self,
         request: Request<SetBucketOwnerRequest>,

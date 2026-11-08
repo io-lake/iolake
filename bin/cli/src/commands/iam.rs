@@ -3,7 +3,7 @@
 use super::{Ctx, key_values, parse_size, read_json, seg, tenant_query};
 use crate::cli::{
     GroupCmd, KeyCmd, PolicyCmd, Principal, RoleCmd, TenantAdminCmd, TenantCmd, TenantFields,
-    UserCmd,
+    TenantRateLimitCmd, UserCmd,
 };
 use crate::output::{field, key_values as kv, rows_of, ts};
 use anyhow::{Result, bail};
@@ -140,6 +140,28 @@ pub async fn tenant(cmd: TenantCmd, ctx: &mut Ctx<'_, '_>) -> Result<()> {
                 .await?;
             ctx.out.done(&format!("Deleted tenant {name}"))?;
         }
+        TenantCmd::RateLimit { action } => match action {
+            TenantRateLimitCmd::Get { tenant } => {
+                let v = ctx
+                    .api
+                    .get(&format!("/_admin/tenants/{}/rate-limit", seg(&tenant)), &[])
+                    .await?;
+                ctx.out.emit(&v, kv)?;
+            }
+            TenantRateLimitCmd::Set { tenant, rps, burst } => {
+                ctx.api
+                    .send_json(
+                        "PUT",
+                        &format!("/_admin/tenants/{}/rate-limit", seg(&tenant)),
+                        &[],
+                        json!({ "rps": rps, "burst": burst }),
+                    )
+                    .await?;
+                ctx.out.done(&format!(
+                    "Tenant {tenant}: rate limit {rps} rps, {burst} burst (0 = no limit)"
+                ))?;
+            }
+        },
         TenantCmd::Admin { action } => match action {
             TenantAdminCmd::List { tenant } => {
                 let v = ctx

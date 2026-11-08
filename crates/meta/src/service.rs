@@ -308,6 +308,8 @@ use iolake_proto::metadata::{
     SetBucketPolicyResponse,
     SetBucketQuotaRequest,
     SetBucketQuotaResponse,
+    SetBucketRateLimitRequest,
+    SetBucketRateLimitResponse,
     SetConfigRequest,
     SetConfigResponse,
     SetOsdAdminStateRequest,

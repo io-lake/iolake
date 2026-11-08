@@ -214,6 +214,8 @@ impl MetaService {
             quota_bytes: 0,
             quota_objects: 0,
             object_lock: None,
+            rate_limit_rps: 0,
+            rate_limit_burst: 0,
         };
 
         // Replicate through Raft so followers see the new bucket at the
@@ -866,6 +868,64 @@ impl MetaService {
             req.bucket, req.quota_bytes, req.quota_objects
         );
         Ok(Response::new(SetBucketQuotaResponse {}))
+    }
+
+    pub(crate) async fn set_bucket_rate_limit(
+        &self,
+        request: Request<SetBucketRateLimitRequest>,
+    ) -> Result<Response<SetBucketRateLimitResponse>, Status> {
+        let req = request.into_inner();
+        let (expected_bytes, new_bucket, new_bytes) = {
+            let buckets = self.buckets.read();
+            let current = buckets
+                .get(&req.bucket)
+                .cloned()
+                .ok_or_else(|| Status::not_found(format!("bucket '{}' not found", req.bucket)))?;
+            let expected = current.encode_to_vec();
+            let mut new_bucket = current;
+            new_bucket.rate_limit_rps = req.rate_limit_rps;
+            new_bucket.rate_limit_burst = req.rate_limit_burst;
+            let new_bytes = new_bucket.encode_to_vec();
+            (expected, new_bucket, new_bytes)
+        };
+
+        if let Some(raft) = self.raft_handle() {
+            use iolake_meta_store::{CasOp, CasTable, MetaCommand, MetaResponse};
+            let cmd = MetaCommand::MultiCas {
+                ops: vec![CasOp {
+                    table: CasTable::Buckets,
+                    key: req.bucket.clone(),
+                    expected: Some(expected_bytes),
+                    new_value: Some(new_bytes),
+                }],
+                requested_by: "set-bucket-rate-limit".into(),
+            };
+            match raft.client_write(cmd).await {
+                Ok(r) => match r.data {
+                    MetaResponse::MultiCasOk => {}
+                    MetaResponse::MultiCasConflict { .. } => {
+                        return Err(Status::aborted("bucket changed since read; retry"));
+                    }
+                    other => {
+                        error!(
+                            "unexpected raft response for set_bucket_rate_limit: {:?}",
+                            other
+                        );
+                        return Err(Status::internal("raft commit wrong variant"));
+                    }
+                },
+                Err(e) => return Err(raft_write_to_status(&e)),
+            }
+        } else if let Some(store) = &self.store {
+            store.put_bucket(&req.bucket, &new_bucket);
+        }
+
+        self.buckets.write().insert(req.bucket.clone(), new_bucket);
+        info!(
+            "Set rate limit of bucket '{}': {} rps, {} burst (0 = no limit)",
+            req.bucket, req.rate_limit_rps, req.rate_limit_burst
+        );
+        Ok(Response::new(SetBucketRateLimitResponse {}))
     }
 
     pub(crate) async fn get_bucket_versioning(

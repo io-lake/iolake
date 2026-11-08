@@ -274,7 +274,7 @@ async fn read_object(state: &Arc<AppState>, bucket: &str, key: &str) -> Option<V
         .map(|b| b.to_vec())
 }
 
-const CSV_HEADER: &str = "time,api,method,status,action,bucket,key,bucket_tenant,principal_tenant,principal_user_id,principal_auth,source_ip,error_code,request_bytes,response_bytes,duration_ms,complete,id\n";
+const CSV_HEADER: &str = "time,api,method,path,status,action,bucket,key,bucket_tenant,principal_tenant,principal_user_id,principal_auth,source_ip,error_code,request_bytes,response_bytes,duration_ms,complete,request_id\n";
 
 /// One CSV row for an event, columns matching [`CSV_HEADER`].
 fn csv_row(v: &Value) -> String {
@@ -284,6 +284,7 @@ fn csv_row(v: &Value) -> String {
         s(&v["time"]),
         s(&v["api"]),
         s(&v["method"]),
+        s(&v["path"]),
         n(&v["status"]),
         s(&v["action"]),
         s(&v["bucket"]),

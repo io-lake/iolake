@@ -180,6 +180,8 @@ pub struct AppState {
     pub auth_state: Arc<crate::auth_middleware::AuthState>,
     /// The audit stream, for the admin API to reload after a change.
     pub auditor: Arc<crate::audit::Auditor>,
+    /// The system audit bucket (`--audit-system-bucket`), for audit export.
+    pub audit_system_bucket: Option<String>,
     /// Pack records of packed objects, for reads.
     pub pack_cache: crate::packs::PackCache,
     /// Bucket replication: caches, the fast-path queue, the backlog.

@@ -7,6 +7,7 @@ pub mod addressing;
 pub mod admin;
 pub mod admission;
 pub mod audit;
+pub mod audit_export;
 pub mod audit_spool;
 pub mod auth_middleware;
 pub mod authz;
@@ -1133,6 +1134,7 @@ pub async fn run(
         trusted_proxies,
         auth_state: Arc::clone(&auth_state),
         auditor: Arc::clone(&auditor),
+        audit_system_bucket: args.audit_system_bucket.clone(),
         pack_cache: crate::packs::PackCache::default(),
         replication: crate::replication::Replication::default(),
         admission: Arc::clone(&admission),
@@ -1241,6 +1243,10 @@ pub async fn run(
             get(audit::admin_get)
                 .put(audit::admin_put)
                 .delete(audit::admin_delete),
+        )
+        .route(
+            "/_admin/audit/events",
+            get(audit_export::admin_audit_events),
         )
         .route(
             "/_admin/public-access-block",

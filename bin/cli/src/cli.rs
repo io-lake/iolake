@@ -289,10 +289,31 @@ pub enum TenantCmd {
     },
     /// DELETE /_admin/tenants/{name} (its buckets must be gone)
     Delete { name: String },
+    /// Tenant-wide request rate limit (system admin only to set)
+    RateLimit {
+        #[command(subcommand)]
+        action: TenantRateLimitCmd,
+    },
     /// Tenant admins
     Admin {
         #[command(subcommand)]
         action: TenantAdminCmd,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum TenantRateLimitCmd {
+    /// GET /_admin/tenants/{name}/rate-limit
+    Get { tenant: String },
+    /// PUT /_admin/tenants/{name}/rate-limit
+    Set {
+        tenant: String,
+        /// Requests per second (0 = no limit)
+        #[arg(long, default_value_t = 0)]
+        rps: u64,
+        /// Requests allowed momentarily above the rate (0 = equals rps)
+        #[arg(long, default_value_t = 0)]
+        burst: u64,
     },
 }
 

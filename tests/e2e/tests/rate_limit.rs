@@ -65,3 +65,51 @@ fn a_bucket_over_its_rate_is_throttled_and_others_are_not() {
         "a cleared limit stops throttling"
     );
 }
+
+#[test]
+fn a_tenant_limit_covers_all_its_buckets_and_not_other_tenants() {
+    let c = Cluster::start();
+
+    // Two tenants; two buckets in the first, one in the second. The buckets
+    // are owned by the system admin (so it can GET them) but carry the tenant.
+    for t in ["acme", "globex"] {
+        c.json(
+            "POST",
+            "/_admin/tenants",
+            json!({ "name": t, "display_name": t, "enabled": true }),
+        )
+        .expect_ok();
+    }
+    for (name, tenant) in [
+        ("acme-a", "acme"),
+        ("acme-b", "acme"),
+        ("globex-a", "globex"),
+    ] {
+        c.json(
+            "POST",
+            "/_admin/buckets",
+            json!({ "name": name, "tenant": tenant }),
+        )
+        .expect_ok();
+        c.request("PUT", &format!("/{name}/k"), b"x").expect_ok();
+    }
+
+    // One token for the whole acme tenant, none for globex.
+    c.json(
+        "PUT",
+        "/_admin/tenants/acme/rate-limit",
+        json!({ "rps": 1, "burst": 1 }),
+    )
+    .expect(204);
+
+    // The tenant ceiling is shared: requests spread across acme's two buckets
+    // still exhaust the single tenant token, so some are throttled.
+    let throttled = hammer(&c, "acme-a", 3) + hammer(&c, "acme-b", 3);
+    assert!(
+        throttled >= 1,
+        "a tenant over its rate must be throttled across its buckets"
+    );
+
+    // A bucket in another tenant is untouched.
+    assert_eq!(hammer(&c, "globex-a", 6), 0, "another tenant is unaffected");
+}

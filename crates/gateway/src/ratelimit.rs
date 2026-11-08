@@ -87,6 +87,13 @@ impl RateLimitState {
             limiters: Limiters::new(),
         })
     }
+
+    /// Take one token for `key` at `rate` req/s; burst 0 means "equals the rate".
+    #[allow(clippy::cast_precision_loss)] // rate/burst are small request counts
+    fn take(&self, key: &str, rate: u64, burst: u64) -> Option<f64> {
+        let burst = if burst == 0 { rate } else { burst }.max(1);
+        self.limiters.take(key, rate as f64, burst as f64)
+    }
 }
 
 /// The bucket a request addresses, or `None` for a request with no single bucket
@@ -119,9 +126,9 @@ fn too_many_requests(bucket: &str, rate: u64, retry_after: f64) -> Response {
     resp
 }
 
-/// Refuses a request over its bucket's configured rate with `429`. Runs after
-/// authorization and before the body is read, so a refused request buffers none.
-#[allow(clippy::cast_precision_loss)] // rate/burst are small request counts
+/// Refuses a request over its bucket's or its tenant's configured rate with
+/// `429`. Both scopes apply (AND): a request needs a token in each limit that
+/// is set. Runs after authorization, before the body is read.
 pub async fn rate_limit_layer(
     State(state): State<Arc<RateLimitState>>,
     request: Request,
@@ -130,15 +137,24 @@ pub async fn rate_limit_layer(
     let Some(bucket) = bucket_of(request.method(), request.uri()) else {
         return next.run(request).await;
     };
-    let Some((rate, burst)) = crate::authz::bucket_rate_limit(&state.app, &bucket).await else {
+    let Some(scope) = crate::authz::bucket_scope(&state.app, &bucket).await else {
         return next.run(request).await;
     };
-    // burst 0 means "same as the rate"; never below one token.
-    let burst = if burst == 0 { rate } else { burst }.max(1);
-    match state.limiters.take(&bucket, rate as f64, burst as f64) {
-        None => next.run(request).await,
-        Some(retry_after) => too_many_requests(&bucket, rate, retry_after),
+    // The bucket's own limit, then its tenant's aggregate — the more specific
+    // (bucket) is checked first, so it is the one reported when both would hit.
+    if let Some((rate, burst)) = scope.rate_limit
+        && let Some(retry) = state.take(&format!("b:{bucket}"), rate, burst)
+    {
+        return too_many_requests(&bucket, rate, retry);
     }
+    if !scope.tenant.is_empty()
+        && let Some((rate, burst)) =
+            crate::authz::tenant_rate_limit(&state.app, &scope.tenant).await
+        && let Some(retry) = state.take(&format!("t:{}", scope.tenant), rate, burst)
+    {
+        return too_many_requests(&scope.tenant, rate, retry);
+    }
+    next.run(request).await
 }
 
 #[cfg(test)]

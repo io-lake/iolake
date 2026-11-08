@@ -1317,6 +1317,10 @@ pub async fn run(
         .route("/_admin/tenants/{name}", put(admin::admin_update_tenant))
         .route("/_admin/tenants/{name}", delete(admin::admin_delete_tenant))
         .route(
+            "/_admin/tenants/{name}/rate-limit",
+            get(admin::admin_get_tenant_rate_limit).put(admin::admin_set_tenant_rate_limit),
+        )
+        .route(
             "/_admin/tenants/{name}/admins",
             post(admin::admin_add_tenant_admin),
         )

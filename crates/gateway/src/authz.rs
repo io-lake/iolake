@@ -537,12 +537,68 @@ async fn load_bucket(state: &AppState, bucket: &str) -> Result<BucketEntry, Unav
     Ok(entry)
 }
 
-/// A bucket's rate limit `(rps, burst)` from the shared cache, or `None` (no limit, missing, or meta unreadable — fail open).
-pub async fn bucket_rate_limit(state: &AppState, bucket: &str) -> Option<(u64, u64)> {
+/// A bucket's rate-limit scope: its owning tenant, and its own `(rps, burst)`
+/// limit when set. `None` if the bucket is missing or meta can't be read (fail open).
+pub struct BucketScope {
+    pub tenant: String,
+    pub rate_limit: Option<(u64, u64)>,
+}
+
+/// A bucket's rate-limit scope from the shared cache (no extra meta call).
+pub async fn bucket_scope(state: &AppState, bucket: &str) -> Option<BucketScope> {
     match load_bucket(state, bucket).await {
-        Ok(entry) if !entry.missing && entry.rate_limit.0 > 0 => Some(entry.rate_limit),
+        Ok(entry) if !entry.missing => Some(BucketScope {
+            tenant: entry.tenant,
+            rate_limit: (entry.rate_limit.0 > 0).then_some(entry.rate_limit),
+        }),
         _ => None,
     }
+}
+
+/// Cache key for a tenant's rate limit in the shared account cache.
+fn tenant_rate_limit_key(tenant: &str) -> String {
+    format!("rate-limit/tenant/{tenant}")
+}
+
+/// A tenant's rate limit `(rps, burst)`, or `None` (no limit, or meta unreadable).
+/// Cached per tenant in the same account cache the public-access block uses.
+pub async fn tenant_rate_limit(state: &AppState, tenant: &str) -> Option<(u64, u64)> {
+    if tenant.is_empty() {
+        return None;
+    }
+    let key = tenant_rate_limit_key(tenant);
+    if let Some(cached) = state.policy_cache.account(&key) {
+        return cached.and_then(|v| parse_rate_limit(&v));
+    }
+    let doc = match state
+        .meta_client
+        .clone()
+        .get_tenant(iolake_proto::metadata::GetTenantRequest {
+            name: tenant.to_string(),
+        })
+        .await
+    {
+        Ok(r) => r
+            .into_inner()
+            .tenant
+            .map(|t| serde_json::json!({ "rps": t.rate_limit_rps, "burst": t.rate_limit_burst })),
+        Err(_) => return None, // fail open: don't throttle when meta blips
+    };
+    state.policy_cache.put_account(&key, doc.clone());
+    doc.and_then(|v| parse_rate_limit(&v))
+}
+
+/// Drop this gateway's cached tenant rate limit so a change shows at once.
+pub fn forget_tenant_rate_limit(state: &AppState, tenant: &str) {
+    state
+        .policy_cache
+        .forget_account(&tenant_rate_limit_key(tenant));
+}
+
+/// `(rps, burst)` from a cached `{rps, burst}` doc, or `None` when rps is 0.
+fn parse_rate_limit(v: &serde_json::Value) -> Option<(u64, u64)> {
+    let rps = v["rps"].as_u64().unwrap_or(0);
+    (rps > 0).then(|| (rps, v["burst"].as_u64().unwrap_or(0)))
 }
 
 /// How meta names a principal's attachments and inline policies:

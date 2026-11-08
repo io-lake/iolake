@@ -2746,6 +2746,8 @@ message TenantConfig {
     uint64 created_at = 12;
     uint64 updated_at = 13;
     DedupPolicy dedup = 14;               // Unset fields inherit from the cluster default
+    uint64 rate_limit_rps = 15;           // Tenant-wide request rate, requests/sec (0 = no limit)
+    uint64 rate_limit_burst = 16;         // Requests allowed momentarily above the rate (0 = equals the rate)
 }
 
 message CreateTenantRequest { TenantConfig tenant = 1; }

@@ -121,6 +121,8 @@ fn json_to_tenant(v: &serde_json::Value) -> TenantConfig {
             .get("dedup")
             .filter(|d| !d.is_null())
             .and_then(|d| iolake_proto::dedup::from_json(d).ok()),
+        rate_limit_rps: v["rate_limit_rps"].as_u64().unwrap_or_default(),
+        rate_limit_burst: v["rate_limit_burst"].as_u64().unwrap_or_default(),
     }
 }
 
@@ -176,6 +178,8 @@ fn tenant_to_json(t: &TenantConfig) -> serde_json::Value {
         // Round-trips: the console saves the whole tenant, and a field it
         // did not send back would reset to inherit.
         "dedup": t.dedup.as_ref().map(iolake_proto::dedup::to_json),
+        "rate_limit_rps": t.rate_limit_rps,
+        "rate_limit_burst": t.rate_limit_burst,
     })
 }
 use serde::Deserialize;
@@ -2045,6 +2049,85 @@ pub async fn admin_get_bucket_rate_limit(
         Err(e) if e.code() == tonic::Code::NotFound => {
             (StatusCode::NOT_FOUND, e.message().to_string()).into_response()
         }
+        Err(e) => (StatusCode::BAD_REQUEST, e.message().to_string()).into_response(),
+    }
+}
+
+/// `PUT /_admin/tenants/{name}/rate-limit` with `{"rps": N, "burst": N}`
+/// (0 = no limit). System admin only: a tenant must not raise its own ceiling.
+pub async fn admin_set_tenant_rate_limit(
+    State(state): State<Arc<AppState>>,
+    auth: Option<Extension<AuthResult>>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> Response {
+    if let Some(deny) = require_system_admin(&auth, &headers) {
+        return deny;
+    }
+    let field = |n: &str| match &body[n] {
+        serde_json::Value::Null => Ok(0),
+        v => v
+            .as_u64()
+            .ok_or_else(|| format!("{n} must be a whole number of requests")),
+    };
+    let (rps, burst) = match (field("rps"), field("burst")) {
+        (Ok(r), Ok(b)) => (r, b),
+        (Err(e), _) | (_, Err(e)) => return (StatusCode::BAD_REQUEST, e).into_response(),
+    };
+    let mut client = state.meta_client.clone();
+    let existing = match client
+        .get_tenant(GetTenantRequest { name: name.clone() })
+        .await
+    {
+        Ok(r) => r.into_inner().tenant,
+        Err(e) => return (StatusCode::BAD_REQUEST, e.message().to_string()).into_response(),
+    };
+    let Some(mut tenant) = existing else {
+        return (StatusCode::NOT_FOUND, "Tenant not found").into_response();
+    };
+    tenant.rate_limit_rps = rps;
+    tenant.rate_limit_burst = burst;
+    match client
+        .update_tenant(UpdateTenantRequest {
+            tenant: Some(tenant),
+        })
+        .await
+    {
+        Ok(_) => {
+            // This gateway drops its cached tenant limit to see its own change at once.
+            crate::authz::forget_tenant_rate_limit(&state, &name);
+            tracing::info!("Set rate limit of tenant '{name}': {rps} rps, {burst} burst");
+            StatusCode::NO_CONTENT.into_response()
+        }
+        Err(e) => (StatusCode::BAD_REQUEST, e.message().to_string()).into_response(),
+    }
+}
+
+/// `GET /_admin/tenants/{name}/rate-limit` → `{"rps": N, "burst": N}`.
+pub async fn admin_get_tenant_rate_limit(
+    State(state): State<Arc<AppState>>,
+    auth: Option<Extension<AuthResult>>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+) -> Response {
+    if let Some(deny) = require_tenant_admin_access(&state, &auth, &headers, &name).await {
+        return deny;
+    }
+    match state
+        .meta_client
+        .clone()
+        .get_tenant(GetTenantRequest { name: name.clone() })
+        .await
+    {
+        Ok(r) => match r.into_inner().tenant {
+            Some(t) => Json(serde_json::json!({
+                "rps": t.rate_limit_rps,
+                "burst": t.rate_limit_burst,
+            }))
+            .into_response(),
+            None => (StatusCode::NOT_FOUND, "Tenant not found").into_response(),
+        },
         Err(e) => (StatusCode::BAD_REQUEST, e.message().to_string()).into_response(),
     }
 }

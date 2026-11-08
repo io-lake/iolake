@@ -12,6 +12,7 @@ import {
   FileText,
   LogIn,
   Lock,
+  ScrollText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -110,7 +111,10 @@ export const NAV: NavSection[] = [
   },
   {
     title: "Security",
-    items: [{ to: "/encryption", label: "Encryption", icon: Lock, adminOnly: true, keywords: "kms sse keys" }],
+    items: [
+      { to: "/audit", label: "Audit", icon: ScrollText, keywords: "audit log events export search trail" },
+      { to: "/encryption", label: "Encryption", icon: Lock, adminOnly: true, keywords: "kms sse keys" },
+    ],
   },
 ];
 

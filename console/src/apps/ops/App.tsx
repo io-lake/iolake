@@ -29,6 +29,7 @@ import Health from "../../pages/Health";
 import Cluster from "../../pages/Cluster";
 import PoolPlacement from "../../pages/PoolPlacement";
 import MyAccount from "../../pages/MyAccount";
+import AuditSearch from "../../pages/AuditSearch";
 
 export default function OpsApp() {
   const [user, setUser] = useState<string | null>(null);
@@ -88,6 +89,7 @@ export default function OpsApp() {
         <Route path="iceberg" element={<Navigate to="/catalog" replace />} />
         <Route path="unity" element={<UnityCatalog />} />
         <Route path="sharing" element={<DeltaSharing />} />
+        <Route path="audit" element={<AuditSearch systemAdmin />} />
         <Route path="monitoring" element={<Monitoring />} />
         <Route path="encryption" element={<Encryption />} />
         <Route path="cluster/health" element={<Health />} />

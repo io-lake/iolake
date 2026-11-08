@@ -168,7 +168,24 @@ export const buckets = {
       `/_admin/buckets/${encodeURIComponent(bucket)}/owner`,
       { owner }
     ),
+  // Per-bucket request rate limit (rps 0 = no limit; burst 0 = equals rps).
+  getRateLimit: (bucket: string) =>
+    request<RateLimit>(
+      "GET",
+      `/_admin/buckets/${encodeURIComponent(bucket)}/rate-limit`
+    ),
+  setRateLimit: (bucket: string, limit: RateLimit) =>
+    request<void>(
+      "PUT",
+      `/_admin/buckets/${encodeURIComponent(bucket)}/rate-limit`,
+      limit
+    ),
 };
+
+export interface RateLimit {
+  rps: number;
+  burst: number;
+}
 
 // Iceberg API
 function whq(warehouse?: string) {

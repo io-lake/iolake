@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { Badge, Banner, Button, Cell, Input, Select } from "../ui";
+import { buckets as bucketsApi, type RateLimit } from "../../api/client";
 import type { PoolProtection } from "../../api/protection";
 import { ProtectionHealth, PublicBadge } from "./BucketPanel";
 import { CardFrame, DangerTextButton, Kv, SelectableRow, SettingCard, Th } from "./parts";
@@ -166,6 +167,8 @@ export function SettingsTab({
 
       <ReplicationCard setting={settings?.replication} />
 
+      <RateLimitCard bucket={bucket.name} />
+
       <SettingCard
         title="Delete bucket"
         description="Removes the bucket and its name. Only an empty bucket can be deleted: delete its objects first."
@@ -178,6 +181,70 @@ export function SettingsTab({
         {delErr && <p className="text-[12px] text-err">{delErr}</p>}
       </SettingCard>
     </div>
+  );
+}
+
+/// The bucket's request rate limit (token bucket), on top of the tenant's own.
+function RateLimitCard({ bucket }: { bucket: string }) {
+  const [limit, setLimit] = useState<RateLimit>({ rps: 0, burst: 0 });
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState("");
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    let live = true;
+    bucketsApi
+      .getRateLimit(bucket)
+      .then((l) => live && setLimit({ rps: l.rps ?? 0, burst: l.burst ?? 0 }))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [bucket]);
+
+  const save = async () => {
+    setBusy(true);
+    setSaved("");
+    setErr("");
+    try {
+      await bucketsApi.setRateLimit(bucket, limit);
+      setSaved(limit.rps === 0 ? "Rate limit cleared" : "Rate limit saved");
+    } catch (e) {
+      setErr(`Couldn't save the rate limit. ${errText(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <SettingCard
+      title="Request rate limit"
+      description="Caps this bucket's requests per second (per gateway) so one bucket can't crowd out the rest. Over the limit, the gateway answers 429. 0 = no limit."
+      action={
+        <Button disabled={busy} icon={<Save size={13} />} onClick={() => void save()}>
+          Save
+        </Button>
+      }
+    >
+      <div className="grid grid-cols-2 gap-3">
+        <Input
+          label="Requests / second"
+          type="number"
+          value={limit.rps}
+          onChange={(e) => setLimit({ ...limit, rps: Number(e.target.value) })}
+          hint="0 = no limit"
+        />
+        <Input
+          label="Burst"
+          type="number"
+          value={limit.burst}
+          onChange={(e) => setLimit({ ...limit, burst: Number(e.target.value) })}
+          hint="0 = equals the rate"
+        />
+      </div>
+      {saved && <p className="text-[12px] text-ok">{saved}</p>}
+      {err && <p className="text-[12px] text-err">{err}</p>}
+    </SettingCard>
   );
 }
 

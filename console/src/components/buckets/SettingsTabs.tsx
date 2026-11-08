@@ -220,11 +220,6 @@ function RateLimitCard({ bucket }: { bucket: string }) {
     <SettingCard
       title="Request rate limit"
       description="Caps this bucket's requests per second (per gateway) so one bucket can't crowd out the rest. Over the limit, the gateway answers 429. 0 = no limit."
-      action={
-        <Button disabled={busy} icon={<Save size={13} />} onClick={() => void save()}>
-          Save
-        </Button>
-      }
     >
       <div className="grid grid-cols-2 gap-3">
         <Input
@@ -242,8 +237,13 @@ function RateLimitCard({ bucket }: { bucket: string }) {
           hint="0 = equals the rate"
         />
       </div>
-      {saved && <p className="text-[12px] text-ok">{saved}</p>}
-      {err && <p className="text-[12px] text-err">{err}</p>}
+      <div className="flex items-center gap-2">
+        <Button disabled={busy} icon={<Save size={13} />} onClick={() => void save()}>
+          Save
+        </Button>
+        {saved && <span className="text-[12px] text-ok">{saved}</span>}
+        {err && <span className="text-[12px] text-err">{err}</span>}
+      </div>
     </SettingCard>
   );
 }

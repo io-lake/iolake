@@ -170,6 +170,44 @@ export const buckets = {
     ),
 };
 
+// Audit export and search (GET /_admin/audit/events), scoped to the caller's tenant.
+export interface AuditEvent {
+  time: string;
+  api: string;
+  method: string;
+  status: number;
+  action?: string;
+  bucket?: string;
+  key?: string;
+  bucket_tenant?: string;
+  principal: { tenant?: string; user_id?: string; auth?: string };
+  source?: { ip?: string };
+}
+
+export interface AuditQuery {
+  from: string;
+  to: string;
+  api?: string;
+  tenant?: string;
+  q?: string;
+}
+
+function auditQs(p: AuditQuery, extra: Record<string, string>): string {
+  const sp = new URLSearchParams({ from: p.from, to: p.to, ...extra });
+  if (p.api) sp.set("api", p.api);
+  if (p.tenant) sp.set("tenant", p.tenant);
+  if (p.q) sp.set("q", p.q);
+  return sp.toString();
+}
+
+export const audit = {
+  search: (p: AuditQuery) =>
+    request<AuditEvent[]>("GET", `/_admin/audit/events?${auditQs(p, { limit: "1000" })}`),
+  // A same-origin, cookie-authed URL for the full download (NDJSON or CSV).
+  downloadUrl: (p: AuditQuery, format: "ndjson" | "csv") =>
+    `${BASE}/_admin/audit/events?${auditQs(p, { format })}`,
+};
+
 // Iceberg API
 function whq(warehouse?: string) {
   return warehouse ? `?warehouse=${encodeURIComponent(warehouse)}` : "";

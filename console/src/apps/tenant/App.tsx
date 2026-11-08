@@ -24,6 +24,7 @@ import Buckets from "../../pages/Buckets";
 import BucketDetail from "../../pages/BucketDetail";
 import Objects from "../../pages/Objects";
 import UsersPage from "../../pages/Users";
+import AuditSearch from "../../pages/AuditSearch";
 import Identity from "../../pages/Identity";
 import Catalog from "../../pages/Catalog";
 import UnityCatalog from "../../pages/UnityCatalog";
@@ -94,6 +95,7 @@ export default function TenantApp() {
         <Route path="iceberg" element={<Navigate to="/catalog" replace />} />
         <Route path="unity" element={<UnityCatalog />} />
         <Route path="sharing" element={<DeltaSharing />} />
+        <Route path="audit" element={<AuditSearch />} />
       </Route>
     </Routes>
   );

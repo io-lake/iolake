@@ -780,6 +780,11 @@ pub enum BucketCmd {
         #[arg(long, default_value_t = 0)]
         objects: u64,
     },
+    /// Per-bucket request rate limit
+    RateLimit {
+        #[command(subcommand)]
+        action: BucketRateLimitCmd,
+    },
     /// Bucket policy
     Policy {
         #[command(subcommand)]
@@ -799,6 +804,22 @@ pub enum BucketCmd {
     Cors {
         #[command(subcommand)]
         action: XmlDocCmd,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum BucketRateLimitCmd {
+    /// GET /_admin/buckets/{name}/rate-limit
+    Get { bucket: String },
+    /// PUT /_admin/buckets/{name}/rate-limit
+    Set {
+        bucket: String,
+        /// Requests per second (0 = no limit)
+        #[arg(long, default_value_t = 0)]
+        rps: u64,
+        /// Requests allowed momentarily above the rate (0 = equals rps)
+        #[arg(long, default_value_t = 0)]
+        burst: u64,
     },
 }
 

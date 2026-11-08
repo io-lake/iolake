@@ -136,6 +136,7 @@ pub const RULES: &[(&str, &[(&str, Roles)])] = &[
             ("CreateBucket", GW),
             ("SetBucketOwner", GW),
             ("SetBucketQuota", GW),
+            ("SetBucketRateLimit", GW),
             ("DeleteBucket", GW),
             ("GetBucket", GW),
             ("ListBuckets", GW),

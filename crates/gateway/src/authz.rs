@@ -317,6 +317,8 @@ struct BucketEntry {
     /// The bucket's own public access block (its tenant's and the
     /// cluster's are added when it matters).
     public_block: crate::public_access::PublicAccessBlock,
+    /// The bucket's request rate limit (rps, burst); 0 rps = no limit.
+    rate_limit: (u64, u64),
     /// Meta answered that the bucket doesn't exist (not: meta couldn't be
     /// read, which leaves this false and the entry empty).
     missing: bool,
@@ -503,6 +505,7 @@ async fn load_bucket(state: &AppState, bucket: &str) -> Result<BucketEntry, Unav
             owner: String::new(),
             tenant: String::new(),
             public_block: crate::public_access::PublicAccessBlock::ALL,
+            rate_limit: (0, 0),
             missing: true,
             cached_at: Instant::now(),
         });
@@ -526,11 +529,20 @@ async fn load_bucket(state: &AppState, bucket: &str) -> Result<BucketEntry, Unav
         owner: meta.owner,
         tenant: meta.tenant,
         public_block,
+        rate_limit: (meta.rate_limit_rps, meta.rate_limit_burst),
         missing: false,
         cached_at: Instant::now(),
     };
     state.policy_cache.put_bucket(bucket, entry.clone());
     Ok(entry)
+}
+
+/// A bucket's rate limit `(rps, burst)` from the shared cache, or `None` (no limit, missing, or meta unreadable — fail open).
+pub async fn bucket_rate_limit(state: &AppState, bucket: &str) -> Option<(u64, u64)> {
+    match load_bucket(state, bucket).await {
+        Ok(entry) if !entry.missing && entry.rate_limit.0 > 0 => Some(entry.rate_limit),
+        _ => None,
+    }
 }
 
 /// How meta names a principal's attachments and inline policies:
@@ -1427,6 +1439,7 @@ mod tests {
             owner: "u1".to_string(),
             tenant: String::new(),
             public_block: crate::public_access::PublicAccessBlock::ALL,
+            rate_limit: (0, 0),
             missing: false,
             cached_at: Instant::now(),
         }
@@ -1467,6 +1480,7 @@ mod tests {
                 owner: "u1".to_string(),
                 tenant: "globex".to_string(),
                 public_block: crate::public_access::PublicAccessBlock::ALL,
+                rate_limit: (0, 0),
                 cached_at: Instant::now(),
                 missing: false,
             },

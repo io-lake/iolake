@@ -1971,6 +1971,84 @@ pub async fn admin_set_bucket_quota(
     }
 }
 
+/// `PUT /_admin/buckets/{bucket}/rate-limit` with `{"rps": N, "burst": N}`
+/// (0 or absent = no limit): the bucket's per-gateway request rate.
+pub async fn admin_set_bucket_rate_limit(
+    State(state): State<Arc<AppState>>,
+    auth: Option<Extension<AuthResult>>,
+    headers: HeaderMap,
+    Path(bucket): Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> Response {
+    if let Some(deny) = require_bucket_tenant_admin(&state, &auth, &headers, &bucket).await {
+        return deny;
+    }
+    let field = |name: &str| match &body[name] {
+        serde_json::Value::Null => Ok(0),
+        v => v
+            .as_u64()
+            .ok_or_else(|| format!("{name} must be a whole number of requests")),
+    };
+    let (rps, burst) = match (field("rps"), field("burst")) {
+        (Ok(r), Ok(b)) => (r, b),
+        (Err(e), _) | (_, Err(e)) => return (StatusCode::BAD_REQUEST, e).into_response(),
+    };
+    match state
+        .meta_client
+        .clone()
+        .set_bucket_rate_limit(iolake_proto::metadata::SetBucketRateLimitRequest {
+            bucket: bucket.clone(),
+            rate_limit_rps: rps,
+            rate_limit_burst: burst,
+        })
+        .await
+    {
+        Ok(_) => {
+            // This gateway drops its cached entry so it sees its own change at once.
+            state.policy_cache.invalidate(&bucket);
+            tracing::info!("Set rate limit of bucket '{bucket}': {rps} rps, {burst} burst");
+            StatusCode::NO_CONTENT.into_response()
+        }
+        Err(e) if e.code() == tonic::Code::NotFound => {
+            (StatusCode::NOT_FOUND, e.message().to_string()).into_response()
+        }
+        Err(e) => (StatusCode::BAD_REQUEST, e.message().to_string()).into_response(),
+    }
+}
+
+/// `GET /_admin/buckets/{bucket}/rate-limit` → `{"rps": N, "burst": N}`.
+pub async fn admin_get_bucket_rate_limit(
+    State(state): State<Arc<AppState>>,
+    auth: Option<Extension<AuthResult>>,
+    headers: HeaderMap,
+    Path(bucket): Path<String>,
+) -> Response {
+    if let Some(deny) = require_bucket_tenant_admin(&state, &auth, &headers, &bucket).await {
+        return deny;
+    }
+    match state
+        .meta_client
+        .clone()
+        .get_bucket(iolake_proto::metadata::GetBucketRequest {
+            name: bucket.clone(),
+        })
+        .await
+    {
+        Ok(resp) => match resp.into_inner().bucket {
+            Some(b) => Json(serde_json::json!({
+                "rps": b.rate_limit_rps,
+                "burst": b.rate_limit_burst,
+            }))
+            .into_response(),
+            None => (StatusCode::NOT_FOUND, "bucket not found").into_response(),
+        },
+        Err(e) if e.code() == tonic::Code::NotFound => {
+            (StatusCode::NOT_FOUND, e.message().to_string()).into_response()
+        }
+        Err(e) => (StatusCode::BAD_REQUEST, e.message().to_string()).into_response(),
+    }
+}
+
 /// Query params for admin object listing
 #[derive(Debug, serde::Deserialize)]
 pub struct AdminListObjectsParams {

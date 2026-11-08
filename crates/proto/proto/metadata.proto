@@ -13,6 +13,7 @@ service MetadataService {
     rpc SetBucketOwner(SetBucketOwnerRequest) returns (SetBucketOwnerResponse);
     // A bucket's byte and object quotas (0 = unlimited).
     rpc SetBucketQuota(SetBucketQuotaRequest) returns (SetBucketQuotaResponse);
+    rpc SetBucketRateLimit(SetBucketRateLimitRequest) returns (SetBucketRateLimitResponse);
     rpc DeleteBucket(DeleteBucketRequest) returns (DeleteBucketResponse);
     rpc GetBucket(GetBucketRequest) returns (GetBucketResponse);
     rpc ListBuckets(ListBucketsRequest) returns (ListBucketsResponse);
@@ -369,6 +370,8 @@ message BucketMeta {
     uint64 quota_objects = 9;        // Per-bucket object count quota (0 = unlimited)
     ObjectLockConfiguration object_lock = 10;  // Object lock config (immutable after creation)
     DedupPolicy dedup = 11;          // Unset fields inherit from the tenant, then the cluster
+    uint64 rate_limit_rps = 12;      // Per-bucket request rate, requests/sec (0 = no limit)
+    uint64 rate_limit_burst = 13;    // Requests allowed momentarily above the rate (0 = equals the rate)
     // NOTE: default encryption is persisted in a separate table keyed by bucket name
     // (BUCKET_ENCRYPTION_CONFIGS) to keep BucketMeta read-hot and avoid rewriting it on
     // PutBucketEncryption. Loaded into the meta service on boot. No field here.
@@ -626,6 +629,14 @@ message SetBucketQuotaRequest {
 }
 
 message SetBucketQuotaResponse {}
+
+message SetBucketRateLimitRequest {
+    string bucket = 1;
+    uint64 rate_limit_rps = 2;    // 0 = no limit
+    uint64 rate_limit_burst = 3;  // 0 = equals the rate
+}
+
+message SetBucketRateLimitResponse {}
 
 message CreateBucketResponse {
     BucketMeta bucket = 1;

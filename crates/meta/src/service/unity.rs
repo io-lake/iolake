@@ -179,6 +179,8 @@ impl MetaService {
             quota_bytes: 0,
             quota_objects: 0,
             object_lock: None,
+            rate_limit_rps: 0,
+            rate_limit_burst: 0,
         };
         let bucket_bytes = bucket.encode_to_vec();
 

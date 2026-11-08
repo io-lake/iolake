@@ -1,7 +1,9 @@
 //! Buckets and provisioning.
 
 use super::{Ctx, q, read_input, read_json, seg};
-use crate::cli::{BucketCmd, BucketDedupCmd, BucketPolicyCmd, ProvisionCmd, XmlDocCmd};
+use crate::cli::{
+    BucketCmd, BucketDedupCmd, BucketPolicyCmd, BucketRateLimitCmd, ProvisionCmd, XmlDocCmd,
+};
 use crate::http::Body;
 use crate::output::{cell, key_values as kv, rows_of, ts};
 use anyhow::{Result, anyhow, bail};
@@ -96,6 +98,7 @@ pub async fn bucket(cmd: BucketCmd, ctx: &mut Ctx<'_, '_>) -> Result<()> {
                 "Bucket {name}: quota {bytes} bytes, {objects} objects (0 = unlimited)"
             ))?;
         }
+        BucketCmd::RateLimit { action } => bucket_rate_limit(action, ctx).await?,
         BucketCmd::Policy { action } => bucket_policy(action, ctx).await?,
         BucketCmd::Dedup { action } => bucket_dedup(action, ctx).await?,
         BucketCmd::Lifecycle { action } => xml_subresource(ctx, "lifecycle", action).await?,
@@ -120,6 +123,32 @@ async fn create_bucket(
     ctx.api
         .send_json("POST", "/_admin/buckets", &[], body)
         .await
+}
+
+async fn bucket_rate_limit(cmd: BucketRateLimitCmd, ctx: &mut Ctx<'_, '_>) -> Result<()> {
+    match cmd {
+        BucketRateLimitCmd::Get { bucket } => {
+            let v = ctx
+                .api
+                .get(&format!("/_admin/buckets/{}/rate-limit", seg(&bucket)), &[])
+                .await?;
+            ctx.out.emit(&v, kv)?;
+        }
+        BucketRateLimitCmd::Set { bucket, rps, burst } => {
+            ctx.api
+                .send_json(
+                    "PUT",
+                    &format!("/_admin/buckets/{}/rate-limit", seg(&bucket)),
+                    &[],
+                    json!({ "rps": rps, "burst": burst }),
+                )
+                .await?;
+            ctx.out.done(&format!(
+                "Bucket {bucket}: rate limit {rps} rps, {burst} burst (0 = no limit)"
+            ))?;
+        }
+    }
+    Ok(())
 }
 
 async fn bucket_policy(cmd: BucketPolicyCmd, ctx: &mut Ctx<'_, '_>) -> Result<()> {

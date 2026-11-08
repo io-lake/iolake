@@ -44,6 +44,7 @@ pub mod post_object;
 pub mod prom;
 pub mod public_access;
 pub mod quota;
+pub mod ratelimit;
 pub mod rdma;
 pub mod replication;
 pub mod s3;
@@ -1369,6 +1370,10 @@ pub async fn run(
             "/_admin/buckets/{bucket}/quota",
             put(admin::admin_set_bucket_quota),
         )
+        .route(
+            "/_admin/buckets/{bucket}/rate-limit",
+            get(admin::admin_get_bucket_rate_limit).put(admin::admin_set_bucket_rate_limit),
+        )
         .route("/_admin/policies/attach", post(iam_admin::attach_policy))
         .route("/_admin/policies/detach", post(iam_admin::detach_policy))
         .route("/_admin/policies/attached", get(iam_admin::list_attached))
@@ -1641,6 +1646,7 @@ pub async fn run(
         app: Arc::clone(&state),
         auth_enabled: !args.no_auth,
     });
+    let rate_limit_state = ratelimit::RateLimitState::new(Arc::clone(&state));
 
     // S3-side layer stack (chunked-decode + body limit + optional SigV4 auth).
     let build_s3_protected = || {
@@ -1655,6 +1661,11 @@ pub async fn run(
             .layer(middleware::from_fn_with_state(
                 Arc::clone(&admission),
                 admission::body_layer,
+            ))
+            // Per-bucket rate limit: after authz, before the body is read.
+            .layer(middleware::from_fn_with_state(
+                Arc::clone(&rate_limit_state),
+                ratelimit::rate_limit_layer,
             ));
         let r = if args.no_auth {
             // Nothing signed, but a body is still held to the hash it
